@@ -79,6 +79,17 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   same run (10,000 in → 1,589 governed, 8,411 quarantined, reasons
   unchanged; runtime 0.755s; audit 1,589 governed + 8,411
   quarantined entries; governed CSV has no raw member IDs).
+- Oct 21, 2026 build block (2:30 PM run): de-identified quarantine
+  CSV (`write_quarantine_csv` in hipaa_pipeline_framework/io.py) —
+  quarantine reports now write member hash + reason per row,
+  dropping patient names and raw member IDs (the demo previously
+  wrote raw member IDs into quarantine.csv); demo now dogfoods
+  both io writers; 2 new tests (suite now 23, all passing);
+  README + PLAN updated. Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged; runtime
+  0.558s; audit 1,589 governed + 8,411 quarantined entries;
+  quarantine.csv verified: zero raw member IDs, zero patient
+  names).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

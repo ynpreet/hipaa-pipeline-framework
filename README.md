@@ -33,7 +33,9 @@ in this repo. Demos use synthetic data only.
 - `hipaa_pipeline_framework/io.py` — CSV in/out: `read_claims_csv`
   reads raw claims rows for `run_pipeline`; `write_governed_csv`
   writes only the fixed de-identified columns, dropping any raw
-  identifier that slipped into a record dict.
+  identifier that slipped into a record dict; `write_quarantine_csv`
+  writes quarantined (record, reason) pairs the same way — member
+  hash plus reason, never a raw member ID or patient name.
 - `examples/run_demo.py` — end-to-end demo on synthetic data, via the
   `run_pipeline` orchestrator (secure defaults, gates, quarantine,
   audit trail).
@@ -50,15 +52,15 @@ python3 examples/run_demo.py
 python3 -m unittest discover -s tests -v
 ```
 
-21 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
+23 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
 (defaults secure, each insecure override flagged, defaults are fresh
 copies), pipeline orchestration (govern/quarantine, counts,
 fail-closed config, one audit entry per record), and CSV I/O (rows
-feed the pipeline, governed CSV drops identifiers, empty write still
-writes the header).
+feed the pipeline, governed CSV drops identifiers, quarantine CSV
+writes hashes not raw IDs, empty writes still write the header).
 No dependencies, no real patient data.
 
 Oct 21, 2026 build block (11:00 AM run): pipeline orchestrator
@@ -99,6 +101,16 @@ identifier that slipped into a governed record dict; 3 new tests
 (suite now 21, all passing); demo re-verified same run
 (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
 runtime 0.755s; audit 1,589 governed + 8,411 quarantined entries).
+
+Oct 21, 2026 build block (2:30 PM run): `write_quarantine_csv`
+(`hipaa_pipeline_framework/io.py`) — quarantine reports now write
+the member hash plus reason per row (previously the demo wrote raw
+member IDs into quarantine.csv), dropping patient names and raw
+IDs; demo dogfoods both io writers; 2 new tests (suite now 23, all
+passing); demo re-verified same run (10,000 in → 1,589 governed,
+8,411 quarantined, reasons unchanged; runtime 0.558s; audit 1,589
+governed + 8,411 quarantined entries; quarantine.csv verified to
+contain zero raw member IDs and zero patient names).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

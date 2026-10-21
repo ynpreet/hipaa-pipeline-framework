@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from hipaa_pipeline_framework import (  # noqa: E402
     AuditLog,
     GOVERNED_COLUMNS,
+    QUARANTINE_COLUMNS,
     QuarantineReason,
     default_pipeline_config,
     hash_member_id,
@@ -25,6 +26,7 @@ from hipaa_pipeline_framework import (  # noqa: E402
     validate_config,
     validate_record,
     write_governed_csv,
+    write_quarantine_csv,
 )
 
 
@@ -258,6 +260,31 @@ class TestCsvIO(unittest.TestCase):
             write_governed_csv(path, [])
             self.assertEqual(path.read_text().strip(),
                              ",".join(GOVERNED_COLUMNS))
+
+    def test_write_quarantine_csv_hashes_not_raw_ids(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "quarantine.csv"
+            result = run_pipeline([good_record(),
+                                   good_record(service_date="2026-02-30"),
+                                   good_record(member_id="")])
+            write_quarantine_csv(path, result["quarantined"])
+            with open(path) as f:
+                header = f.readline().strip().split(",")
+            self.assertEqual(header, list(QUARANTINE_COLUMNS))
+            body = path.read_text()
+            self.assertNotIn("M-100001", body)
+            self.assertNotIn("Patient", body)
+            self.assertNotIn("member_id", body)
+            self.assertIn(hash_member_id("M-100001"), body)
+            self.assertIn(QuarantineReason.BAD_DATE, body)
+            self.assertIn(QuarantineReason.MISSING_FIELD, body)
+
+    def test_write_quarantine_csv_empty_still_writes_header(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "empty.csv"
+            write_quarantine_csv(path, [])
+            self.assertEqual(path.read_text().strip(),
+                             ",".join(QUARANTINE_COLUMNS))
 
 
 if __name__ == "__main__":

@@ -8,13 +8,15 @@ details, no real patient data anywhere in this repo.
 from .audit import AuditLog
 from .config import default_pipeline_config, is_secure, validate_config
 from .deidentification import hash_member_id, strip_identifiers
-from .io import GOVERNED_COLUMNS, read_claims_csv, write_governed_csv
+from .io import (GOVERNED_COLUMNS, QUARANTINE_COLUMNS, read_claims_csv,
+                 write_governed_csv, write_quarantine_csv)
 from .pipeline import run_pipeline
 from .quality import QuarantineReason, validate_record
 
 __all__ = [
     "AuditLog",
     "GOVERNED_COLUMNS",
+    "QUARANTINE_COLUMNS",
     "QuarantineReason",
     "default_pipeline_config",
     "hash_member_id",
@@ -25,4 +27,5 @@ __all__ = [
     "validate_config",
     "validate_record",
     "write_governed_csv",
+    "write_quarantine_csv",
 ]

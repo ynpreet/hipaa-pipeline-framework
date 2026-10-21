@@ -4,11 +4,11 @@ Generates 10,000 claims-like rows with seeded defects, runs them
 through the run_pipeline orchestrator (secure defaults, quality
 gates, quarantine with reasons, one audit entry per record), and
 writes governed_output.csv, quarantine.csv, and audit.jsonl next
-to this script's output dir.
+to this script's output dir — both CSVs via the io module, so the
+quarantine report carries member hashes, never raw member IDs.
 Run from the repo root: python3 examples/run_demo.py
 """
 
-import csv
 import random
 import sys
 import time
@@ -16,7 +16,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipaa_pipeline_framework import AuditLog, run_pipeline  # noqa: E402
+from hipaa_pipeline_framework import (  # noqa: E402
+    AuditLog,
+    run_pipeline,
+    write_governed_csv,
+    write_quarantine_csv,
+)
 
 OUT = Path(__file__).resolve().parent / "output"
 OUT.mkdir(exist_ok=True)
@@ -46,16 +51,8 @@ def main():
     result = run_pipeline(make_raw(), audit_log=audit)
     kept, quarantined = result["governed"], result["quarantined"]
     reasons = result["reasons"]
-    with open(OUT / "governed_output.csv", "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(kept[0]))
-        w.writeheader()
-        w.writerows(kept)
-    with open(OUT / "quarantine.csv", "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["member_id", "service_date", "claim_amount", "reason"])
-        for r, why in quarantined:
-            w.writerow([r["member_id"], r["service_date"],
-                        r["claim_amount"], why])
+    write_governed_csv(OUT / "governed_output.csv", kept)
+    write_quarantine_csv(OUT / "quarantine.csv", quarantined)
     print(f"records_in=10000 records_governed={len(kept)} "
           f"records_quarantined={len(quarantined)}")
     print(f"quarantine_reasons={dict(reasons)}")
