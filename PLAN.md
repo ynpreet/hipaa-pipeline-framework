@@ -101,6 +101,19 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   quarantined, reasons unchanged; runtime 0.607s; governed and
   quarantine CSVs byte-identical to pre-run outputs; audit
   summary matches the pipeline counts).
+- Oct 21, 2026 build block (3:30 PM run): audit-trail CSV export
+  (`write_audit_csv` in hipaa_pipeline_framework/io.py) —
+  exports an AuditLog's trail under fixed audit columns for
+  spreadsheet reviewers; trail stores only hashes and "redacted"
+  markers, so the export carries no raw identifiers; empty or
+  missing trail still writes the header; exported from the
+  package; demo now dogfoods it as audit.csv; 2 new tests
+  (suite now 26, all passing); README + PLAN updated. Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.699s; governed and
+  quarantine CSVs byte-identical to pre-run outputs; audit.csv
+  10,001 lines — header + 10,000 entries — zero raw member IDs,
+  zero patient names).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

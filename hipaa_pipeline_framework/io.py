@@ -8,6 +8,10 @@ identifier, even if one slipped into a governed record dict.
 write_quarantine_csv writes quarantined (record, reason) pairs the
 same way: the raw record is replaced by its member hash plus the
 quarantine reason, so quarantine reports never leak identifiers.
+write_audit_csv exports an AuditLog's trail to CSV for reviewers
+who work in spreadsheets: one row per entry, under the fixed audit
+columns, carrying only the hashed member reference the trail
+already stores — never a raw identifier.
 """
 
 import csv
@@ -19,6 +23,7 @@ GOVERNED_COLUMNS = ("member_hash", "service_date",
                     "claim_amount", "diagnosis_code")
 QUARANTINE_COLUMNS = ("member_hash", "service_date",
                       "claim_amount", "diagnosis_code", "reason")
+AUDIT_COLUMNS = ("timestamp", "action", "member_hash", "reason")
 
 
 def read_claims_csv(path):
@@ -64,3 +69,20 @@ def write_quarantine_csv(path, quarantined):
                 "diagnosis_code": record.get("diagnosis_code", ""),
                 "reason": reason,
             })
+
+
+def write_audit_csv(path, audit_log):
+    """Export an AuditLog's trail to CSV for reviewers.
+
+    Columns are exactly AUDIT_COLUMNS. Each row is one trail entry
+    (timestamp, action, member hash or "redacted", reason). The
+    trail stores only hashes and "redacted" markers, so the export
+    contains no raw identifiers. An empty or missing trail still
+    writes the header row.
+    """
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(AUDIT_COLUMNS))
+        writer.writeheader()
+        for entry in audit_log.entries():
+            writer.writerow({col: entry.get(col, "") or ""
+                             for col in AUDIT_COLUMNS})

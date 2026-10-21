@@ -4,6 +4,7 @@ Run from the repo root: python3 -m unittest discover -s tests -v
 Covers the three modules on synthetic data only — no real patient data.
 """
 
+import csv
 import json
 import sys
 import tempfile
@@ -13,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hipaa_pipeline_framework import (  # noqa: E402
+    AUDIT_COLUMNS,
     AuditLog,
     GOVERNED_COLUMNS,
     QUARANTINE_COLUMNS,
@@ -26,6 +28,7 @@ from hipaa_pipeline_framework import (  # noqa: E402
     summarize_run,
     validate_config,
     validate_record,
+    write_audit_csv,
     write_governed_csv,
     write_quarantine_csv,
 )
@@ -303,6 +306,33 @@ class TestCsvIO(unittest.TestCase):
             write_quarantine_csv(path, [])
             self.assertEqual(path.read_text().strip(),
                              ",".join(QUARANTINE_COLUMNS))
+
+    def test_write_audit_csv_exports_trail_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = AuditLog(Path(tmp) / "audit.jsonl")
+            log.write("governed", hash_member_id("M-100001"))
+            log.write("quarantined", "redacted",
+                      QuarantineReason.BAD_DATE)
+            path = Path(tmp) / "audit.csv"
+            write_audit_csv(path, log)
+            with open(path) as f:
+                rows = list(csv.reader(f))
+            self.assertEqual(rows[0], list(AUDIT_COLUMNS))
+            self.assertEqual(len(rows), 3)
+            self.assertEqual(rows[1][1], "governed")
+            self.assertEqual(rows[1][2], hash_member_id("M-100001"))
+            self.assertEqual(rows[2][1], "quarantined")
+            self.assertEqual(rows[2][2], "redacted")
+            self.assertEqual(rows[2][3], QuarantineReason.BAD_DATE)
+            self.assertNotIn("M-100001", path.read_text())
+
+    def test_write_audit_csv_empty_trail_still_writes_header(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = AuditLog(Path(tmp) / "audit.jsonl")  # no trail yet
+            path = Path(tmp) / "audit.csv"
+            write_audit_csv(path, log)
+            self.assertEqual(path.read_text().strip(),
+                             ",".join(AUDIT_COLUMNS))
 
 
 if __name__ == "__main__":

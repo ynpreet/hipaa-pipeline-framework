@@ -37,7 +37,11 @@ in this repo. Demos use synthetic data only.
   writes only the fixed de-identified columns, dropping any raw
   identifier that slipped into a record dict; `write_quarantine_csv`
   writes quarantined (record, reason) pairs the same way — member
-  hash plus reason, never a raw member ID or patient name.
+  hash plus reason, never a raw member ID or patient name;
+  `write_audit_csv` exports an AuditLog's trail to CSV (one row per
+  entry, fixed audit columns) for reviewers who work in
+  spreadsheets — the trail stores only hashes and "redacted"
+  markers, so the export carries no raw identifiers.
 - `examples/run_demo.py` — end-to-end demo on synthetic data, via the
   `run_pipeline` orchestrator (secure defaults, gates, quarantine,
   audit trail).
@@ -54,7 +58,7 @@ python3 examples/run_demo.py
 python3 -m unittest discover -s tests -v
 ```
 
-24 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
+26 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -63,7 +67,8 @@ copies), pipeline orchestration (govern/quarantine, counts,
 fail-closed config, one audit entry per record, run-summary counts
 and quarantine rate), and CSV I/O (rows
 feed the pipeline, governed CSV drops identifiers, quarantine CSV
-writes hashes not raw IDs, empty writes still write the header).
+writes hashes not raw IDs, audit CSV exports the trail rows,
+empty writes still write the header).
 No dependencies, no real patient data.
 
 Oct 21, 2026 build block (11:00 AM run): pipeline orchestrator
@@ -125,6 +130,17 @@ re-verified same run (10,000 in → 1,589 governed, 8,411
 quarantined, reasons unchanged; runtime 0.607s; governed and
 quarantine CSVs byte-identical to the pre-run outputs; audit
 summary matches the pipeline counts).
+
+Oct 21, 2026 build block (3:30 PM run): `write_audit_csv`
+(`hipaa_pipeline_framework/io.py`) — exports an AuditLog's trail
+to CSV (fixed audit columns, one row per entry; the trail stores
+only hashes and "redacted" markers, so the export carries no raw
+identifiers), and the demo now dogfoods it as audit.csv; 2 new
+tests (suite now 26, all passing); demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.699s; governed and quarantine CSVs byte-identical to the
+pre-run outputs; audit.csv has 10,001 lines — header + 10,000
+entries — with zero raw member IDs and zero patient names).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

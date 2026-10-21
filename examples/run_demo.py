@@ -3,9 +3,10 @@
 Generates 10,000 claims-like rows with seeded defects, runs them
 through the run_pipeline orchestrator (secure defaults, quality
 gates, quarantine with reasons, one audit entry per record), and
-writes governed_output.csv, quarantine.csv, and audit.jsonl next
-to this script's output dir — both CSVs via the io module, so the
-quarantine report carries member hashes, never raw member IDs.
+writes governed_output.csv, quarantine.csv, audit.jsonl, and
+audit.csv next to this script's output dir — all three CSVs via
+the io module, so the quarantine report and the audit export carry
+member hashes, never raw member IDs.
 Run from the repo root: python3 examples/run_demo.py
 """
 
@@ -19,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from hipaa_pipeline_framework import (  # noqa: E402
     AuditLog,
     run_pipeline,
+    write_audit_csv,
     write_governed_csv,
     write_quarantine_csv,
 )
@@ -53,6 +55,7 @@ def main():
     reasons = result["reasons"]
     write_governed_csv(OUT / "governed_output.csv", kept)
     write_quarantine_csv(OUT / "quarantine.csv", quarantined)
+    write_audit_csv(OUT / "audit.csv", audit)
     print(f"records_in=10000 records_governed={len(kept)} "
           f"records_quarantined={len(quarantined)}")
     print(f"quarantine_reasons={dict(reasons)}")
