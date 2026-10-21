@@ -23,6 +23,7 @@ from hipaa_pipeline_framework import (  # noqa: E402
     read_claims_csv,
     run_pipeline,
     strip_identifiers,
+    summarize_run,
     validate_config,
     validate_record,
     write_governed_csv,
@@ -196,6 +197,23 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual(result["governed_count"]
                          + result["quarantined_count"],
                          result["records_in"])
+
+    def test_summarize_run_reports_counts_and_rate(self):
+        result = run_pipeline([
+            good_record(),
+            good_record(service_date="2026-02-30"),
+        ])
+        summary = summarize_run(result)
+        self.assertEqual(summary["records_in"], 2)
+        self.assertEqual(summary["governed_count"], 1)
+        self.assertEqual(summary["quarantined_count"], 1)
+        self.assertAlmostEqual(summary["quarantine_rate"], 0.5)
+        self.assertEqual(summary["reasons"],
+                         {QuarantineReason.BAD_DATE: 1})
+        # Empty run: rate is 0.0, not a division error.
+        empty = summarize_run({"records_in": 0, "governed_count": 0,
+                               "quarantined_count": 0, "reasons": {}})
+        self.assertEqual(empty["quarantine_rate"], 0.0)
 
     def test_run_refuses_insecure_config(self):
         cfg = default_pipeline_config()

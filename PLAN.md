@@ -90,6 +90,17 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   0.558s; audit 1,589 governed + 8,411 quarantined entries;
   quarantine.csv verified: zero raw member IDs, zero patient
   names).
+- Oct 21, 2026 build block (3:00 PM run): run summary
+  (`summarize_run` in hipaa_pipeline_framework/pipeline.py) —
+  turns a run_pipeline result into a plain dict (records_in,
+  governed_count, quarantined_count, quarantine rate, per-reason
+  tallies) with no record data, safe to log or report; rate is
+  0.0 for an empty run; exported from the package; 1 new test
+  (suite now 24, all passing); README + PLAN updated. Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.607s; governed and
+  quarantine CSVs byte-identical to pre-run outputs; audit
+  summary matches the pipeline counts).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

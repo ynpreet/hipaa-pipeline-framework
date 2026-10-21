@@ -7,6 +7,11 @@ drops them), and writes one audit entry per record when an AuditLog
 is supplied. Returns a dict with governed records, quarantined
 (record, reason) pairs, per-reason counts, and governed /
 quarantined counts so callers need not recompute them.
+
+summarize_run turns that result into a plain, log-friendly summary
+dict: counts, quarantine rate (fraction quarantined; 0.0 when
+nothing ran), and the per-reason tallies. Rounding is left to the
+caller so the summary stays exact.
 """
 
 from collections import Counter
@@ -53,4 +58,24 @@ def run_pipeline(records, config=None, audit_log=None):
         "governed_count": len(governed),
         "quarantined_count": len(quarantined),
         "reasons": dict(reasons),
+    }
+
+
+def summarize_run(result):
+    """Summarize a run_pipeline result as a plain dict.
+
+    result: the dict returned by run_pipeline. Returns records_in,
+    governed_count, quarantined_count, quarantine_rate (fraction
+    quarantined, 0.0 when no records ran), and reasons. Contains
+    no record data, so it is safe to log or paste into a report.
+    """
+    records_in = result.get("records_in", 0) or 0
+    quarantined_count = result.get("quarantined_count", 0) or 0
+    return {
+        "records_in": records_in,
+        "governed_count": result.get("governed_count", 0) or 0,
+        "quarantined_count": quarantined_count,
+        "quarantine_rate": (quarantined_count / records_in
+                            if records_in else 0.0),
+        "reasons": dict(result.get("reasons", {})),
     }

@@ -10,7 +10,7 @@ from .config import default_pipeline_config, is_secure, validate_config
 from .deidentification import hash_member_id, strip_identifiers
 from .io import (GOVERNED_COLUMNS, QUARANTINE_COLUMNS, read_claims_csv,
                  write_governed_csv, write_quarantine_csv)
-from .pipeline import run_pipeline
+from .pipeline import run_pipeline, summarize_run
 from .quality import QuarantineReason, validate_record
 
 __all__ = [
@@ -24,6 +24,7 @@ __all__ = [
     "read_claims_csv",
     "run_pipeline",
     "strip_identifiers",
+    "summarize_run",
     "validate_config",
     "validate_record",
     "write_governed_csv",

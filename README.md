@@ -29,7 +29,9 @@ in this repo. Demos use synthetic data only.
   every record through the quality gates, quarantines failures with
   a reason, and writes one audit entry per record when given an
   AuditLog. Returns governed records, quarantined pairs, and
-  per-reason counts.
+  per-reason counts. `summarize_run` turns that result into a
+  plain, record-free summary dict (counts, quarantine rate, and
+  per-reason tallies) safe to log or paste into a report.
 - `hipaa_pipeline_framework/io.py` — CSV in/out: `read_claims_csv`
   reads raw claims rows for `run_pipeline`; `write_governed_csv`
   writes only the fixed de-identified columns, dropping any raw
@@ -52,13 +54,14 @@ python3 examples/run_demo.py
 python3 -m unittest discover -s tests -v
 ```
 
-23 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
+24 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
 (defaults secure, each insecure override flagged, defaults are fresh
 copies), pipeline orchestration (govern/quarantine, counts,
-fail-closed config, one audit entry per record), and CSV I/O (rows
+fail-closed config, one audit entry per record, run-summary counts
+and quarantine rate), and CSV I/O (rows
 feed the pipeline, governed CSV drops identifiers, quarantine CSV
 writes hashes not raw IDs, empty writes still write the header).
 No dependencies, no real patient data.
@@ -111,6 +114,17 @@ passing); demo re-verified same run (10,000 in → 1,589 governed,
 8,411 quarantined, reasons unchanged; runtime 0.558s; audit 1,589
 governed + 8,411 quarantined entries; quarantine.csv verified to
 contain zero raw member IDs and zero patient names).
+
+Oct 21, 2026 build block (3:00 PM run): `summarize_run`
+(`hipaa_pipeline_framework/pipeline.py`) — turns a `run_pipeline`
+result into a plain summary dict (records_in, governed_count,
+quarantined_count, quarantine rate, per-reason tallies) with no
+record data, safe to log or paste into a report; rate is 0.0 for
+an empty run; 1 new test (suite now 24, all passing); demo
+re-verified same run (10,000 in → 1,589 governed, 8,411
+quarantined, reasons unchanged; runtime 0.607s; governed and
+quarantine CSVs byte-identical to the pre-run outputs; audit
+summary matches the pipeline counts).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
