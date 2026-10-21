@@ -52,13 +52,22 @@ in this repo. Demos use synthetic data only.
 python3 examples/run_demo.py
 ```
 
+Or run any claims CSV through the pipeline from the command line
+(secure defaults, fail closed; prints only the run summary):
+
+```bash
+python3 -m hipaa_pipeline_framework input.csv \
+  --governed governed.csv --quarantine quarantine.csv \
+  --audit audit.jsonl --audit-csv audit.csv
+```
+
 ## Tests
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-26 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
+28 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -68,7 +77,8 @@ fail-closed config, one audit entry per record, run-summary counts
 and quarantine rate), and CSV I/O (rows
 feed the pipeline, governed CSV drops identifiers, quarantine CSV
 writes hashes not raw IDs, audit CSV exports the trail rows,
-empty writes still write the header).
+empty writes still write the header), and the CLI (de-identified
+outputs + summary on a real CSV, missing input exits 2).
 No dependencies, no real patient data.
 
 Oct 21, 2026 build block (11:00 AM run): pipeline orchestrator
