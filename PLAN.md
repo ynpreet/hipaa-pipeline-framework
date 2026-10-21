@@ -63,6 +63,13 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   8,411 quarantined entries); README test count corrected to 17.
   Demo re-verified same run (10,000 in → 1,589 governed, 8,411
   quarantined, reasons unchanged; runtime 0.362s).
+- Oct 21, 2026 build block (1:30 PM run): audit-trail summary
+  (`AuditLog.summary()` in hipaa_pipeline_framework/audit.py) —
+  totals the trail by action and by quarantine reason, all zeros
+  for an empty/missing trail; 1 new test (suite now 18, all
+  passing); README + PLAN updated. Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+  runtime 0.894s; audit summary matches the pipeline counts).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
