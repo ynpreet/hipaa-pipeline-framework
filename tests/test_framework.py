@@ -107,6 +107,27 @@ class TestAuditLog(unittest.TestCase):
             self.assertEqual(entries[1]["reason"],
                              QuarantineReason.BAD_DATE)
 
+    def test_summary_tallies_by_action_and_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "audit.jsonl"
+            log = AuditLog(path)
+            self.assertEqual(log.summary(), {"total": 0,
+                                             "by_action": {},
+                                             "by_reason": {}})
+            log.write("governed", "abc123")
+            log.write("quarantined", "redacted",
+                      QuarantineReason.BAD_DATE)
+            log.write("quarantined", "redacted",
+                      QuarantineReason.BAD_DATE)
+            log.write("quarantined", "redacted",
+                      QuarantineReason.BAD_AMOUNT)
+            self.assertEqual(log.summary(), {
+                "total": 4,
+                "by_action": {"governed": 1, "quarantined": 3},
+                "by_reason": {QuarantineReason.BAD_DATE: 2,
+                              QuarantineReason.BAD_AMOUNT: 1},
+            })
+
     def test_entries_carry_utc_timestamp_and_read_back(self):
         from datetime import datetime
         with tempfile.TemporaryDirectory() as tmp:
