@@ -30,6 +30,10 @@ in this repo. Demos use synthetic data only.
   a reason, and writes one audit entry per record when given an
   AuditLog. Returns governed records, quarantined pairs, and
   per-reason counts.
+- `hipaa_pipeline_framework/io.py` — CSV in/out: `read_claims_csv`
+  reads raw claims rows for `run_pipeline`; `write_governed_csv`
+  writes only the fixed de-identified columns, dropping any raw
+  identifier that slipped into a record dict.
 - `examples/run_demo.py` — end-to-end demo on synthetic data, via the
   `run_pipeline` orchestrator (secure defaults, gates, quarantine,
   audit trail).
@@ -46,13 +50,15 @@ python3 examples/run_demo.py
 python3 -m unittest discover -s tests -v
 ```
 
-18 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
+21 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
 (defaults secure, each insecure override flagged, defaults are fresh
-copies), and pipeline orchestration (govern/quarantine, counts,
-fail-closed config, one audit entry per record).
+copies), pipeline orchestration (govern/quarantine, counts,
+fail-closed config, one audit entry per record), and CSV I/O (rows
+feed the pipeline, governed CSV drops identifiers, empty write still
+writes the header).
 No dependencies, no real patient data.
 
 Oct 21, 2026 build block (11:00 AM run): pipeline orchestrator
@@ -84,6 +90,15 @@ returning all zeros for an empty or missing trail; 1 new test
 (suite now 18, all passing); demo re-verified same run
 (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
 audit summary matches: governed 1,589, quarantined 8,411).
+
+Oct 21, 2026 build block (2:00 PM run): CSV I/O module
+(`hipaa_pipeline_framework/io.py`) — `read_claims_csv` feeds raw
+claims rows straight into `run_pipeline`, and `write_governed_csv`
+writes only the fixed de-identified columns, dropping any raw
+identifier that slipped into a governed record dict; 3 new tests
+(suite now 21, all passing); demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.755s; audit 1,589 governed + 8,411 quarantined entries).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

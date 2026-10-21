@@ -14,14 +14,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hipaa_pipeline_framework import (  # noqa: E402
     AuditLog,
+    GOVERNED_COLUMNS,
     QuarantineReason,
     default_pipeline_config,
     hash_member_id,
     is_secure,
+    read_claims_csv,
     run_pipeline,
     strip_identifiers,
     validate_config,
     validate_record,
+    write_governed_csv,
 )
 
 
@@ -211,6 +214,50 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(entries[1]["action"], "quarantined")
             self.assertEqual(entries[1]["member_hash"], "redacted")
             self.assertEqual(len(result["governed"]), 1)
+
+
+class TestCsvIO(unittest.TestCase):
+    def test_csv_rows_feed_run_pipeline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text(
+                "member_id,patient_name,service_date,claim_amount,"
+                "diagnosis_code\n"
+                "M-100001,Patient 1,2026-03-15,120.50,E11.9\n"
+                "M-100002,Patient 2,2026-02-30,40.00,J45.909\n"
+            )
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0]["claim_amount"], "120.50")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 1)
+            self.assertEqual(result["quarantined_count"], 1)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 1})
+
+    def test_write_governed_csv_drops_identifiers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "governed.csv"
+            result = run_pipeline([good_record(),
+                                   good_record(member_id="M-100002")])
+            # Slip a raw identifier into a governed record dict:
+            result["governed"][0]["member_id"] = "M-100001"
+            write_governed_csv(path, result["governed"])
+            with open(path) as f:
+                header = f.readline().strip().split(",")
+            self.assertEqual(header, list(GOVERNED_COLUMNS))
+            body = path.read_text()
+            self.assertNotIn("member_id", body)
+            self.assertNotIn("M-100001", body)
+            self.assertNotIn("Patient", body)
+            self.assertIn(hash_member_id("M-100001"), body)
+
+    def test_write_governed_csv_empty_still_writes_header(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "empty.csv"
+            write_governed_csv(path, [])
+            self.assertEqual(path.read_text().strip(),
+                             ",".join(GOVERNED_COLUMNS))
 
 
 if __name__ == "__main__":

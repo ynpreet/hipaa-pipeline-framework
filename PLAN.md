@@ -70,6 +70,15 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   passing); README + PLAN updated. Demo re-verified same run
   (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
   runtime 0.894s; audit summary matches the pipeline counts).
+- Oct 21, 2026 build block (2:00 PM run): CSV I/O module
+  (hipaa_pipeline_framework/io.py) — `read_claims_csv` feeds raw
+  claims rows into run_pipeline, `write_governed_csv` writes only
+  the fixed de-identified columns and drops any raw identifier
+  that slipped into a governed record dict; 3 new tests (suite
+  now 21, all passing); README + PLAN updated. Demo re-verified
+  same run (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.755s; audit 1,589 governed + 8,411
+  quarantined entries; governed CSV has no raw member IDs).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
