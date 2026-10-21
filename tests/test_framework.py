@@ -18,6 +18,7 @@ from hipaa_pipeline_framework import (  # noqa: E402
     default_pipeline_config,
     hash_member_id,
     is_secure,
+    run_pipeline,
     strip_identifiers,
     validate_config,
     validate_record,
@@ -127,6 +128,42 @@ class TestConfig(unittest.TestCase):
         a = default_pipeline_config()
         a["log_phi"] = True
         self.assertTrue(is_secure(default_pipeline_config()))
+
+
+class TestPipeline(unittest.TestCase):
+    def test_run_governs_good_and_quarantines_bad(self):
+        result = run_pipeline([
+            good_record(),
+            good_record(service_date="2026-02-30"),
+            good_record(claim_amount="-5"),
+        ])
+        self.assertEqual(result["records_in"], 3)
+        self.assertEqual(len(result["governed"]), 1)
+        self.assertEqual(len(result["quarantined"]), 2)
+        self.assertEqual(result["reasons"],
+                         {QuarantineReason.BAD_DATE: 1,
+                          QuarantineReason.BAD_AMOUNT: 1})
+        self.assertNotIn("patient_name", result["governed"][0])
+
+    def test_run_refuses_insecure_config(self):
+        cfg = default_pipeline_config()
+        cfg["log_phi"] = True
+        with self.assertRaises(ValueError):
+            run_pipeline([good_record()], config=cfg)
+
+    def test_run_writes_one_audit_entry_per_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "audit.jsonl"
+            result = run_pipeline([good_record(),
+                                   good_record(service_date="")],
+                                  audit_log=AuditLog(path))
+            entries = [json.loads(line) for line in
+                       path.read_text().splitlines()]
+            self.assertEqual(len(entries), 2)
+            self.assertEqual(entries[0]["action"], "governed")
+            self.assertEqual(entries[1]["action"], "quarantined")
+            self.assertEqual(entries[1]["member_hash"], "redacted")
+            self.assertEqual(len(result["governed"]), 1)
 
 
 if __name__ == "__main__":

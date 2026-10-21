@@ -21,6 +21,12 @@ in this repo. Demos use synthetic data only.
   with secure defaults (encryption at rest, audit on, quarantine on
   failure, no PHI in logs) plus validation that refuses insecure
   overrides.
+- `hipaa_pipeline_framework/pipeline.py` — `run_pipeline`: ties the
+  blocks together — refuses insecure configs (fail closed), runs
+  every record through the quality gates, quarantines failures with
+  a reason, and writes one audit entry per record when given an
+  AuditLog. Returns governed records, quarantined pairs, and
+  per-reason counts.
 - `examples/run_demo.py` — end-to-end demo on synthetic data.
 
 ## Quickstart
@@ -41,6 +47,12 @@ impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, and secure-default config validation (defaults
 secure, each insecure override flagged, defaults are fresh copies).
 No dependencies, no real patient data.
+
+Oct 21, 2026 build block (11:00 AM run): pipeline orchestrator
+(`hipaa_pipeline_framework/pipeline.py`, `run_pipeline`) tying config
++ quality gates + audit together, fail-closed on insecure configs;
+3 new tests (suite now 15, all passing); demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

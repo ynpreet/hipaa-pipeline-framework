@@ -34,6 +34,13 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   validation refusing insecure overrides; 3 new tests (suite now 12,
   all passing); README + PLAN updated. Demo re-verified same run
   (numbers below, unchanged).
+- Oct 21, 2026 build block (11:00 AM run): pipeline orchestrator
+  (hipaa_pipeline_framework/pipeline.py, `run_pipeline`) — fail-closed
+  on insecure configs, runs records through the quality gates,
+  quarantines failures with reasons, writes one audit entry per
+  record when given an AuditLog; 3 new tests (suite now 15, all
+  passing); README + PLAN updated. Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
