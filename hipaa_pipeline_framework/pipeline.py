@@ -5,7 +5,8 @@ on an insecure config (fail closed), runs every record through the
 quality gates, quarantines failures with a reason (never silently
 drops them), and writes one audit entry per record when an AuditLog
 is supplied. Returns a dict with governed records, quarantined
-(record, reason) pairs, and per-reason counts.
+(record, reason) pairs, per-reason counts, and governed /
+quarantined counts so callers need not recompute them.
 """
 
 from collections import Counter
@@ -49,5 +50,7 @@ def run_pipeline(records, config=None, audit_log=None):
         "records_in": records_in,
         "governed": governed,
         "quarantined": quarantined,
+        "governed_count": len(governed),
+        "quarantined_count": len(quarantined),
         "reasons": dict(reasons),
     }

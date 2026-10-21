@@ -49,6 +49,12 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged:
   missing_required_field 3557, unparseable_date 3198,
   invalid_amount 1646, duplicate 10; runtime 0.486s).
+- Oct 21, 2026 build block (12:00 PM run): run_pipeline result counts
+  (`governed_count`, `quarantined_count` alongside `records_in`, so
+  callers need not recompute them); 1 new test (suite now 17, all
+  passing); README + PLAN updated. Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+  runtime 0.726s).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

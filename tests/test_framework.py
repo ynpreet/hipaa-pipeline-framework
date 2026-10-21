@@ -159,6 +159,18 @@ class TestPipeline(unittest.TestCase):
                           QuarantineReason.BAD_AMOUNT: 1})
         self.assertNotIn("patient_name", result["governed"][0])
 
+    def test_run_reports_governed_and_quarantined_counts(self):
+        result = run_pipeline([
+            good_record(),
+            good_record(service_date="2026-02-30"),
+            good_record(claim_amount="-5"),
+        ])
+        self.assertEqual(result["governed_count"], 1)
+        self.assertEqual(result["quarantined_count"], 2)
+        self.assertEqual(result["governed_count"]
+                         + result["quarantined_count"],
+                         result["records_in"])
+
     def test_run_refuses_insecure_config(self):
         cfg = default_pipeline_config()
         cfg["log_phi"] = True

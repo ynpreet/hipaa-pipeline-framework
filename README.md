@@ -61,6 +61,11 @@ Oct 21, 2026 build block (11:30 AM run): timestamped audit trail
 1 new test (suite now 16, all passing); demo re-verified same run
 (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged).
 
+Oct 21, 2026 build block (12:00 PM run): `run_pipeline` result now
+also reports `governed_count` and `quarantined_count`; 1 new test
+(suite now 17, all passing); demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged).
+
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
 - Records in: 10,000
