@@ -17,8 +17,9 @@ in this repo. Demos use synthetic data only.
   never silently dropped.
 - `hipaa_pipeline_framework/audit.py` — append-only JSON-lines audit
   trail for governed and quarantined records; every entry carries a
-  UTC timestamp, and `AuditLog.entries()` reads the trail back in
-  order for review.
+  UTC timestamp, `AuditLog.entries()` reads the trail back in
+  order for review, and `AuditLog.summary()` tallies the trail by
+  action and by quarantine reason.
 - `hipaa_pipeline_framework/config.py` — pipeline config template
   with secure defaults (encryption at rest, audit on, quarantine on
   failure, no PHI in logs) plus validation that refuses insecure
@@ -45,10 +46,10 @@ python3 examples/run_demo.py
 python3 -m unittest discover -s tests -v
 ```
 
-17 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
+18 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
-JSON-lines output and read-back, secure-default config validation
+JSON-lines output, read-back, and summary tallies, secure-default config validation
 (defaults secure, each insecure override flagged, defaults are fresh
 copies), and pipeline orchestration (govern/quarantine, counts,
 fail-closed config, one audit entry per record).
@@ -76,6 +77,13 @@ Oct 21, 2026 build block (12:30 PM run): demo refactored onto the
 run (governed and quarantine CSV SHA-256s unchanged; audit 1,589
 governed + 8,411 quarantined entries); demo re-verified same run
 (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged).
+
+Oct 21, 2026 build block (1:30 PM run): `AuditLog.summary()` —
+tallies the audit trail (total, by action, by quarantine reason),
+returning all zeros for an empty or missing trail; 1 new test
+(suite now 18, all passing); demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+audit summary matches: governed 1,589, quarantined 8,411).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
