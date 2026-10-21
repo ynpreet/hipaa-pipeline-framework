@@ -5,10 +5,12 @@ Covers the three modules on synthetic data only — no real patient data.
 """
 
 import csv
+import io
 import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -32,6 +34,7 @@ from hipaa_pipeline_framework import (  # noqa: E402
     write_governed_csv,
     write_quarantine_csv,
 )
+from hipaa_pipeline_framework.__main__ import main as cli_main  # noqa: E402
 
 
 def good_record(**overrides):
@@ -333,6 +336,48 @@ class TestCsvIO(unittest.TestCase):
             write_audit_csv(path, log)
             self.assertEqual(path.read_text().strip(),
                              ",".join(AUDIT_COLUMNS))
+
+
+class TestCli(unittest.TestCase):
+    def _write_input(self, tmp):
+        path = Path(tmp) / "input.csv"
+        with open(path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=[
+                "member_id", "patient_name", "service_date",
+                "claim_amount", "diagnosis_code"])
+            writer.writeheader()
+            writer.writerow(good_record())
+            writer.writerow(good_record(service_date="2026-02-30"))
+        return path
+
+    def test_cli_writes_deidentified_outputs_and_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            inp = self._write_input(tmp)
+            gov, quar = Path(tmp) / "g.csv", Path(tmp) / "q.csv"
+            aud, aud_csv = Path(tmp) / "a.jsonl", Path(tmp) / "a.csv"
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = cli_main([str(inp), "--governed", str(gov),
+                                 "--quarantine", str(quar),
+                                 "--audit", str(aud),
+                                 "--audit-csv", str(aud_csv)])
+            self.assertEqual(code, 0)
+            self.assertIn("records_in=2 governed=1 quarantined=1",
+                          out.getvalue())
+            self.assertIn(QuarantineReason.BAD_DATE, out.getvalue())
+            for path in (gov, quar, aud, aud_csv):
+                self.assertTrue(path.exists())
+                self.assertNotIn("M-100001", path.read_text())
+                self.assertNotIn("Patient 1", path.read_text())
+            self.assertIn(hash_member_id("M-100001"), gov.read_text())
+
+    def test_cli_missing_input_returns_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code = cli_main([str(Path(tmp) / "nope.csv"),
+                             "--governed", str(Path(tmp) / "g.csv"),
+                             "--quarantine", str(Path(tmp) / "q.csv"),
+                             "--audit", str(Path(tmp) / "a.jsonl")])
+            self.assertEqual(code, 2)
 
 
 if __name__ == "__main__":
