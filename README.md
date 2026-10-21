@@ -17,6 +17,10 @@ in this repo. Demos use synthetic data only.
   never silently dropped.
 - `hipaa_pipeline_framework/audit.py` — append-only JSON-lines audit
   trail for governed and quarantined records.
+- `hipaa_pipeline_framework/config.py` — pipeline config template
+  with secure defaults (encryption at rest, audit on, quarantine on
+  failure, no PHI in logs) plus validation that refuses insecure
+  overrides.
 - `examples/run_demo.py` — end-to-end demo on synthetic data.
 
 ## Quickstart
@@ -31,10 +35,12 @@ python3 examples/run_demo.py
 python3 -m unittest discover -s tests -v
 ```
 
-9 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
+12 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
-impossible/non-ISO date, invalid amount, duplicate), and audit-log
-JSON-lines output. No dependencies, no real patient data.
+impossible/non-ISO date, invalid amount, duplicate), audit-log
+JSON-lines output, and secure-default config validation (defaults
+secure, each insecure override flagged, defaults are fresh copies).
+No dependencies, no real patient data.
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

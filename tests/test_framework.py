@@ -15,8 +15,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from hipaa_pipeline_framework import (  # noqa: E402
     AuditLog,
     QuarantineReason,
+    default_pipeline_config,
     hash_member_id,
+    is_secure,
     strip_identifiers,
+    validate_config,
     validate_record,
 )
 
@@ -102,6 +105,28 @@ class TestAuditLog(unittest.TestCase):
             self.assertEqual(entries[0]["action"], "governed")
             self.assertEqual(entries[1]["reason"],
                              QuarantineReason.BAD_DATE)
+
+
+class TestConfig(unittest.TestCase):
+    def test_defaults_are_secure(self):
+        cfg = default_pipeline_config()
+        self.assertEqual(validate_config(cfg), [])
+        self.assertTrue(is_secure(cfg))
+
+    def test_each_insecure_override_is_flagged(self):
+        for bad in ({"encryption_at_rest": False},
+                    {"audit_enabled": False},
+                    {"quarantine_on_failure": False},
+                    {"log_phi": True}):
+            cfg = default_pipeline_config()
+            cfg.update(bad)
+            self.assertFalse(is_secure(cfg))
+            self.assertEqual(len(validate_config(cfg)), 1)
+
+    def test_defaults_are_fresh_copies(self):
+        a = default_pipeline_config()
+        a["log_phi"] = True
+        self.assertTrue(is_secure(default_pipeline_config()))
 
 
 if __name__ == "__main__":
