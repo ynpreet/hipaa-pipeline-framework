@@ -114,6 +114,18 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   quarantine CSVs byte-identical to pre-run outputs; audit.csv
   10,001 lines — header + 10,000 entries — zero raw member IDs,
   zero patient names).
+- Oct 21, 2026 build block (4:00 PM run): command-line entry point
+  (`hipaa_pipeline_framework/__main__.py`) — `python3 -m
+  hipaa_pipeline_framework input.csv --governed … --quarantine …
+  --audit … [--audit-csv …]` runs any claims CSV through
+  run_pipeline under the secure defaults (fail closed) and prints
+  only the run summary; missing input exits 2 with an error, never
+  a traceback; 2 new tests (suite now 28, all passing); CLI
+  smoke-tested on the 10,000-row synthetic CSV (same demo numbers:
+  1,589 governed, 8,411 quarantined, reasons unchanged; zero raw
+  member IDs in all three outputs). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.993s).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
