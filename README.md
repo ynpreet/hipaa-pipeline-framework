@@ -16,7 +16,9 @@ in this repo. Demos use synthetic data only.
   positive amounts, dedupe. Failures are quarantined with a reason,
   never silently dropped.
 - `hipaa_pipeline_framework/audit.py` — append-only JSON-lines audit
-  trail for governed and quarantined records.
+  trail for governed and quarantined records; every entry carries a
+  UTC timestamp, and `AuditLog.entries()` reads the trail back in
+  order for review.
 - `hipaa_pipeline_framework/config.py` — pipeline config template
   with secure defaults (encryption at rest, audit on, quarantine on
   failure, no PHI in logs) plus validation that refuses insecure
@@ -52,6 +54,11 @@ Oct 21, 2026 build block (11:00 AM run): pipeline orchestrator
 (`hipaa_pipeline_framework/pipeline.py`, `run_pipeline`) tying config
 + quality gates + audit together, fail-closed on insecure configs;
 3 new tests (suite now 15, all passing); demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged).
+
+Oct 21, 2026 build block (11:30 AM run): timestamped audit trail
+(`AuditLog.entries()` read-back, UTC timestamp on every entry);
+1 new test (suite now 16, all passing); demo re-verified same run
 (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)

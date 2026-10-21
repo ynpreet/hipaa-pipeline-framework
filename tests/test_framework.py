@@ -107,6 +107,20 @@ class TestAuditLog(unittest.TestCase):
             self.assertEqual(entries[1]["reason"],
                              QuarantineReason.BAD_DATE)
 
+    def test_entries_carry_utc_timestamp_and_read_back(self):
+        from datetime import datetime
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "audit.jsonl"
+            log = AuditLog(path)
+            self.assertEqual(log.entries(), [])  # no trail yet
+            log.write("governed", "abc123")
+            entries = log.entries()
+            self.assertEqual(len(entries), 1)
+            # Timestamp parses and is UTC (offset-aware, +00:00).
+            ts = datetime.fromisoformat(entries[0]["timestamp"])
+            self.assertIsNotNone(ts.tzinfo)
+            self.assertEqual(entries[0]["action"], "governed")
+
 
 class TestConfig(unittest.TestCase):
     def test_defaults_are_secure(self):

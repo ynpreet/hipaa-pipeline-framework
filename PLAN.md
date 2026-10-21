@@ -41,6 +41,14 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   record when given an AuditLog; 3 new tests (suite now 15, all
   passing); README + PLAN updated. Demo re-verified same run
   (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged).
+- Oct 21, 2026 build block (11:30 AM run): timestamped audit trail
+  (hipaa_pipeline_framework/audit.py) — every entry now carries a UTC
+  timestamp, and AuditLog.entries() reads the trail back in order
+  ([] before any entry exists); 1 new test (suite now 16, all
+  passing); README + PLAN updated. Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged:
+  missing_required_field 3557, unparseable_date 3198,
+  invalid_amount 1646, duplicate 10; runtime 0.486s).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
