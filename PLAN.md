@@ -15,10 +15,13 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
 - pipeline config templates with encryption/access-control defaults
 
 ## Status
-- SCAFFOLD ONLY (this folder). Not published. Publishing the public repo
-  under ynpreet needs Preet's explicit tap (submit-permission rule).
-- Next steps when he taps: create repo via browser (connector cannot),
-  push scaffold, PyPI packaging, README with quickstart.
+- PUBLISHED v0.1, Oct 21, 2026: https://github.com/ynpreet/hipaa-pipeline-framework
+  (public, main, commit eb293dfebcf1ba8c5e6d99f48ee9ffe541aa6e12, author
+  Preet Mehta <preetmehta1995@gmail.com>). Repo created via browser
+  (connector create failed 403), files pushed via connector and verified
+  on GitHub. Generated demo outputs and __pycache__ are NOT in the repo.
+- Next steps: PyPI packaging, README quickstart (done in-repo), adoption
+  evidence tracking from day one.
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
