@@ -1,8 +1,10 @@
 """Demo: governed pipeline on SYNTHETIC data only (seed 42).
 
 Generates 10,000 claims-like rows with seeded defects, runs them
-through de-identification + quality gates, writes governed_output.csv,
-quarantine.csv, and audit.jsonl next to this script's output dir.
+through the run_pipeline orchestrator (secure defaults, quality
+gates, quarantine with reasons, one audit entry per record), and
+writes governed_output.csv, quarantine.csv, and audit.jsonl next
+to this script's output dir.
 Run from the repo root: python3 examples/run_demo.py
 """
 
@@ -10,12 +12,11 @@ import csv
 import random
 import sys
 import time
-from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipaa_pipeline_framework import AuditLog, validate_record  # noqa: E402
+from hipaa_pipeline_framework import AuditLog, run_pipeline  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "output"
 OUT.mkdir(exist_ok=True)
@@ -42,16 +43,9 @@ def main():
     audit = AuditLog(OUT / "audit.jsonl")
     if (OUT / "audit.jsonl").exists():
         (OUT / "audit.jsonl").unlink()
-    seen, kept, quarantined, reasons = set(), [], [], Counter()
-    for r in make_raw():
-        clean, reason = validate_record(r, seen)
-        if reason:
-            reasons[reason] += 1
-            quarantined.append((r, reason))
-            audit.write("quarantined", "redacted", reason)
-        else:
-            kept.append(clean)
-            audit.write("governed", clean["member_hash"])
+    result = run_pipeline(make_raw(), audit_log=audit)
+    kept, quarantined = result["governed"], result["quarantined"]
+    reasons = result["reasons"]
     with open(OUT / "governed_output.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(kept[0]))
         w.writeheader()

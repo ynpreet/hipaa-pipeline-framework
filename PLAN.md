@@ -55,6 +55,14 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   passing); README + PLAN updated. Demo re-verified same run
   (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
   runtime 0.726s).
+- Oct 21, 2026 build block (12:30 PM run): demo now runs through the
+  `run_pipeline` orchestrator instead of hand-rolling the same loop
+  (examples/run_demo.py) — the orchestrator is now dogfooded by its
+  own demo; outputs byte-identical to the pre-refactor run (governed
+  and quarantine CSV SHA-256s unchanged, audit 1,589 governed +
+  8,411 quarantined entries); README test count corrected to 17.
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.362s).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
