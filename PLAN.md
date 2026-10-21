@@ -22,6 +22,12 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   on GitHub. Generated demo outputs and __pycache__ are NOT in the repo.
 - Next steps: PyPI packaging, README quickstart (done in-repo), adoption
   evidence tracking from day one.
+- Oct 21, 2026 build block: stdlib test suite added
+  (tests/test_framework.py, 9 tests, all passing) covering hash,
+  identifier stripping, all quality gates, and audit logging; demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411 quarantined,
+  reasons unchanged; governed output contains no raw member IDs or
+  patient names).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

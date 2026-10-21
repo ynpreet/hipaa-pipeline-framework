@@ -25,6 +25,17 @@ in this repo. Demos use synthetic data only.
 python3 examples/run_demo.py
 ```
 
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+9 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
+uniqueness, identifier stripping, every quality gate (missing field,
+impossible/non-ISO date, invalid amount, duplicate), and audit-log
+JSON-lines output. No dependencies, no real patient data.
+
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
 - Records in: 10,000
