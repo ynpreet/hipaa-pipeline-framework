@@ -2,7 +2,8 @@
 
 Usage: python3 -m hipaa_pipeline_framework input.csv \
     --governed governed.csv --quarantine quarantine.csv \
-    --audit audit.jsonl [--audit-csv audit.csv]
+    --audit audit.jsonl [--audit-csv audit.csv] \
+    [--summary-json summary.json]
 
 Reads raw claims rows, runs them through run_pipeline under the
 secure defaults (fail closed: any insecure config override refuses
@@ -18,7 +19,7 @@ import sys
 
 from .audit import AuditLog
 from .io import (read_claims_csv, write_audit_csv, write_governed_csv,
-                 write_quarantine_csv)
+                 write_quarantine_csv, write_summary_json)
 from .pipeline import run_pipeline, summarize_run
 
 
@@ -35,6 +36,8 @@ def build_parser():
                         help="output JSONL audit trail")
     parser.add_argument("--audit-csv", default=None,
                         help="optional CSV export of the audit trail")
+    parser.add_argument("--summary-json", default=None,
+                        help="optional JSON export of the run summary")
     return parser
 
 
@@ -52,6 +55,8 @@ def main(argv=None):
     if args.audit_csv:
         write_audit_csv(args.audit_csv, audit)
     summary = summarize_run(result)
+    if args.summary_json:
+        write_summary_json(args.summary_json, summary)
     print(f"records_in={summary['records_in']} "
           f"governed={summary['governed_count']} "
           f"quarantined={summary['quarantined_count']} "

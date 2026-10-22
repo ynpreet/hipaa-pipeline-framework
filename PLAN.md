@@ -126,6 +126,26 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   member IDs in all three outputs). Demo re-verified same run
   (10,000 in → 1,589 governed, 8,411 quarantined, reasons
   unchanged; runtime 0.993s).
+- Oct 21, 2026 build block (10:05 PM run): run-summary JSON
+  export (`write_summary_json` in hipaa_pipeline_framework/io.py)
+  — writes a summarize_run dict to sorted, diff-friendly JSON
+  (counts, quarantine rate, per-reason tallies, no record data),
+  exported from the package; demo now dogfoods it as
+  summary.json; 2 new tests (suite now 30, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.575s; governed and
+  quarantine CSVs byte-identical to pre-run outputs; audit.csv
+  10,001 lines, governed 1,589 + quarantined 8,411; summary.json
+  matches the pipeline counts, quarantine rate 0.8411, zero raw
+  member IDs).
+- Oct 22, 2026 build block (4:05 AM run): CLI `--summary-json`
+  flag (hipaa_pipeline_framework/__main__.py) — the command line
+  now writes the run summary to JSON via write_summary_json, so
+  the summary export is reachable without writing Python; 2 new
+  tests (suite now 32, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.576s; audit.csv 10,001 lines; zero raw
+  member IDs, zero patient names in all outputs).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

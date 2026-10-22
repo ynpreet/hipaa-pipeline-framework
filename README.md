@@ -41,7 +41,10 @@ in this repo. Demos use synthetic data only.
   `write_audit_csv` exports an AuditLog's trail to CSV (one row per
   entry, fixed audit columns) for reviewers who work in
   spreadsheets — the trail stores only hashes and "redacted"
-  markers, so the export carries no raw identifiers.
+  markers, so the export carries no raw identifiers;
+  `write_summary_json` writes a `summarize_run` summary dict
+  (counts, quarantine rate, per-reason tallies, no record data)
+  to sorted, diff-friendly JSON for filing or reporting.
 - `examples/run_demo.py` — end-to-end demo on synthetic data, via the
   `run_pipeline` orchestrator (secure defaults, gates, quarantine,
   audit trail).
@@ -58,7 +61,8 @@ Or run any claims CSV through the pipeline from the command line
 ```bash
 python3 -m hipaa_pipeline_framework input.csv \
   --governed governed.csv --quarantine quarantine.csv \
-  --audit audit.jsonl --audit-csv audit.csv
+  --audit audit.jsonl --audit-csv audit.csv \
+  --summary-json summary.json
 ```
 
 ## Tests
@@ -67,7 +71,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-28 stdlib-only tests (Oct 21, 2026, all passing): hash determinism and
+32 stdlib-only tests (Oct 22, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -78,8 +82,22 @@ and quarantine rate), and CSV I/O (rows
 feed the pipeline, governed CSV drops identifiers, quarantine CSV
 writes hashes not raw IDs, audit CSV exports the trail rows,
 empty writes still write the header), and the CLI (de-identified
-outputs + summary on a real CSV, missing input exits 2).
+outputs + summary on a real CSV, missing input exits 2, optional
+--summary-json writes the summary file and is absent when the flag
+is omitted), and
+summary JSON export (round-trip of a real run summary and of
+an empty run, no raw identifiers in the file).
 No dependencies, no real patient data.
+
+Oct 22, 2026 build block (4:05 AM run): CLI `--summary-json` flag
+(`hipaa_pipeline_framework/__main__.py`) — the command line can now
+write the run summary to JSON via `write_summary_json`, so the
+summary export is reachable without writing Python; 2 new tests
+(suite now 32, all passing); demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.576s; governed and quarantine CSVs byte-identical to
+pre-run outputs; audit.csv 10,001 lines; zero raw member IDs,
+zero patient names in all outputs).
 
 Oct 21, 2026 build block (11:00 AM run): pipeline orchestrator
 (`hipaa_pipeline_framework/pipeline.py`, `run_pipeline`) tying config
@@ -151,6 +169,18 @@ tests (suite now 26, all passing); demo re-verified same run
 runtime 0.699s; governed and quarantine CSVs byte-identical to the
 pre-run outputs; audit.csv has 10,001 lines — header + 10,000
 entries — with zero raw member IDs and zero patient names).
+
+Oct 21, 2026 build block (10:05 PM run): `write_summary_json`
+(`hipaa_pipeline_framework/io.py`) — writes a `summarize_run`
+summary dict to sorted, diff-friendly JSON (counts, quarantine
+rate, per-reason tallies, no record data), exported from the
+package, and the demo now dogfoods it as summary.json; 2 new
+tests (suite now 30, all passing); demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.575s; governed and quarantine CSVs byte-identical to the
+pre-run outputs; audit.csv 10,001 lines with governed 1,589 +
+quarantined 8,411; summary.json matches the pipeline counts,
+quarantine rate 0.8411, zero raw member IDs).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

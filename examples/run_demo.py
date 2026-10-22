@@ -20,9 +20,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from hipaa_pipeline_framework import (  # noqa: E402
     AuditLog,
     run_pipeline,
+    summarize_run,
     write_audit_csv,
     write_governed_csv,
     write_quarantine_csv,
+    write_summary_json,
 )
 
 OUT = Path(__file__).resolve().parent / "output"
@@ -56,6 +58,7 @@ def main():
     write_governed_csv(OUT / "governed_output.csv", kept)
     write_quarantine_csv(OUT / "quarantine.csv", quarantined)
     write_audit_csv(OUT / "audit.csv", audit)
+    write_summary_json(OUT / "summary.json", summarize_run(result))
     print(f"records_in=10000 records_governed={len(kept)} "
           f"records_quarantined={len(quarantined)}")
     print(f"quarantine_reasons={dict(reasons)}")

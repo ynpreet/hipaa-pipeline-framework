@@ -33,6 +33,7 @@ from hipaa_pipeline_framework import (  # noqa: E402
     write_audit_csv,
     write_governed_csv,
     write_quarantine_csv,
+    write_summary_json,
 )
 from hipaa_pipeline_framework.__main__ import main as cli_main  # noqa: E402
 
@@ -337,6 +338,31 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(path.read_text().strip(),
                              ",".join(AUDIT_COLUMNS))
 
+    def test_write_summary_json_round_trips_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = run_pipeline([good_record(),
+                                   good_record(service_date="2026-02-30")])
+            summary = summarize_run(result)
+            path = Path(tmp) / "summary.json"
+            write_summary_json(path, summary)
+            loaded = json.loads(path.read_text())
+            self.assertEqual(loaded, summary)
+            self.assertEqual(loaded["records_in"], 2)
+            self.assertEqual(loaded["governed_count"], 1)
+            self.assertEqual(loaded["quarantined_count"], 1)
+            self.assertNotIn("M-100001", path.read_text())
+            self.assertNotIn("Patient 1", path.read_text())
+
+    def test_write_summary_json_empty_run_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = summarize_run(run_pipeline([]))
+            path = Path(tmp) / "summary.json"
+            write_summary_json(path, summary)
+            loaded = json.loads(path.read_text())
+            self.assertEqual(loaded["records_in"], 0)
+            self.assertEqual(loaded["quarantine_rate"], 0.0)
+            self.assertEqual(loaded["reasons"], {})
+
 
 class TestCli(unittest.TestCase):
     def _write_input(self, tmp):
@@ -378,6 +404,42 @@ class TestCli(unittest.TestCase):
                              "--quarantine", str(Path(tmp) / "q.csv"),
                              "--audit", str(Path(tmp) / "a.jsonl")])
             self.assertEqual(code, 2)
+
+    def test_cli_summary_json_flag_writes_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            inp = self._write_input(tmp)
+            gov, quar = Path(tmp) / "g.csv", Path(tmp) / "q.csv"
+            aud = Path(tmp) / "a.jsonl"
+            summ = Path(tmp) / "summary.json"
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = cli_main([str(inp), "--governed", str(gov),
+                                 "--quarantine", str(quar),
+                                 "--audit", str(aud),
+                                 "--summary-json", str(summ)])
+            self.assertEqual(code, 0)
+            loaded = json.loads(summ.read_text())
+            self.assertEqual(loaded["records_in"], 2)
+            self.assertEqual(loaded["governed_count"], 1)
+            self.assertEqual(loaded["quarantined_count"], 1)
+            self.assertEqual(loaded["quarantine_rate"], 0.5)
+            self.assertEqual(loaded["reasons"],
+                             {QuarantineReason.BAD_DATE: 1})
+            self.assertNotIn("M-100001", summ.read_text())
+            self.assertNotIn("Patient 1", summ.read_text())
+
+    def test_cli_without_summary_json_flag_writes_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            inp = self._write_input(tmp)
+            summ = Path(tmp) / "summary.json"
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = cli_main([str(inp),
+                                 "--governed", str(Path(tmp) / "g.csv"),
+                                 "--quarantine", str(Path(tmp) / "q.csv"),
+                                 "--audit", str(Path(tmp) / "a.jsonl")])
+            self.assertEqual(code, 0)
+            self.assertFalse(summ.exists())
 
 
 if __name__ == "__main__":

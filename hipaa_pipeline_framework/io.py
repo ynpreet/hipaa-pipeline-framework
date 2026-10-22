@@ -12,9 +12,14 @@ write_audit_csv exports an AuditLog's trail to CSV for reviewers
 who work in spreadsheets: one row per entry, under the fixed audit
 columns, carrying only the hashed member reference the trail
 already stores — never a raw identifier.
+write_summary_json writes a run summary (the plain dict from
+summarize_run, which contains counts and tallies and no record
+data) to JSON so a run's outcome can be filed or reported without
+any patient data attached.
 """
 
 import csv
+import json
 from pathlib import Path
 
 from .deidentification import hash_member_id
@@ -86,3 +91,16 @@ def write_audit_csv(path, audit_log):
         for entry in audit_log.entries():
             writer.writerow({col: entry.get(col, "") or ""
                              for col in AUDIT_COLUMNS})
+
+
+def write_summary_json(path, summary):
+    """Write a run summary dict to JSON.
+
+    summary is expected to be the plain dict from summarize_run:
+    counts, quarantine rate, and per-reason tallies — no record
+    data, so the file is safe to file or share. Keys are sorted
+    for stable, diff-friendly output.
+    """
+    with open(path, "w") as f:
+        json.dump(summary, f, indent=2, sort_keys=True)
+        f.write("\n")
