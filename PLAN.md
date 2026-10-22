@@ -146,6 +146,17 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   (10,000 in → 1,589 governed, 8,411 quarantined, reasons
   unchanged; runtime 0.576s; audit.csv 10,001 lines; zero raw
   member IDs, zero patient names in all outputs).
+- Oct 22, 2026 build block (10:05 AM run): CSV header validation
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a claims
+  CSV missing any REQUIRED_COLUMNS (member_id, service_date,
+  claim_amount) raises ValueError naming the missing columns
+  instead of silently quarantining every row as
+  missing_required_field; the CLI turns that into exit 2 with no
+  outputs written; empty files raise the same way. 3 new tests
+  (suite now 35, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.754s; audit.csv 10,001 lines; zero raw
+  member IDs, zero patient names in all outputs).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

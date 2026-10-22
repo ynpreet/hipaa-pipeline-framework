@@ -26,15 +26,35 @@ from .deidentification import hash_member_id
 
 GOVERNED_COLUMNS = ("member_hash", "service_date",
                     "claim_amount", "diagnosis_code")
+# Columns a claims CSV must carry for the quality gates to mean
+# anything: without one of these, every row would quarantine as
+# missing_required_field and the real problem — a malformed file —
+# would hide inside the quarantine tally. diagnosis_code is
+# deliberately NOT required (it defaults to "" for governed rows).
+REQUIRED_COLUMNS = ("member_id", "service_date", "claim_amount")
 QUARANTINE_COLUMNS = ("member_hash", "service_date",
                       "claim_amount", "diagnosis_code", "reason")
 AUDIT_COLUMNS = ("timestamp", "action", "member_hash", "reason")
 
 
 def read_claims_csv(path):
-    """Read a claims CSV into a list of row dicts (string values)."""
+    """Read a claims CSV into a list of row dicts (string values).
+
+    Fail closed on a malformed file: if the header (or an empty
+    file, which has no header) is missing any REQUIRED_COLUMNS,
+    raise ValueError naming the missing columns instead of
+    returning rows that would all quarantine as missing fields.
+    The CLI turns this into exit code 2 with no outputs written.
+    """
     with open(path, newline="") as f:
-        return list(csv.DictReader(f))
+        reader = csv.DictReader(f)
+        header = reader.fieldnames or []
+        missing = [col for col in REQUIRED_COLUMNS if col not in header]
+        if missing:
+            raise ValueError(
+                f"claims CSV is missing required columns: "
+                f"{', '.join(missing)}")
+        return list(reader)
 
 
 def write_governed_csv(path, governed):

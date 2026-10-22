@@ -9,8 +9,9 @@ from .audit import AuditLog
 from .config import default_pipeline_config, is_secure, validate_config
 from .deidentification import hash_member_id, strip_identifiers
 from .io import (AUDIT_COLUMNS, GOVERNED_COLUMNS, QUARANTINE_COLUMNS,
-                 read_claims_csv, write_audit_csv, write_governed_csv,
-                 write_quarantine_csv, write_summary_json)
+                 REQUIRED_COLUMNS, read_claims_csv, write_audit_csv,
+                 write_governed_csv, write_quarantine_csv,
+                 write_summary_json)
 from .pipeline import run_pipeline, summarize_run
 from .quality import QuarantineReason, validate_record
 
@@ -19,6 +20,7 @@ __all__ = [
     "AuditLog",
     "GOVERNED_COLUMNS",
     "QUARANTINE_COLUMNS",
+    "REQUIRED_COLUMNS",
     "QuarantineReason",
     "default_pipeline_config",
     "hash_member_id",

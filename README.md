@@ -33,7 +33,11 @@ in this repo. Demos use synthetic data only.
   plain, record-free summary dict (counts, quarantine rate, and
   per-reason tallies) safe to log or paste into a report.
 - `hipaa_pipeline_framework/io.py` — CSV in/out: `read_claims_csv`
-  reads raw claims rows for `run_pipeline`; `write_governed_csv`
+  reads raw claims rows for `run_pipeline`, and fails closed on a
+  malformed file — a header missing any of REQUIRED_COLUMNS
+  (`member_id`, `service_date`, `claim_amount`) raises ValueError
+  naming the missing columns instead of quarantining every row;
+  `write_governed_csv`
   writes only the fixed de-identified columns, dropping any raw
   identifier that slipped into a record dict; `write_quarantine_csv`
   writes quarantined (record, reason) pairs the same way — member
@@ -71,7 +75,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-32 stdlib-only tests (Oct 22, 2026, all passing): hash determinism and
+35 stdlib-only tests (Oct 22, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -84,9 +88,11 @@ writes hashes not raw IDs, audit CSV exports the trail rows,
 empty writes still write the header), and the CLI (de-identified
 outputs + summary on a real CSV, missing input exits 2, optional
 --summary-json writes the summary file and is absent when the flag
-is omitted), and
+is omitted, bad-header input exits 2 and writes no outputs), and
 summary JSON export (round-trip of a real run summary and of
-an empty run, no raw identifiers in the file).
+an empty run, no raw identifiers in the file), and CSV header
+validation (missing required column and empty file both raise
+ValueError naming the missing columns).
 No dependencies, no real patient data.
 
 Oct 22, 2026 build block (4:05 AM run): CLI `--summary-json` flag
@@ -97,6 +103,17 @@ summary export is reachable without writing Python; 2 new tests
 (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
 runtime 0.576s; governed and quarantine CSVs byte-identical to
 pre-run outputs; audit.csv 10,001 lines; zero raw member IDs,
+zero patient names in all outputs).
+
+Oct 22, 2026 build block (10:05 AM run): CSV header validation
+(`read_claims_csv` in `hipaa_pipeline_framework/io.py`) — a claims
+CSV missing any REQUIRED_COLUMNS (`member_id`, `service_date`,
+`claim_amount`) now raises ValueError naming the missing columns
+instead of silently quarantining every row as missing-field, and
+the CLI turns that into exit 2 with no outputs written; 3 new
+tests (suite now 35, all passing). Demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.754s; audit.csv 10,001 lines; zero raw member IDs,
 zero patient names in all outputs).
 
 Oct 21, 2026 build block (11:00 AM run): pipeline orchestrator

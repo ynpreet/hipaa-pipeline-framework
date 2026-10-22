@@ -262,6 +262,26 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.BAD_DATE: 1})
 
+    def test_read_claims_csv_missing_column_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text(
+                "member_id,service_date\n"
+                "M-100001,2026-03-15\n"
+            )
+            with self.assertRaises(ValueError) as ctx:
+                read_claims_csv(path)
+            self.assertIn("claim_amount", str(ctx.exception))
+
+    def test_read_claims_csv_empty_file_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "empty.csv"
+            path.write_text("")
+            with self.assertRaises(ValueError) as ctx:
+                read_claims_csv(path)
+            for col in ("member_id", "service_date", "claim_amount"):
+                self.assertIn(col, str(ctx.exception))
+
     def test_write_governed_csv_drops_identifiers(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "governed.csv"
@@ -404,6 +424,20 @@ class TestCli(unittest.TestCase):
                              "--quarantine", str(Path(tmp) / "q.csv"),
                              "--audit", str(Path(tmp) / "a.jsonl")])
             self.assertEqual(code, 2)
+
+    def test_cli_bad_header_returns_2_and_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            inp = Path(tmp) / "bad.csv"
+            inp.write_text("member_id,service_date\n"
+                           "M-100001,2026-03-15\n")
+            gov, quar = Path(tmp) / "g.csv", Path(tmp) / "q.csv"
+            aud = Path(tmp) / "a.jsonl"
+            code = cli_main([str(inp), "--governed", str(gov),
+                             "--quarantine", str(quar),
+                             "--audit", str(aud)])
+            self.assertEqual(code, 2)
+            for path in (gov, quar, aud):
+                self.assertFalse(path.exists())
 
     def test_cli_summary_json_flag_writes_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
