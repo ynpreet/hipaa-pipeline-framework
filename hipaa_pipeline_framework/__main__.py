@@ -11,11 +11,16 @@ to run), and writes the de-identified outputs via the io module —
 governed records, the quarantine report, and the audit trail — so
 no raw identifier ever reaches an output file. Prints only the run
 summary (counts, quarantine rate, per-reason tallies), never record
-data. Returns 2 on a usage or input error.
+data. Missing parent directories of the output files are created
+before the run starts, so a nested output path works without a
+prior mkdir; an unwritable output path still returns 2, with an
+error line instead of a traceback. Returns 2 on a usage or input
+error.
 """
 
 import argparse
 import sys
+from pathlib import Path
 
 from .audit import AuditLog
 from .io import (read_claims_csv, write_audit_csv, write_governed_csv,
@@ -41,6 +46,22 @@ def build_parser():
     return parser
 
 
+def _ensure_parent_dirs(paths):
+    """Create the parent directory of each output path, if needed.
+
+    A path with no parent component (a bare filename in the current
+    directory) needs nothing. Anything else is created, nested
+    levels included, before any output is written, so the run
+    never fails halfway through on a missing directory. Raises
+    OSError when a parent cannot be created (e.g. a path component
+    is a regular file); the caller turns that into exit code 2.
+    """
+    for path in paths:
+        parent = Path(path).parent
+        if str(parent) not in ("", "."):
+            parent.mkdir(parents=True, exist_ok=True)
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
     try:
@@ -48,15 +69,25 @@ def main(argv=None):
     except (OSError, ValueError) as exc:
         print(f"error: cannot read input: {exc}", file=sys.stderr)
         return 2
-    audit = AuditLog(args.audit)
-    result = run_pipeline(records, audit_log=audit)
-    write_governed_csv(args.governed, result["governed"])
-    write_quarantine_csv(args.quarantine, result["quarantined"])
+    outputs = [args.governed, args.quarantine, args.audit]
     if args.audit_csv:
-        write_audit_csv(args.audit_csv, audit)
-    summary = summarize_run(result)
+        outputs.append(args.audit_csv)
     if args.summary_json:
-        write_summary_json(args.summary_json, summary)
+        outputs.append(args.summary_json)
+    try:
+        _ensure_parent_dirs(outputs)
+        audit = AuditLog(args.audit)
+        result = run_pipeline(records, audit_log=audit)
+        write_governed_csv(args.governed, result["governed"])
+        write_quarantine_csv(args.quarantine, result["quarantined"])
+        if args.audit_csv:
+            write_audit_csv(args.audit_csv, audit)
+        summary = summarize_run(result)
+        if args.summary_json:
+            write_summary_json(args.summary_json, summary)
+    except OSError as exc:
+        print(f"error: cannot write output: {exc}", file=sys.stderr)
+        return 2
     print(f"records_in={summary['records_in']} "
           f"governed={summary['governed_count']} "
           f"quarantined={summary['quarantined_count']} "

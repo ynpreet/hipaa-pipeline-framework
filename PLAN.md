@@ -157,6 +157,18 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   (10,000 in → 1,589 governed, 8,411 quarantined, reasons
   unchanged; runtime 0.754s; audit.csv 10,001 lines; zero raw
   member IDs, zero patient names in all outputs).
+- Oct 22, 2026 build block (4:05 PM run): CLI output parent
+  directories (hipaa_pipeline_framework/__main__.py) — the CLI
+  creates missing parent directories for all its outputs before
+  the run starts, so nested output paths work without a prior
+  mkdir; an unwritable output path exits 2 with an error line,
+  never a traceback. 2 new tests (suite now 37, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.775s; audit.csv
+  10,001 lines; governed and quarantine CSVs byte-identical to
+  pre-run outputs; zero raw member IDs, zero patient names in
+  all outputs; CLI smoke-tested into fresh nested output
+  directories with the same numbers).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

@@ -75,7 +75,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-35 stdlib-only tests (Oct 22, 2026, all passing): hash determinism and
+37 stdlib-only tests (Oct 22, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -92,7 +92,10 @@ is omitted, bad-header input exits 2 and writes no outputs), and
 summary JSON export (round-trip of a real run summary and of
 an empty run, no raw identifiers in the file), and CSV header
 validation (missing required column and empty file both raise
-ValueError naming the missing columns).
+ValueError naming the missing columns), and CLI output
+directories (missing parent directories are created before the
+run; an unwritable output path exits 2 with an error line, no
+traceback).
 No dependencies, no real patient data.
 
 Oct 22, 2026 build block (4:05 AM run): CLI `--summary-json` flag
@@ -115,6 +118,20 @@ tests (suite now 35, all passing). Demo re-verified same run
 (10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
 runtime 0.754s; audit.csv 10,001 lines; zero raw member IDs,
 zero patient names in all outputs).
+
+Oct 22, 2026 build block (4:05 PM run): CLI output parent
+directories (`hipaa_pipeline_framework/__main__.py`) — the CLI now
+creates missing parent directories for all its outputs (governed,
+quarantine, audit, --audit-csv, --summary-json) before the run
+starts, so a nested output path works without a prior mkdir, and
+an unwritable output path exits 2 with an error line instead of a
+traceback; 2 new tests (suite now 37, all passing). Demo
+re-verified same run (10,000 in → 1,589 governed, 8,411
+quarantined, reasons unchanged; runtime 0.775s; audit.csv 10,001
+lines; governed and quarantine CSVs byte-identical to pre-run
+outputs; zero raw member IDs, zero patient names in all outputs;
+CLI smoke-tested on a 10,000-row synthetic CSV into fresh nested
+output directories with the same numbers).
 
 Oct 21, 2026 build block (11:00 AM run): pipeline orchestrator
 (`hipaa_pipeline_framework/pipeline.py`, `run_pipeline`) tying config

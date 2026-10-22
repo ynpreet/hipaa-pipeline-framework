@@ -10,7 +10,7 @@ import json
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -461,6 +461,43 @@ class TestCli(unittest.TestCase):
                              {QuarantineReason.BAD_DATE: 1})
             self.assertNotIn("M-100001", summ.read_text())
             self.assertNotIn("Patient 1", summ.read_text())
+
+    def test_cli_creates_missing_output_parent_dirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            inp = self._write_input(tmp)
+            base = Path(tmp) / "out" / "nested"
+            gov = base / "g.csv"
+            quar = base / "q.csv"
+            aud = base / "a.jsonl"
+            aud_csv = base / "a.csv"
+            summ = base / "summary.json"
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = cli_main([str(inp), "--governed", str(gov),
+                                 "--quarantine", str(quar),
+                                 "--audit", str(aud),
+                                 "--audit-csv", str(aud_csv),
+                                 "--summary-json", str(summ)])
+            self.assertEqual(code, 0)
+            for path in (gov, quar, aud, aud_csv, summ):
+                self.assertTrue(path.exists())
+                self.assertNotIn("M-100001", path.read_text())
+                self.assertNotIn("Patient 1", path.read_text())
+
+    def test_cli_unwritable_output_parent_returns_2_no_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            inp = self._write_input(tmp)
+            blocker = Path(tmp) / "blocker"
+            blocker.write_text("not a directory")
+            gov = blocker / "g.csv"
+            err = io.StringIO()
+            with redirect_stderr(err):
+                code = cli_main([str(inp), "--governed", str(gov),
+                                 "--quarantine", str(Path(tmp) / "q.csv"),
+                                 "--audit", str(Path(tmp) / "a.jsonl")])
+            self.assertEqual(code, 2)
+            self.assertNotIn("Traceback", err.getvalue())
+            self.assertIn("cannot write output", err.getvalue())
 
     def test_cli_without_summary_json_flag_writes_none(self):
         with tempfile.TemporaryDirectory() as tmp:
