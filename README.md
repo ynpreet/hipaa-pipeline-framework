@@ -37,6 +37,9 @@ in this repo. Demos use synthetic data only.
   malformed file — a header missing any of REQUIRED_COLUMNS
   (`member_id`, `service_date`, `claim_amount`) raises ValueError
   naming the missing columns instead of quarantining every row;
+  it also tolerates real export mess — a UTF-8 byte-order mark
+  and whitespace around headers and values are stripped, so a
+  spreadsheet export reads cleanly instead of failing a gate;
   `write_governed_csv`
   writes only the fixed de-identified columns, dropping any raw
   identifier that slipped into a record dict; `write_quarantine_csv`
@@ -75,7 +78,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-37 stdlib-only tests (Oct 22, 2026, all passing): hash determinism and
+39 stdlib-only tests (Oct 22, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -95,7 +98,9 @@ validation (missing required column and empty file both raise
 ValueError naming the missing columns), and CLI output
 directories (missing parent directories are created before the
 run; an unwritable output path exits 2 with an error line, no
-traceback).
+traceback), and CSV input tolerance (a BOM-marked, whitespace-padded
+export reads cleanly and governs; a padded header missing a
+required column still raises naming that column).
 No dependencies, no real patient data.
 
 Oct 22, 2026 build block (4:05 AM run): CLI `--summary-json` flag
@@ -132,6 +137,19 @@ lines; governed and quarantine CSVs byte-identical to pre-run
 outputs; zero raw member IDs, zero patient names in all outputs;
 CLI smoke-tested on a 10,000-row synthetic CSV into fresh nested
 output directories with the same numbers).
+
+Oct 22, 2026 build block (10:05 PM run): CSV input tolerance
+(`read_claims_csv` in `hipaa_pipeline_framework/io.py`) — a claims
+CSV with a UTF-8 byte-order mark and whitespace around headers
+and values now reads cleanly (BOM stripped, headers and values
+trimmed) instead of failing a quality gate, while a padded header
+still missing a required column raises naming that column; 2 new
+tests (suite now 39, all passing). Demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 1.029s; governed, quarantine, and summary.json outputs
+byte-identical to pre-run outputs; audit.csv 10,001 lines; zero raw
+member IDs, zero patient names in all outputs; CLI smoke-tested on
+a BOM-marked, padded 2-row CSV: 1 governed, 1 quarantined).
 
 Oct 21, 2026 build block (11:00 AM run): pipeline orchestrator
 (`hipaa_pipeline_framework/pipeline.py`, `run_pipeline`) tying config

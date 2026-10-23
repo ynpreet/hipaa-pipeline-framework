@@ -282,6 +282,33 @@ class TestCsvIO(unittest.TestCase):
             for col in ("member_id", "service_date", "claim_amount"):
                 self.assertIn(col, str(ctx.exception))
 
+    def test_read_claims_csv_tolerates_bom_and_padding(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            # Spreadsheet-style export: UTF-8 BOM plus whitespace
+            # around headers and values.
+            path.write_bytes(
+                b"\xef\xbb\xbf member_id , service_date , "
+                b"claim_amount , diagnosis_code \n"
+                b" M-100001 , 2026-03-15 , 120.50 , E11.9 \n"
+            )
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["member_id"], "M-100001")
+            self.assertEqual(rows[0]["service_date"], "2026-03-15")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 1)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_padded_header_still_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text(" member_id , service_date \n"
+                            " M-100001 , 2026-03-15 \n")
+            with self.assertRaises(ValueError) as ctx:
+                read_claims_csv(path)
+            self.assertIn("claim_amount", str(ctx.exception))
+
     def test_write_governed_csv_drops_identifiers(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "governed.csv"

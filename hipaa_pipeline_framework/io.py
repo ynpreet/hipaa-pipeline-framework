@@ -1,7 +1,10 @@
 """CSV input/output for the governed pipeline.
 
 read_claims_csv reads raw claims-like rows (all values strings) so a
-caller can feed a file straight into run_pipeline. write_governed_csv
+caller can feed a file straight into run_pipeline; it tolerates the
+mess real exports carry — a UTF-8 byte-order mark and whitespace
+around headers and values — while still failing closed on a header
+missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
 it never writes a raw member ID, patient name, or any other direct
 identifier, even if one slipped into a governed record dict.
@@ -45,16 +48,26 @@ def read_claims_csv(path):
     raise ValueError naming the missing columns instead of
     returning rows that would all quarantine as missing fields.
     The CLI turns this into exit code 2 with no outputs written.
+    Real exports are tolerated on the way in: a UTF-8 byte-order
+    mark (the kind spreadsheet exports prepend) is stripped by the
+    utf-8-sig encoding, and surrounding whitespace on headers and
+    values is stripped, so " member_id " and " 2026-03-15 " mean
+    the same as their clean forms instead of failing a gate.
     """
-    with open(path, newline="") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
-        header = reader.fieldnames or []
+        header = [name.strip() if name else name
+                  for name in (reader.fieldnames or [])]
+        reader.fieldnames = header
         missing = [col for col in REQUIRED_COLUMNS if col not in header]
         if missing:
             raise ValueError(
                 f"claims CSV is missing required columns: "
                 f"{', '.join(missing)}")
-        return list(reader)
+        return [{key.strip(): (value.strip() if isinstance(value, str)
+                              else value)
+                 for key, value in row.items() if key is not None}
+                for row in reader]
 
 
 def write_governed_csv(path, governed):

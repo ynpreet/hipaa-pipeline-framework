@@ -169,6 +169,19 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   pre-run outputs; zero raw member IDs, zero patient names in
   all outputs; CLI smoke-tested into fresh nested output
   directories with the same numbers).
+- Oct 22, 2026 build block (10:05 PM run): CSV input tolerance
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a claims
+  CSV with a UTF-8 byte-order mark and whitespace around headers
+  and values now reads cleanly (BOM stripped via utf-8-sig,
+  headers and values trimmed) instead of failing a quality gate,
+  while a padded header still missing a required column raises
+  ValueError naming that column; 2 new tests (suite now 39, all
+  passing). Demo re-verified same run (10,000 in → 1,589 governed,
+  8,411 quarantined, reasons unchanged; runtime 1.029s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a BOM-marked,
+  padded 2-row CSV: 1 governed, 1 quarantined).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
