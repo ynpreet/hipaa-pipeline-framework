@@ -300,6 +300,35 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["governed_count"], 1)
             self.assertEqual(result["quarantined_count"], 0)
 
+    def test_read_claims_csv_skips_blank_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            # Trailing spreadsheet-export junk: a commas-only
+            # line and a whitespace-only line between real rows.
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,2026-03-15,120.50\n"
+                            ",,\n"
+                            "   \n"
+                            "M-100002,2026-03-16,200.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 2)
+            result = run_pipeline(rows)
+            self.assertEqual(result["records_in"], 2)
+            self.assertEqual(result["governed_count"], 2)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_partial_row_still_quarantines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,2026-03-15,\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 1)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 1)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.MISSING_FIELD: 1})
+
     def test_read_claims_csv_padded_header_still_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"

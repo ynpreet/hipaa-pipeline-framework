@@ -3,8 +3,8 @@
 read_claims_csv reads raw claims-like rows (all values strings) so a
 caller can feed a file straight into run_pipeline; it tolerates the
 mess real exports carry — a UTF-8 byte-order mark and whitespace
-around headers and values — while still failing closed on a header
-missing a required column. write_governed_csv
+around headers and values — skips blank rows outright, and still
+fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
 it never writes a raw member ID, patient name, or any other direct
 identifier, even if one slipped into a governed record dict.
@@ -53,6 +53,13 @@ def read_claims_csv(path):
     utf-8-sig encoding, and surrounding whitespace on headers and
     values is stripped, so " member_id " and " 2026-03-15 " mean
     the same as their clean forms instead of failing a gate.
+    Blank rows — a commas-only line (",,") or a whitespace-only
+    line, the kind trailing spreadsheet exports leave behind —
+    are skipped outright: they carry no record, so counting one
+    as a missing_required_field quarantine would inflate the
+    quarantine tally with a non-record. A row with some fields
+    filled and others empty is NOT blank and still quarantines
+    normally.
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -64,10 +71,15 @@ def read_claims_csv(path):
             raise ValueError(
                 f"claims CSV is missing required columns: "
                 f"{', '.join(missing)}")
-        return [{key.strip(): (value.strip() if isinstance(value, str)
-                              else value)
-                 for key, value in row.items() if key is not None}
-                for row in reader]
+        rows = []
+        for row in reader:
+            cleaned = {key.strip(): (value.strip()
+                                     if isinstance(value, str) else value)
+                       for key, value in row.items() if key is not None}
+            if cleaned and any(value not in (None, "")
+                               for value in cleaned.values()):
+                rows.append(cleaned)
+        return rows
 
 
 def write_governed_csv(path, governed):

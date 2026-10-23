@@ -78,7 +78,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-39 stdlib-only tests (Oct 22, 2026, all passing): hash determinism and
+41 stdlib-only tests (Oct 23, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -100,8 +100,25 @@ directories (missing parent directories are created before the
 run; an unwritable output path exits 2 with an error line, no
 traceback), and CSV input tolerance (a BOM-marked, whitespace-padded
 export reads cleanly and governs; a padded header missing a
-required column still raises naming that column).
+required column still raises naming that column), and blank-row
+skipping (a commas-only or whitespace-only line is skipped, not
+counted as a missing-field quarantine; a partially filled row
+still quarantines normally).
 No dependencies, no real patient data.
+
+Oct 23, 2026 build block (4:05 AM run): blank-row skipping
+(`read_claims_csv` in `hipaa_pipeline_framework/io.py`) — a
+claims CSV with a commas-only line or a whitespace-only line
+(the trailing junk spreadsheet exports leave behind) now skips
+those rows outright instead of counting each as a
+missing_required_field quarantine, while a row with some fields
+filled and others empty still quarantines normally; 2 new tests
+(suite now 41, all passing). Demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.488s; governed 1,590 lines, quarantine 8,412 lines,
+audit.csv 10,001 lines; zero raw member IDs, zero patient names
+in all outputs; CLI smoke-tested on a blank-row 2-row CSV: 2 in,
+2 governed, 0 quarantined).
 
 Oct 22, 2026 build block (4:05 AM run): CLI `--summary-json` flag
 (`hipaa_pipeline_framework/__main__.py`) — the command line can now

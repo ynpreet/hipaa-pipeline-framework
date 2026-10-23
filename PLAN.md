@@ -182,6 +182,18 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   outputs; audit.csv 10,001 lines; zero raw member IDs, zero
   patient names in all outputs; CLI smoke-tested on a BOM-marked,
   padded 2-row CSV: 1 governed, 1 quarantined).
+- Oct 23, 2026 build block (4:05 AM run): blank-row skipping
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  commas-only line or whitespace-only line in a claims CSV is
+  now skipped outright instead of inflating the quarantine tally
+  as missing_required_field, while a partially filled row still
+  quarantines normally; 2 new tests (suite now 41, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.488s; governed
+  1,590 lines, quarantine 8,412 lines, audit.csv 10,001 lines;
+  zero raw member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a blank-row 2-row CSV: 2 in, 2 governed,
+  0 quarantined).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
