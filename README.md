@@ -78,7 +78,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-41 stdlib-only tests (Oct 23, 2026, all passing): hash determinism and
+43 stdlib-only tests (Oct 23, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -103,8 +103,25 @@ export reads cleanly and governs; a padded header missing a
 required column still raises naming that column), and blank-row
 skipping (a commas-only or whitespace-only line is skipped, not
 counted as a missing-field quarantine; a partially filled row
-still quarantines normally).
+still quarantines normally), and currency formatting
+("$1,200.50" reads as 1200.50 and governs; "$abc" still
+quarantines as invalid_amount).
 No dependencies, no real patient data.
+
+Oct 23, 2026 build block (10:05 AM run): currency-formatted
+amounts (`read_claims_csv` in `hipaa_pipeline_framework/io.py`) —
+a claim_amount written as "$1,200.50" (leading "$" plus
+thousands commas, the way spreadsheet exports write money) now
+reads as 1200.50 and governs instead of quarantining as
+invalid_amount, while a value that is still not a number after
+stripping ("$abc") still quarantines normally; the quality
+gates stay strict and see only the stripped value; 2 new tests
+(suite now 43, all passing). Demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.387s; governed, quarantine, and summary.json outputs
+byte-identical to pre-run outputs; zero raw member IDs, zero
+patient names in all outputs; CLI smoke-tested on a
+currency-formatted 2-row CSV: 2 in, 1 governed, 1 quarantined).
 
 Oct 23, 2026 build block (4:05 AM run): blank-row skipping
 (`read_claims_csv` in `hipaa_pipeline_framework/io.py`) — a

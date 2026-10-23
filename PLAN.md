@@ -182,6 +182,18 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   outputs; audit.csv 10,001 lines; zero raw member IDs, zero
   patient names in all outputs; CLI smoke-tested on a BOM-marked,
   padded 2-row CSV: 1 governed, 1 quarantined).
+- Oct 23, 2026 build block (10:05 AM run): currency-formatted
+  amounts (read_claims_csv in hipaa_pipeline_framework/io.py) —
+  a claim_amount written as "$1,200.50" now reads as 1200.50 and
+  governs instead of quarantining as invalid_amount, while
+  "$abc" still quarantines normally; the quality gates stay
+  strict and see only the stripped value; 2 new tests (suite
+  now 43, all passing). Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged; runtime
+  0.387s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a
+  currency-formatted 2-row CSV: 2 in, 1 governed, 1 quarantined).
 - Oct 23, 2026 build block (4:05 AM run): blank-row skipping
   (read_claims_csv in hipaa_pipeline_framework/io.py) — a
   commas-only line or whitespace-only line in a claims CSV is

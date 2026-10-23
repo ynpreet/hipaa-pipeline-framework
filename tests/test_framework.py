@@ -317,6 +317,33 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["governed_count"], 2)
             self.assertEqual(result["quarantined_count"], 0)
 
+    def test_read_claims_csv_strips_currency_formatting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            # Spreadsheet-style amount: quoted because of the comma.
+            path.write_text("member_id,service_date,claim_amount\n"
+                            'M-100001,2026-03-15,"$1,200.50"\n')
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["claim_amount"], "1200.50")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 1)
+            self.assertEqual(result["quarantined_count"], 0)
+            self.assertEqual(result["governed"][0]["claim_amount"],
+                             1200.50)
+
+    def test_read_claims_csv_currency_garbage_still_quarantines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,2026-03-15,$abc\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 1)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 1)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_AMOUNT: 1})
+
     def test_read_claims_csv_partial_row_still_quarantines(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"

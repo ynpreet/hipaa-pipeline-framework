@@ -3,7 +3,8 @@
 read_claims_csv reads raw claims-like rows (all values strings) so a
 caller can feed a file straight into run_pipeline; it tolerates the
 mess real exports carry — a UTF-8 byte-order mark and whitespace
-around headers and values — skips blank rows outright, and still
+around headers and values, currency-formatted amounts such as
+"$1,200.50" — skips blank rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
 it never writes a raw member ID, patient name, or any other direct
@@ -59,7 +60,13 @@ def read_claims_csv(path):
     as a missing_required_field quarantine would inflate the
     quarantine tally with a non-record. A row with some fields
     filled and others empty is NOT blank and still quarantines
-    normally.
+    normally. Currency formatting on claim_amount — a leading "$"
+    and thousands commas, as in "$1,200.50" — is stripped on read,
+    so a formatted amount governs instead of quarantining as
+    invalid_amount; a value that is still not a number after
+    stripping (e.g. "$abc") quarantines normally. The quality
+    gates themselves stay strict: they see only the stripped
+    value, never the raw formatting.
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -76,6 +83,10 @@ def read_claims_csv(path):
             cleaned = {key.strip(): (value.strip()
                                      if isinstance(value, str) else value)
                        for key, value in row.items() if key is not None}
+            amount = cleaned.get("claim_amount")
+            if isinstance(amount, str):
+                cleaned["claim_amount"] = amount.replace(
+                    "$", "").replace(",", "").strip()
             if cleaned and any(value not in (None, "")
                                for value in cleaned.values()):
                 rows.append(cleaned)
