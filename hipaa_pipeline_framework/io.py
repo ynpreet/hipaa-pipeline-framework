@@ -4,7 +4,8 @@ read_claims_csv reads raw claims-like rows (all values strings) so a
 caller can feed a file straight into run_pipeline; it tolerates the
 mess real exports carry — a UTF-8 byte-order mark and whitespace
 around headers and values, currency-formatted amounts such as
-"$1,200.50" — skips blank rows outright, and still
+"$1,200.50", US slash dates such as "03/15/2026" — skips blank
+rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
 it never writes a raw member ID, patient name, or any other direct
@@ -24,6 +25,7 @@ any patient data attached.
 
 import csv
 import json
+from datetime import datetime
 from pathlib import Path
 
 from .deidentification import hash_member_id
@@ -64,8 +66,14 @@ def read_claims_csv(path):
     and thousands commas, as in "$1,200.50" — is stripped on read,
     so a formatted amount governs instead of quarantining as
     invalid_amount; a value that is still not a number after
-    stripping (e.g. "$abc") quarantines normally. The quality
-    gates themselves stay strict: they see only the stripped
+    stripping (e.g. "$abc") quarantines normally. A service_date
+    in US slash form (MM/DD/YYYY, the convention in US healthcare
+    exports) is normalized to ISO form (YYYY-MM-DD) on read, so
+    "03/15/2026" governs instead of quarantining as
+    unparseable_date; a slash date that is not a real calendar
+    date (e.g. "02/30/2026") is left untouched so the gates
+    quarantine it normally. The quality
+    gates themselves stay strict: they see only the normalized
     value, never the raw formatting.
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
@@ -87,6 +95,13 @@ def read_claims_csv(path):
             if isinstance(amount, str):
                 cleaned["claim_amount"] = amount.replace(
                     "$", "").replace(",", "").strip()
+            date = cleaned.get("service_date")
+            if isinstance(date, str) and "/" in date:
+                try:
+                    cleaned["service_date"] = datetime.strptime(
+                        date, "%m/%d/%Y").strftime("%Y-%m-%d")
+                except ValueError:
+                    pass  # not a real calendar date: gates quarantine it
             if cleaned and any(value not in (None, "")
                                for value in cleaned.values()):
                 rows.append(cleaned)

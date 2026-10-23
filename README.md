@@ -78,7 +78,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-43 stdlib-only tests (Oct 23, 2026, all passing): hash determinism and
+45 stdlib-only tests (Oct 23, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -105,8 +105,27 @@ skipping (a commas-only or whitespace-only line is skipped, not
 counted as a missing-field quarantine; a partially filled row
 still quarantines normally), and currency formatting
 ("$1,200.50" reads as 1200.50 and governs; "$abc" still
-quarantines as invalid_amount).
+quarantines as invalid_amount), and slash-date normalization
+("03/15/2026" reads as 2026-03-15 and governs; "02/30/2026"
+still quarantines as unparseable_date).
 No dependencies, no real patient data.
+
+Oct 23, 2026 build block (4:05 PM run): US slash-date
+normalization (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written as
+MM/DD/YYYY (the US healthcare-export convention) now normalizes
+to ISO form (YYYY-MM-DD) on read and governs instead of
+quarantining as unparseable_date, while a slash date that is
+not a real calendar date ("02/30/2026") is left untouched so
+the gates quarantine it normally; the quality gates stay
+strict and see only the normalized value; 2 new tests (suite
+now 45, all passing). Demo re-verified same run (10,000 in →
+1,589 governed, 8,411 quarantined, reasons unchanged; runtime
+0.735s; governed, quarantine, and summary.json outputs
+byte-identical to pre-run outputs; audit.csv 10,001 lines;
+zero raw member IDs, zero patient names in all outputs; CLI
+smoke-tested on a slash-date 2-row CSV: 2 in, 1 governed,
+1 quarantined).
 
 Oct 23, 2026 build block (10:05 AM run): currency-formatted
 amounts (`read_claims_csv` in `hipaa_pipeline_framework/io.py`) —

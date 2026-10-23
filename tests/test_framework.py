@@ -356,6 +356,30 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.MISSING_FIELD: 1})
 
+    def test_read_claims_csv_normalizes_slash_dates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,03/15/2026,120.50\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["service_date"], "2026-03-15")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 1)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_slash_date_still_quarantines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,02/30/2026,120.50\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 1)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 1)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 1})
+
     def test_read_claims_csv_padded_header_still_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"
