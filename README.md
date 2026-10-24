@@ -45,6 +45,10 @@ in this repo. Demos use synthetic data only.
   identifier that slipped into a record dict; `write_quarantine_csv`
   writes quarantined (record, reason) pairs the same way — member
   hash plus reason, never a raw member ID or patient name;
+  `read_claims_csv` also normalizes datetime-stamped service
+  dates ("2026-03-15 10:30:00" or "2026-03-15T09:00:00" read as
+  2026-03-15 and govern; an impossible datetime still
+  quarantines as unparseable_date);
   `write_audit_csv` exports an AuditLog's trail to CSV (one row per
   entry, fixed audit columns) for reviewers who work in
   spreadsheets — the trail stores only hashes and "redacted"
@@ -78,7 +82,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-47 stdlib-only tests (Oct 23, 2026, all passing): hash determinism and
+49 stdlib-only tests (Oct 24, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -109,8 +113,30 @@ quarantines as invalid_amount), and slash-date normalization
 ("03/15/2026" reads as 2026-03-15 and governs; "02/30/2026"
 still quarantines as unparseable_date), and case-insensitive headers
 ("Member_ID" reads as member_id and governs; a mixed-case header
-still missing a required column raises naming that column).
+still missing a required column raises naming that column), and
+datetime-stamped dates ("2026-03-15 10:30:00" or
+"2026-03-15T09:00:00" read as 2026-03-15 and govern; an
+impossible datetime still quarantines as unparseable_date).
 No dependencies, no real patient data.
+
+Oct 24, 2026 build block (4:05 AM run): datetime-stamped
+service dates (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date carrying a
+time stamp (space- or "T"-separated, e.g. "2026-03-15 10:30:00"
+or "2026-03-15T09:00:00", the way spreadsheet exports write
+datetimes) now normalizes to its date part (YYYY-MM-DD) on
+read and governs instead of quarantining as
+unparseable_date, while an impossible datetime ("2026-02-30
+10:00:00") or a garbage time part is left untouched so the
+gates quarantine it normally; the quality gates stay strict
+and see only the normalized value; 2 new tests (suite now
+49, all passing). Demo re-verified same run (10,000 in →
+1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.524s; governed, quarantine, and summary.json
+outputs byte-identical to pre-run outputs; audit.csv 10,001
+lines; zero raw member IDs, zero patient names in all
+outputs; CLI smoke-tested on a datetime-stamped 2-row CSV:
+2 in, 1 governed, 1 quarantined).
 
 Oct 23, 2026 build block (10:05 PM run): case-insensitive CSV
 headers (`read_claims_csv` in

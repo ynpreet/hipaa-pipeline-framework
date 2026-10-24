@@ -5,7 +5,8 @@ caller can feed a file straight into run_pipeline; it tolerates the
 mess real exports carry — a UTF-8 byte-order mark and whitespace
 around headers and values, headers in any letter case (so
 "Member_ID" means member_id), currency-formatted amounts such as
-"$1,200.50", US slash dates such as "03/15/2026" — skips blank
+"$1,200.50", US slash dates such as "03/15/2026",
+datetime-stamped dates such as "2026-03-15 10:30:00" — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -79,7 +80,14 @@ def read_claims_csv(path):
     "03/15/2026" governs instead of quarantining as
     unparseable_date; a slash date that is not a real calendar
     date (e.g. "02/30/2026") is left untouched so the gates
-    quarantine it normally. The quality
+    quarantine it normally. A service_date carrying a time stamp
+    (a space- or "T"-separated datetime such as "2026-03-15
+    10:30:00" or "2026-03-15T09:00:00", the way spreadsheet
+    exports write datetimes) is normalized to its date part
+    (YYYY-MM-DD) on read, so it governs instead of quarantining
+    as unparseable_date; a datetime that is not a real calendar
+    date or has a garbage time part (e.g. "2026-02-30 10:00:00")
+    is left untouched so the gates quarantine it normally. The quality
     gates themselves stay strict: they see only the normalized
     value, never the raw formatting.
     """
@@ -109,6 +117,20 @@ def read_claims_csv(path):
                         date, "%m/%d/%Y").strftime("%Y-%m-%d")
                 except ValueError:
                     pass  # not a real calendar date: gates quarantine it
+            elif isinstance(date, str) and (" " in date or "T" in date):
+                parsed = None
+                for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
+                            "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M",
+                            "%Y-%m-%d %H:%M:%S.%f",
+                            "%Y-%m-%dT%H:%M:%S.%f"):
+                    try:
+                        parsed = datetime.strptime(date, fmt)
+                        break
+                    except ValueError:
+                        continue
+                if parsed is not None:
+                    cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
+                # else: not a real datetime: gates quarantine it
             if cleaned and any(value not in (None, "")
                                for value in cleaned.values()):
                 rows.append(cleaned)

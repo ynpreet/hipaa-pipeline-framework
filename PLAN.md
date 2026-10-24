@@ -182,6 +182,23 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   outputs; audit.csv 10,001 lines; zero raw member IDs, zero
   patient names in all outputs; CLI smoke-tested on a BOM-marked,
   padded 2-row CSV: 1 governed, 1 quarantined).
+- Oct 24, 2026 build block (4:05 AM run): datetime-stamped
+  service dates (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date carrying a
+  time stamp (space- or "T"-separated, e.g. "2026-03-15 10:30:00"
+  or "2026-03-15T09:00:00", the way spreadsheet exports write
+  datetimes) now normalizes to its date part (YYYY-MM-DD) on
+  read and governs instead of quarantining as unparseable_date,
+  while an impossible datetime ("2026-02-30 10:00:00") or a
+  garbage time part is left untouched so the gates quarantine
+  it normally; the quality gates stay strict and see only the
+  normalized value; 2 new tests (suite now 49, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.524s; governed,
+  quarantine, and summary.json outputs byte-identical to
+  pre-run outputs; audit.csv 10,001 lines; zero raw member
+  IDs, zero patient names in all outputs; CLI smoke-tested on
+  a datetime-stamped 2-row CSV: 2 in, 1 governed, 1 quarantined).
 - Oct 23, 2026 build block (10:05 PM run): case-insensitive CSV
   headers (read_claims_csv in hipaa_pipeline_framework/io.py) —
   headers are now matched without regard to letter case, so an
