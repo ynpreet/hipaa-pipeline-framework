@@ -7,7 +7,9 @@ around headers and values, headers in any letter case (so
 "Member_ID" means member_id), currency-formatted amounts such as
 "$1,200.50", US slash dates such as "03/15/2026",
 year-first slash dates such as "2026/03/15",
-datetime-stamped dates such as "2026-03-15 10:30:00" — skips blank
+datetime-stamped dates such as "2026-03-15 10:30:00", and
+timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
+"2026-03-15 10:30:00+05:30" — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -28,6 +30,7 @@ any patient data attached.
 
 import csv
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -95,6 +98,17 @@ def read_claims_csv(path):
     is left untouched so the gates quarantine it normally. The quality
     gates themselves stay strict: they see only the normalized
     value, never the raw formatting.
+    A datetime-stamped date carrying a timezone suffix — a trailing
+    "Z" (UTC) or a numeric offset such as "+05:30" or "-0500", the
+    way API and EHR exports write timestamps — has that suffix
+    stripped before the datetime is parsed, so "2026-03-15T09:00:00Z"
+    and "2026-03-15 10:30:00+05:30" also govern as their date part;
+    the offset itself is not converted (the gate needs the service
+    date as written, not a shifted one). A suffix that is not a
+    well-formed UTC designator or offset (e.g. "+99:99") is not
+    stripped, so the value stays unparseable and the gates
+    quarantine it normally, as does an impossible date carrying a
+    valid suffix (e.g. "2026-02-30T09:00:00Z").
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -127,13 +141,26 @@ def read_claims_csv(path):
                 # else: not a real calendar date in either slash
                 # form: left untouched, gates quarantine it
             elif isinstance(date, str) and (" " in date or "T" in date):
+                candidate = date
+                # Strip a timezone suffix before parsing: a trailing
+                # "Z", or a well-formed numeric offset (hours 00-14,
+                # minutes 00-59, colon optional). Anything else is
+                # left in place so parsing fails and the gates
+                # quarantine the value normally.
+                if candidate.endswith("Z"):
+                    candidate = candidate[:-1]
+                else:
+                    suffix = re.search(
+                        r"([+-](?:0\d|1[0-4]):?[0-5]\d)$", candidate)
+                    if suffix is not None:
+                        candidate = candidate[:-len(suffix.group(1))]
                 parsed = None
                 for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
                             "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M",
                             "%Y-%m-%d %H:%M:%S.%f",
                             "%Y-%m-%dT%H:%M:%S.%f"):
                     try:
-                        parsed = datetime.strptime(date, fmt)
+                        parsed = datetime.strptime(candidate, fmt)
                         break
                     except ValueError:
                         continue

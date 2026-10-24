@@ -182,6 +182,26 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   outputs; audit.csv 10,001 lines; zero raw member IDs, zero
   patient names in all outputs; CLI smoke-tested on a BOM-marked,
   padded 2-row CSV: 1 governed, 1 quarantined).
+- Oct 24, 2026 build block (4:05 PM run): timezone-suffixed
+  datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date carrying a
+  timezone suffix (a trailing "Z" for UTC, or a numeric offset
+  such as "+05:30" or "-0500", the way API and EHR exports write
+  timestamps) now has that suffix stripped before parsing and
+  normalizes to its date part (YYYY-MM-DD) on read and governs
+  instead of quarantining as unparseable_date, while an impossible
+  date with a valid suffix ("2026-02-30T09:00:00Z") or a
+  malformed offset ("+99:99") is left untouched so the gates
+  quarantine it normally; the offset is not converted (the gate
+  needs the service date as written, not a shifted one), and the
+  quality gates stay strict and see only the normalized value;
+  2 new tests (suite now 53, all passing). Demo re-verified
+  same run (10,000 in → 1,589 governed, 8,411 quarantined,
+  reasons unchanged; runtime 0.517s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines; zero raw member IDs, zero patient
+  names in all outputs; CLI smoke-tested on a timezone-suffixed
+  2-row CSV: 2 in, 1 governed, 1 quarantined).
 - Oct 24, 2026 build block (10:05 AM run): year-first slash
   dates (read_claims_csv in
   hipaa_pipeline_framework/io.py) — a service_date written as

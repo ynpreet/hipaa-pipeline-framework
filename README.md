@@ -48,7 +48,8 @@ in this repo. Demos use synthetic data only.
   `read_claims_csv` also normalizes datetime-stamped service
   dates ("2026-03-15 10:30:00" or "2026-03-15T09:00:00" read as
   2026-03-15 and govern; an impossible datetime still
-  quarantines as unparseable_date);
+  quarantines as unparseable_date), including timezone-suffixed
+  forms ("2026-03-15T09:00:00Z", "2026-03-15 10:30:00+05:30");
   `write_audit_csv` exports an AuditLog's trail to CSV (one row per
   entry, fixed audit columns) for reviewers who work in
   spreadsheets — the trail stores only hashes and "redacted"
@@ -82,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-51 stdlib-only tests (Oct 24, 2026, all passing): hash determinism and
+53 stdlib-only tests (Oct 24, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -116,8 +117,32 @@ still quarantines as unparseable_date), and case-insensitive headers
 still missing a required column raises naming that column), and
 datetime-stamped dates ("2026-03-15 10:30:00" or
 "2026-03-15T09:00:00" read as 2026-03-15 and govern; an
-impossible datetime still quarantines as unparseable_date).
+impossible datetime still quarantines as unparseable_date), and
+timezone-suffixed datetimes ("2026-03-15T09:00:00Z" or
+"2026-03-15 10:30:00+05:30" read as their date part and govern;
+an impossible date with a valid suffix, or a malformed offset,
+still quarantines as unparseable_date).
 No dependencies, no real patient data.
+
+Oct 24, 2026 build block (4:05 PM run): timezone-suffixed
+datetimes (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date carrying a
+timezone suffix (a trailing "Z" for UTC, or a numeric offset
+such as "+05:30" or "-0500", the way API and EHR exports write
+timestamps) now has that suffix stripped before parsing and
+normalizes to its date part (YYYY-MM-DD) on read and governs
+instead of quarantining as unparseable_date, while an impossible
+date with a valid suffix ("2026-02-30T09:00:00Z") or a malformed
+offset ("+99:99") is left untouched so the gates quarantine it
+normally; the offset is not converted, and the quality gates stay
+strict and see only the normalized value; 2 new tests (suite now
+53, all passing). Demo re-verified same run (10,000 in →
+1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.517s; governed, quarantine, and summary.json
+outputs byte-identical to pre-run outputs; audit.csv 10,001
+lines; zero raw member IDs, zero patient names in all
+outputs; CLI smoke-tested on a timezone-suffixed 2-row CSV:
+2 in, 1 governed, 1 quarantined).
 
 Oct 24, 2026 build block (4:05 AM run): datetime-stamped
 service dates (`read_claims_csv` in
