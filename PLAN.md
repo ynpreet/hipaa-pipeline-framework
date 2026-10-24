@@ -182,6 +182,20 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   outputs; audit.csv 10,001 lines; zero raw member IDs, zero
   patient names in all outputs; CLI smoke-tested on a BOM-marked,
   padded 2-row CSV: 1 governed, 1 quarantined).
+- Oct 23, 2026 build block (10:05 PM run): case-insensitive CSV
+  headers (read_claims_csv in hipaa_pipeline_framework/io.py) —
+  headers are now matched without regard to letter case, so an
+  export headed "Member_ID,SERVICE_DATE,Claim_Amount" reads as
+  member_id, service_date, claim_amount and governs instead of
+  failing closed as missing columns, while a mixed-case header
+  still missing a required column raises ValueError naming that
+  column; 2 new tests (suite now 47, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 1.546s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a
+  mixed-case-header 2-row CSV: 2 in, 1 governed, 1 quarantined).
 - Oct 23, 2026 build block (4:05 PM run): US slash-date
   normalization (read_claims_csv in
   hipaa_pipeline_framework/io.py) — a service_date written as

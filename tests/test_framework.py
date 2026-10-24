@@ -389,6 +389,27 @@ class TestCsvIO(unittest.TestCase):
                 read_claims_csv(path)
             self.assertIn("claim_amount", str(ctx.exception))
 
+    def test_read_claims_csv_matches_headers_case_insensitively(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("Member_ID,SERVICE_DATE,Claim_Amount\n"
+                            "M-100001,2026-03-15,120.50\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["member_id"], "M-100001")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 1)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_mixed_case_header_still_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("Member_ID,Service_Date\n"
+                            "M-100001,2026-03-15\n")
+            with self.assertRaises(ValueError) as ctx:
+                read_claims_csv(path)
+            self.assertIn("claim_amount", str(ctx.exception))
+
     def test_write_governed_csv_drops_identifiers(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "governed.csv"

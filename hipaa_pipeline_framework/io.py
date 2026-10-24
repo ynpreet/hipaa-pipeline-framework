@@ -3,7 +3,8 @@
 read_claims_csv reads raw claims-like rows (all values strings) so a
 caller can feed a file straight into run_pipeline; it tolerates the
 mess real exports carry — a UTF-8 byte-order mark and whitespace
-around headers and values, currency-formatted amounts such as
+around headers and values, headers in any letter case (so
+"Member_ID" means member_id), currency-formatted amounts such as
 "$1,200.50", US slash dates such as "03/15/2026" — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
@@ -56,6 +57,12 @@ def read_claims_csv(path):
     utf-8-sig encoding, and surrounding whitespace on headers and
     values is stripped, so " member_id " and " 2026-03-15 " mean
     the same as their clean forms instead of failing a gate.
+    Headers are also matched case-insensitively: "Member_ID",
+    "SERVICE_DATE", and "Claim_Amount" are read as member_id,
+    service_date, and claim_amount, so an export's capitalisation
+    no longer fails the file closed as missing columns; a header
+    still missing a required column (in any case) raises
+    ValueError naming that column.
     Blank rows — a commas-only line (",,") or a whitespace-only
     line, the kind trailing spreadsheet exports leave behind —
     are skipped outright: they carry no record, so counting one
@@ -78,7 +85,7 @@ def read_claims_csv(path):
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
-        header = [name.strip() if name else name
+        header = [name.strip().lower() if name else name
                   for name in (reader.fieldnames or [])]
         reader.fieldnames = header
         missing = [col for col in REQUIRED_COLUMNS if col not in header]
