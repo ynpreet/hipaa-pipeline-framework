@@ -6,6 +6,7 @@ mess real exports carry — a UTF-8 byte-order mark and whitespace
 around headers and values, headers in any letter case (so
 "Member_ID" means member_id), currency-formatted amounts such as
 "$1,200.50", US slash dates such as "03/15/2026",
+year-first slash dates such as "2026/03/15",
 datetime-stamped dates such as "2026-03-15 10:30:00" — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
@@ -80,7 +81,11 @@ def read_claims_csv(path):
     "03/15/2026" governs instead of quarantining as
     unparseable_date; a slash date that is not a real calendar
     date (e.g. "02/30/2026") is left untouched so the gates
-    quarantine it normally. A service_date carrying a time stamp
+    quarantine it normally. The year-first slash form (YYYY/MM/DD,
+    another export convention) normalizes the same way, so
+    "2026/03/15" also governs; an impossible year-first date
+    (e.g. "2026/02/30") is left untouched for the gates.
+    A service_date carrying a time stamp
     (a space- or "T"-separated datetime such as "2026-03-15
     10:30:00" or "2026-03-15T09:00:00", the way spreadsheet
     exports write datetimes) is normalized to its date part
@@ -112,11 +117,15 @@ def read_claims_csv(path):
                     "$", "").replace(",", "").strip()
             date = cleaned.get("service_date")
             if isinstance(date, str) and "/" in date:
-                try:
-                    cleaned["service_date"] = datetime.strptime(
-                        date, "%m/%d/%Y").strftime("%Y-%m-%d")
-                except ValueError:
-                    pass  # not a real calendar date: gates quarantine it
+                for fmt in ("%m/%d/%Y", "%Y/%m/%d"):
+                    try:
+                        cleaned["service_date"] = datetime.strptime(
+                            date, fmt).strftime("%Y-%m-%d")
+                        break
+                    except ValueError:
+                        continue
+                # else: not a real calendar date in either slash
+                # form: left untouched, gates quarantine it
             elif isinstance(date, str) and (" " in date or "T" in date):
                 parsed = None
                 for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
