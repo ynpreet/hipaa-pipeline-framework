@@ -7,6 +7,9 @@ around headers and values, headers in any letter case (so
 "Member_ID" means member_id), currency-formatted amounts such as
 "$1,200.50", US slash dates such as "03/15/2026",
 year-first slash dates such as "2026/03/15",
+day-first slash dates such as "15/03/2026" (unambiguous only:
+the US form keeps priority, so a date whose first component
+could be a month still reads as MM/DD/YYYY),
 datetime-stamped dates such as "2026-03-15 10:30:00",
 timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
 "2026-03-15 10:30:00+05:30", and dot-separated dates such as
@@ -89,6 +92,13 @@ def read_claims_csv(path):
     another export convention) normalizes the same way, so
     "2026/03/15" also governs; an impossible year-first date
     (e.g. "2026/02/30") is left untouched for the gates.
+    The day-first slash form (DD/MM/YYYY, the convention in
+    non-US healthcare exports) normalizes the same way, but
+    only when it is unambiguous: the US form is tried first, so
+    "15/03/2026" governs as 2026-03-15 while "03/04/2026" still
+    reads as the US form (2026-03-04); a day-first date that is
+    not a real calendar date (e.g. "32/03/2026" or "15/13/2026")
+    is left untouched so the gates quarantine it normally.
     A service_date carrying a time stamp
     (a space- or "T"-separated datetime such as "2026-03-15
     10:30:00" or "2026-03-15T09:00:00", the way spreadsheet
@@ -143,15 +153,18 @@ def read_claims_csv(path):
                     "$", "").replace(",", "").strip()
             date = cleaned.get("service_date")
             if isinstance(date, str) and "/" in date:
-                for fmt in ("%m/%d/%Y", "%Y/%m/%d"):
+                for fmt in ("%m/%d/%Y", "%Y/%m/%d", "%d/%m/%Y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(
                             date, fmt).strftime("%Y-%m-%d")
                         break
                     except ValueError:
                         continue
-                # else: not a real calendar date in either slash
-                # form: left untouched, gates quarantine it
+                # else: not a real calendar date in any slash
+                # form: left untouched, gates quarantine it.
+                # The US form is tried first, so only an
+                # unambiguous day-first date (first component
+                # above 12) reaches the DD/MM/YYYY attempt.
             elif isinstance(date, str) and "." in date:
                 try:
                     cleaned["service_date"] = datetime.strptime(

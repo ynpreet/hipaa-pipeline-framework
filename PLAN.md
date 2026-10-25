@@ -182,6 +182,25 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   outputs; audit.csv 10,001 lines; zero raw member IDs, zero
   patient names in all outputs; CLI smoke-tested on a BOM-marked,
   padded 2-row CSV: 1 governed, 1 quarantined).
+- Oct 25, 2026 build block (10:05 AM run): day-first slash
+  dates (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  DD/MM/YYYY (the non-US healthcare-export convention) now
+  normalizes to ISO form (YYYY-MM-DD) on read and governs
+  instead of quarantining as unparseable_date, but only when
+  it is unambiguous: the US MM/DD/YYYY form is tried first, so
+  "03/04/2026" still reads as 2026-03-04, while "15/03/2026"
+  governs as 2026-03-15; an impossible day-first date
+  ("32/03/2026" or "15/13/2026") is left untouched so the
+  gates quarantine it normally; the quality gates stay strict
+  and see only the normalized value; 2 new tests (suite now
+  59, all passing). Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged;
+  runtime 0.684s; governed, quarantine, and summary.json
+  outputs byte-identical to pre-run outputs; audit.csv 10,001
+  lines; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a day-first slash-date 2-row
+  CSV: 2 in, 1 governed, 1 quarantined).
 - Oct 25, 2026 build block (4:05 AM run): month-name dates
   (read_claims_csv in
   hipaa_pipeline_framework/io.py) — a service_date written
