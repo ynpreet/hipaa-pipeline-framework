@@ -7,9 +7,10 @@ around headers and values, headers in any letter case (so
 "Member_ID" means member_id), currency-formatted amounts such as
 "$1,200.50", US slash dates such as "03/15/2026",
 year-first slash dates such as "2026/03/15",
-datetime-stamped dates such as "2026-03-15 10:30:00", and
+datetime-stamped dates such as "2026-03-15 10:30:00",
 timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
-"2026-03-15 10:30:00+05:30" — skips blank
+"2026-03-15 10:30:00+05:30", and dot-separated dates such as
+"2026.03.15" — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -109,6 +110,17 @@ def read_claims_csv(path):
     stripped, so the value stays unparseable and the gates
     quarantine it normally, as does an impossible date carrying a
     valid suffix (e.g. "2026-02-30T09:00:00Z").
+    A service_date in dot-separated form (YYYY.MM.DD, another
+    export convention) normalizes to ISO form (YYYY-MM-DD) on
+    read, so "2026.03.15" governs instead of quarantining as
+    unparseable_date; an impossible dot-separated date (e.g.
+    "2026.02.30") is left untouched so the gates quarantine it
+    normally. A service_date written with a month name ("Mar 15,
+    2026" or "15 Mar 2026", abbreviated or full month name, the
+    way human-readable exports write dates) normalizes the same
+    way, so it governs; an impossible month-name date (e.g.
+    "Feb 30, 2026") or an unknown month name is left untouched
+    so the gates quarantine it normally.
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -140,6 +152,31 @@ def read_claims_csv(path):
                         continue
                 # else: not a real calendar date in either slash
                 # form: left untouched, gates quarantine it
+            elif isinstance(date, str) and "." in date:
+                try:
+                    cleaned["service_date"] = datetime.strptime(
+                        date, "%Y.%m.%d").strftime("%Y-%m-%d")
+                except ValueError:
+                    # Not a real calendar date in dot form:
+                    # left untouched, gates quarantine it
+                    pass
+            elif isinstance(date, str) and any(
+                    month in date for month in
+                    ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")):
+                # Month-name form: "Mar 15, 2026" or "15 Mar 2026",
+                # abbreviated or full month name. A name that is
+                # not a real month, or an impossible day, fails
+                # every format and is left untouched so the gates
+                # quarantine it normally.
+                for fmt in ("%b %d, %Y", "%B %d, %Y",
+                            "%d %b %Y", "%d %B %Y"):
+                    try:
+                        cleaned["service_date"] = datetime.strptime(
+                            date, fmt).strftime("%Y-%m-%d")
+                        break
+                    except ValueError:
+                        continue
             elif isinstance(date, str) and (" " in date or "T" in date):
                 candidate = date
                 # Strip a timezone suffix before parsing: a trailing

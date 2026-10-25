@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-53 stdlib-only tests (Oct 24, 2026, all passing): hash determinism and
+57 stdlib-only tests (Oct 25, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -121,8 +121,48 @@ impossible datetime still quarantines as unparseable_date), and
 timezone-suffixed datetimes ("2026-03-15T09:00:00Z" or
 "2026-03-15 10:30:00+05:30" read as their date part and govern;
 an impossible date with a valid suffix, or a malformed offset,
-still quarantines as unparseable_date).
+still quarantines as unparseable_date), and
+dot-separated dates ("2026.03.15" reads as 2026-03-15 and
+governs; "2026.02.30" still quarantines as unparseable_date),
+and month-name dates ("Mar 15, 2026" or "15 Mar 2026" read as
+2026-03-15 and govern; "Feb 30, 2026" still quarantines as
+unparseable_date).
 No dependencies, no real patient data.
+
+Oct 25, 2026 build block (4:05 AM run): month-name dates
+(`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written with
+a month name ("Mar 15, 2026" or "15 Mar 2026", abbreviated or
+full month name, another export convention) now normalizes to
+ISO form (YYYY-MM-DD) on read and governs instead of
+quarantining as unparseable_date, while an impossible
+month-name date ("Feb 30, 2026") or an unknown month name is
+left untouched so the gates quarantine it normally; the quality
+gates stay strict and see only the normalized value; 2 new
+tests (suite now 57, all passing). Demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons
+unchanged; runtime 0.629s; governed, quarantine, and
+summary.json outputs byte-identical to pre-run outputs;
+audit.csv 10,001 lines; zero raw member IDs, zero patient
+names in all outputs; CLI smoke-tested on a month-name-date
+2-row CSV: 2 in, 1 governed, 1 quarantined).
+
+Oct 24, 2026 build block (10:05 PM run): dot-separated
+dates (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written as
+YYYY.MM.DD (another export convention) now normalizes to ISO
+form (YYYY-MM-DD) on read and governs instead of quarantining
+as unparseable_date, while an impossible dot-separated date
+("2026.02.30") is left untouched so the gates quarantine it
+normally; the quality gates stay strict and see only the
+normalized value; 2 new tests (suite now 55, all passing).
+Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+quarantined, reasons unchanged; runtime 0.533s; governed,
+quarantine, and summary.json outputs byte-identical to pre-run
+outputs; audit.csv 10,001 lines; zero raw member IDs, zero
+patient names in all outputs; CLI smoke-tested on a
+dot-separated-date 2-row CSV: 2 in, 1 governed,
+1 quarantined).
 
 Oct 24, 2026 build block (4:05 PM run): timezone-suffixed
 datetimes (`read_claims_csv` in
