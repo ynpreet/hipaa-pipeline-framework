@@ -182,6 +182,25 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   outputs; audit.csv 10,001 lines; zero raw member IDs, zero
   patient names in all outputs; CLI smoke-tested on a BOM-marked,
   padded 2-row CSV: 1 governed, 1 quarantined).
+- Oct 26, 2026 build block (4:05 PM run): slash datetimes
+  (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written
+  in slash form carrying a time stamp ("03/15/2026 10:30:00"
+  or "03/15/2026T09:00:00", the way spreadsheet exports
+  write slash datetimes) now normalizes to its date part
+  (YYYY-MM-DD) on read and governs instead of quarantining
+  as unparseable_date, with the same US-first order
+  ("15/03/2026T09:00:00" governs as 2026-03-15), while an
+  impossible slash datetime ("02/30/2026 10:00:00") is left
+  untouched so the gates quarantine it normally; the quality
+  gates stay strict and see only the normalized value; 2 new
+  tests (suite now 69, all passing). Demo re-verified same
+  run (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.434s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines; zero raw member IDs, zero patient
+  names in all outputs; CLI smoke-tested on a slash-
+  datetime 2-row CSV: 2 in, 1 governed, 1 quarantined).
 - Oct 26, 2026 build block (10:05 AM run): underscore-separated
   dates (read_claims_csv in
   hipaa_pipeline_framework/io.py) — a service_date written in

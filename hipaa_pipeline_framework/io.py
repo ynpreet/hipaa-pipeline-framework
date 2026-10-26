@@ -10,6 +10,8 @@ year-first slash dates such as "2026/03/15",
 day-first slash dates such as "15/03/2026" (unambiguous only:
 the US form keeps priority, so a date whose first component
 could be a month still reads as MM/DD/YYYY),
+slash datetimes such as "03/15/2026 10:30:00" (the date part
+governs, the time part is dropped),
 datetime-stamped dates such as "2026-03-15 10:30:00",
 timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
 "2026-03-15 10:30:00+05:30", dot-separated dates such as
@@ -102,6 +104,13 @@ def read_claims_csv(path):
     reads as the US form (2026-03-04); a day-first date that is
     not a real calendar date (e.g. "32/03/2026" or "15/13/2026")
     is left untouched so the gates quarantine it normally.
+    A service_date in slash form carrying a time stamp
+    ("03/15/2026 10:30:00" or "03/15/2026T09:00:00", the way
+    spreadsheet exports write slash datetimes) normalizes to
+    its date part the same way, with the same US-first order;
+    an impossible slash datetime (e.g. "02/30/2026 10:00:00")
+    or a garbage time part is left untouched so the gates
+    quarantine it normally.
     A service_date carrying a time stamp
     (a space- or "T"-separated datetime such as "2026-03-15
     10:30:00" or "2026-03-15T09:00:00", the way spreadsheet
@@ -188,6 +197,27 @@ def read_claims_csv(path):
                         break
                     except ValueError:
                         continue
+                if cleaned["service_date"] == date:
+                    # Slash datetime: same date orders, plus a
+                    # space- or "T"-separated time part, which is
+                    # dropped — only the date part governs.
+                    for fmt in ("%m/%d/%Y %H:%M:%S",
+                                "%m/%d/%Y %H:%M",
+                                "%m/%d/%Y %H:%M:%S.%f",
+                                "%m/%d/%YT%H:%M:%S",
+                                "%m/%d/%YT%H:%M",
+                                "%Y/%m/%d %H:%M:%S",
+                                "%Y/%m/%d %H:%M",
+                                "%Y/%m/%dT%H:%M:%S",
+                                "%d/%m/%Y %H:%M:%S",
+                                "%d/%m/%Y %H:%M",
+                                "%d/%m/%YT%H:%M:%S"):
+                        try:
+                            cleaned["service_date"] = datetime.strptime(
+                                date, fmt).strftime("%Y-%m-%d")
+                            break
+                        except ValueError:
+                            continue
                 # else: not a real calendar date in any slash
                 # form: left untouched, gates quarantine it.
                 # The US form is tried first, so only an

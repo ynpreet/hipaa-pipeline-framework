@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-67 stdlib-only tests (Oct 26, 2026, all passing): hash determinism and
+69 stdlib-only tests (Oct 26, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -138,8 +138,49 @@ unparseable_date), and numeric hyphen dates
 ("03-15-2026" reads as 2026-03-15 and governs;
 "15-03-2026" also governs as 2026-03-15, while
 "03-04-2026" still reads as the US form; "02-30-2026"
+still quarantines as unparseable_date), and slash
+datetimes ("03/15/2026 10:30:00" or "03/15/2026T09:00:00"
+read as their date part and govern; "02/30/2026 10:00:00"
 still quarantines as unparseable_date).
 No dependencies, no real patient data.
+
+Oct 26, 2026 build block (4:05 PM run): slash datetimes
+(`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written
+in slash form carrying a time stamp ("03/15/2026 10:30:00"
+or "03/15/2026T09:00:00", the way spreadsheet exports
+write slash datetimes) now normalizes to its date part
+(YYYY-MM-DD) on read and governs instead of quarantining
+as unparseable_date, with the same US-first order
+("15/03/2026T09:00:00" governs as 2026-03-15), while an
+impossible slash datetime ("02/30/2026 10:00:00") is left
+untouched so the gates quarantine it normally; the quality
+gates stay strict and see only the normalized value; 2 new
+tests (suite now 69, all passing). Demo re-verified same
+run (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+unchanged; runtime 0.434s; governed, quarantine, and
+summary.json outputs byte-identical to pre-run outputs;
+audit.csv 10,001 lines; zero raw member IDs, zero patient
+names in all outputs; CLI smoke-tested on a slash-
+datetime 2-row CSV: 2 in, 1 governed, 1 quarantined).
+
+Oct 26, 2026 build block (10:05 AM run): underscore-separated
+dates (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written in
+underscore-separated form (YYYY_MM_DD, the way some exports
+and file-naming conventions write dates) now normalizes to
+ISO form (YYYY-MM-DD) on read and governs instead of
+quarantining as unparseable_date, while an impossible
+underscore-separated date ("2026_02_30") is left untouched
+so the gates quarantine it normally; the quality gates stay
+strict and see only the normalized value; 2 new tests
+(suite now 67, all passing). Demo re-verified same run
+(10,000 in → 1,589 governed, 8,411 quarantined, reasons
+unchanged; runtime 0.391s; governed, quarantine, and
+summary.json outputs byte-identical to pre-run outputs;
+audit.csv 10,001 lines; zero raw member IDs, zero patient
+names in all outputs; CLI smoke-tested on an underscore-
+separated-date 2-row CSV: 2 in, 1 governed, 1 quarantined).
 
 Oct 26, 2026 build block (4:05 AM run): numeric hyphen
 dates (`read_claims_csv` in
