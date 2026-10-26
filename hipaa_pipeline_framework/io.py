@@ -14,7 +14,8 @@ datetime-stamped dates such as "2026-03-15 10:30:00",
 timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
 "2026-03-15 10:30:00+05:30", dot-separated dates such as
 "2026.03.15", compact dates such as "20260315", and
-hyphenated month-name dates such as "15-Mar-2026" — skips blank
+hyphenated month-name dates such as "15-Mar-2026", and
+numeric hyphen dates such as "03-15-2026" — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -141,7 +142,16 @@ def read_claims_csv(path):
     some exports write dates without spaces) normalizes the same
     way, so it governs; an impossible hyphenated month-name date
     (e.g. "30-Feb-2026") is left untouched so the gates
-    quarantine it normally.
+    quarantine it normally. A service_date in numeric hyphen
+    form ("03-15-2026", the way some exports write the US date
+    with hyphens instead of slashes) normalizes the same way,
+    with the US form keeping priority: "03-04-2026" reads as
+    2026-03-04 while an unambiguous day-first form ("15-03-2026")
+    governs as 2026-03-15; an impossible numeric hyphen date
+    (e.g. "02-30-2026") is left untouched so the gates
+    quarantine it normally. An already-ISO date ("2026-03-15")
+    is not touched by this form — its four-digit first
+    component does not match the numeric-hyphen pattern.
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -198,6 +208,24 @@ def read_claims_csv(path):
                             "%d %b %Y", "%d %B %Y",
                             "%d-%b-%Y", "%b-%d-%Y",
                             "%d-%B-%Y", "%B-%d-%Y"):
+                    try:
+                        cleaned["service_date"] = datetime.strptime(
+                            date, fmt).strftime("%Y-%m-%d")
+                        break
+                    except ValueError:
+                        continue
+            elif isinstance(date, str) and re.fullmatch(
+                    r"\d{1,2}-\d{1,2}-\d{4}", date):
+                # Numeric hyphen form: "03-15-2026" (US) or an
+                # unambiguous day-first "15-03-2026". The US form
+                # is tried first, mirroring the slash-date rule,
+                # so only a first component above 12 reaches the
+                # DD-MM-YYYY attempt. An ISO date never reaches
+                # here: its four-digit first component does not
+                # match the pattern. An impossible date fails
+                # every format and is left untouched so the gates
+                # quarantine it normally.
+                for fmt in ("%m-%d-%Y", "%d-%m-%Y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(
                             date, fmt).strftime("%Y-%m-%d")

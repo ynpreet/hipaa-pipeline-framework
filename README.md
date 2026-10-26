@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-59 stdlib-only tests (Oct 25, 2026, all passing): hash determinism and
+65 stdlib-only tests (Oct 26, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -134,8 +134,34 @@ unparseable_date), and compact dates ("20260315" reads as
 unparseable_date), and hyphenated month-name dates
 ("15-Mar-2026" or "Mar-15-2026" read as 2026-03-15 and
 govern; "30-Feb-2026" still quarantines as
-unparseable_date).
+unparseable_date), and numeric hyphen dates
+("03-15-2026" reads as 2026-03-15 and governs;
+"15-03-2026" also governs as 2026-03-15, while
+"03-04-2026" still reads as the US form; "02-30-2026"
+still quarantines as unparseable_date).
 No dependencies, no real patient data.
+
+Oct 26, 2026 build block (4:05 AM run): numeric hyphen
+dates (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written
+in numeric hyphen form ("03-15-2026", the way some exports
+write the US date with hyphens instead of slashes) now
+normalizes to ISO form (YYYY-MM-DD) on read and governs
+instead of quarantining as unparseable_date, with the US
+form keeping priority ("03-04-2026" still reads as
+2026-03-04, while an unambiguous day-first form
+"15-03-2026" governs as 2026-03-15), while an impossible
+numeric hyphen date ("02-30-2026") is left untouched so
+the gates quarantine it normally; an already-ISO date is
+not touched by this form, and the quality gates stay strict
+and see only the normalized value; 2 new tests (suite now
+65, all passing). Demo re-verified same run (10,000 in →
+1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.639s; governed, quarantine, and summary.json
+outputs byte-identical to pre-run outputs; audit.csv
+10,001 lines; zero raw member IDs, zero patient names in
+all outputs; CLI smoke-tested on a numeric-hyphen 2-row
+CSV: 2 in, 1 governed, 1 quarantined).
 
 Oct 25, 2026 build block (10:05 PM run): hyphenated
 month-name dates (`read_claims_csv` in
