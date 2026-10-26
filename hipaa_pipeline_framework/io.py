@@ -12,8 +12,9 @@ the US form keeps priority, so a date whose first component
 could be a month still reads as MM/DD/YYYY),
 datetime-stamped dates such as "2026-03-15 10:30:00",
 timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
-"2026-03-15 10:30:00+05:30", and dot-separated dates such as
-"2026.03.15" — skips blank
+"2026-03-15 10:30:00+05:30", dot-separated dates such as
+"2026.03.15", compact dates such as "20260315", and
+hyphenated month-name dates such as "15-Mar-2026" — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -130,7 +131,17 @@ def read_claims_csv(path):
     way human-readable exports write dates) normalizes the same
     way, so it governs; an impossible month-name date (e.g.
     "Feb 30, 2026") or an unknown month name is left untouched
-    so the gates quarantine it normally.
+    so the gates quarantine it normally. A service_date in
+    compact form (YYYYMMDD, the basic ISO 8601 form, another
+    export convention) normalizes the same way, so "20260315"
+    governs; an impossible compact date (e.g. "20260230") is
+    left untouched so the gates quarantine it normally.
+    A service_date in hyphenated month-name form ("15-Mar-2026"
+    or "Mar-15-2026", abbreviated or full month name, the way
+    some exports write dates without spaces) normalizes the same
+    way, so it governs; an impossible hyphenated month-name date
+    (e.g. "30-Feb-2026") is left untouched so the gates
+    quarantine it normally.
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -178,18 +189,31 @@ def read_claims_csv(path):
                     ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")):
                 # Month-name form: "Mar 15, 2026" or "15 Mar 2026",
-                # abbreviated or full month name. A name that is
-                # not a real month, or an impossible day, fails
-                # every format and is left untouched so the gates
-                # quarantine it normally.
+                # abbreviated or full month name, including the
+                # hyphenated forms "15-Mar-2026" and "Mar-15-2026".
+                # A name that is not a real month, or an impossible
+                # day, fails every format and is left untouched so
+                # the gates quarantine it normally.
                 for fmt in ("%b %d, %Y", "%B %d, %Y",
-                            "%d %b %Y", "%d %B %Y"):
+                            "%d %b %Y", "%d %B %Y",
+                            "%d-%b-%Y", "%b-%d-%Y",
+                            "%d-%B-%Y", "%B-%d-%Y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(
                             date, fmt).strftime("%Y-%m-%d")
                         break
                     except ValueError:
                         continue
+            elif isinstance(date, str) and date.isdigit() and len(date) == 8:
+                # Compact form: YYYYMMDD (basic ISO 8601, the way
+                # some EHR and API exports write dates). An
+                # impossible compact date fails parsing and is
+                # left untouched so the gates quarantine it.
+                try:
+                    cleaned["service_date"] = datetime.strptime(
+                        date, "%Y%m%d").strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
             elif isinstance(date, str) and (" " in date or "T" in date):
                 candidate = date
                 # Strip a timezone suffix before parsing: a trailing

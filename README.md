@@ -129,8 +129,50 @@ and month-name dates ("Mar 15, 2026" or "15 Mar 2026" read as
 unparseable_date), and day-first slash dates ("15/03/2026"
 reads as 2026-03-15 and governs; "03/04/2026" still reads as
 the US form; "32/03/2026" still quarantines as
+unparseable_date), and compact dates ("20260315" reads as
+2026-03-15 and governs; "20260230" still quarantines as
+unparseable_date), and hyphenated month-name dates
+("15-Mar-2026" or "Mar-15-2026" read as 2026-03-15 and
+govern; "30-Feb-2026" still quarantines as
 unparseable_date).
 No dependencies, no real patient data.
+
+Oct 25, 2026 build block (10:05 PM run): hyphenated
+month-name dates (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written
+in hyphenated month-name form ("15-Mar-2026" or
+"Mar-15-2026", abbreviated or full month name, the way some
+exports write dates without spaces) now normalizes to ISO
+form (YYYY-MM-DD) on read and governs instead of
+quarantining as unparseable_date, while an impossible
+hyphenated month-name date ("30-Feb-2026") is left
+untouched so the gates quarantine it normally; the quality
+gates stay strict and see only the normalized value; 2 new
+tests (suite now 63, all passing). Demo re-verified same
+run (10,000 in → 1,589 governed, 8,411 quarantined,
+reasons unchanged; runtime 0.789s; governed, quarantine,
+and summary.json outputs byte-identical to pre-run outputs;
+audit.csv 10,001 lines; zero raw member IDs, zero patient
+names in all outputs; CLI smoke-tested on a hyphenated
+month-name 2-row CSV: 2 in, 1 governed, 1 quarantined).
+
+Oct 25, 2026 build block (4:05 PM run): compact dates
+(`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written in
+compact form (YYYYMMDD, the basic ISO 8601 form, another
+export convention) now normalizes to ISO form (YYYY-MM-DD)
+on read and governs instead of quarantining as
+unparseable_date, while an impossible compact date
+("20260230") is left untouched so the gates quarantine it
+normally; the quality gates stay strict and see only the
+normalized value; 2 new tests (suite now 61, all passing).
+Demo re-verified same run (10,000 in → 1,589 governed,
+8,411 quarantined, reasons unchanged; runtime 0.634s;
+governed, quarantine, and summary.json outputs
+byte-identical to pre-run outputs; audit.csv 10,001 lines;
+zero raw member IDs, zero patient names in all outputs; CLI
+smoke-tested on a compact-date 2-row CSV: 2 in, 1 governed,
+1 quarantined).
 
 Oct 25, 2026 build block (10:05 AM run): day-first slash
 dates (`read_claims_csv` in
