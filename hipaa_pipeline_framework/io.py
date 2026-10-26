@@ -15,7 +15,8 @@ timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
 "2026-03-15 10:30:00+05:30", dot-separated dates such as
 "2026.03.15", compact dates such as "20260315", and
 hyphenated month-name dates such as "15-Mar-2026", and
-numeric hyphen dates such as "03-15-2026" — skips blank
+numeric hyphen dates such as "03-15-2026", and
+underscore-separated dates such as "2026_03_15" — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -152,6 +153,12 @@ def read_claims_csv(path):
     quarantine it normally. An already-ISO date ("2026-03-15")
     is not touched by this form — its four-digit first
     component does not match the numeric-hyphen pattern.
+    A service_date in underscore-separated form (YYYY_MM_DD,
+    the way some exports and file-naming conventions write
+    dates) normalizes the same way, so "2026_03_15" governs;
+    an impossible underscore-separated date (e.g.
+    "2026_02_30") is left untouched so the gates quarantine
+    it normally.
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -193,6 +200,17 @@ def read_claims_csv(path):
                 except ValueError:
                     # Not a real calendar date in dot form:
                     # left untouched, gates quarantine it
+                    pass
+            elif isinstance(date, str) and re.fullmatch(
+                    r"\d{4}_\d{2}_\d{2}", date):
+                # Underscore-separated form: YYYY_MM_DD (the way
+                # some exports and file-naming conventions write
+                # dates). An impossible date fails parsing and
+                # is left untouched so the gates quarantine it.
+                try:
+                    cleaned["service_date"] = datetime.strptime(
+                        date, "%Y_%m_%d").strftime("%Y-%m-%d")
+                except ValueError:
                     pass
             elif isinstance(date, str) and any(
                     month in date for month in
