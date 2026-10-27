@@ -251,17 +251,30 @@ def read_claims_csv(path):
                 # hyphenated forms "15-Mar-2026" and "Mar-15-2026".
                 # A name that is not a real month, or an impossible
                 # day, fails every format and is left untouched so
-                # the gates quarantine it normally.
-                for fmt in ("%b %d, %Y", "%B %d, %Y",
-                            "%d %b %Y", "%d %B %Y",
-                            "%d-%b-%Y", "%b-%d-%Y",
-                            "%d-%B-%Y", "%B-%d-%Y"):
-                    try:
-                        cleaned["service_date"] = datetime.strptime(
-                            date, fmt).strftime("%Y-%m-%d")
+                # the gates quarantine it normally. Ordinal day
+                # suffixes ("March 15th, 2026", "15th Mar 2026",
+                # the way human-written exports spell the day)
+                # are stripped before the second attempt, so the
+                # ordinal form governs too; an impossible
+                # ordinal date ("Feb 30th, 2026") still fails
+                # every format and quarantines normally.
+                candidates = [date]
+                stripped = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", date)
+                if stripped != date:
+                    candidates.append(stripped)
+                for candidate in candidates:
+                    for fmt in ("%b %d, %Y", "%B %d, %Y",
+                                "%d %b %Y", "%d %B %Y",
+                                "%d-%b-%Y", "%b-%d-%Y",
+                                "%d-%B-%Y", "%B-%d-%Y"):
+                        try:
+                            cleaned["service_date"] = datetime.strptime(
+                                candidate, fmt).strftime("%Y-%m-%d")
+                            break
+                        except ValueError:
+                            continue
+                    if cleaned["service_date"] != date:
                         break
-                    except ValueError:
-                        continue
             elif isinstance(date, str) and re.fullmatch(
                     r"\d{1,2}-\d{1,2}-\d{4}", date):
                 # Numeric hyphen form: "03-15-2026" (US) or an
