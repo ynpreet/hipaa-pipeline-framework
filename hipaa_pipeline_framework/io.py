@@ -20,7 +20,9 @@ hyphenated month-name dates such as "15-Mar-2026", and
 numeric hyphen dates such as "03-15-2026", and
 underscore-separated dates such as "2026_03_15", and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
-(the weekday label is dropped, only the date part governs) — skips blank
+(the weekday label is dropped, only the date part governs), and
+weekday-prefixed ISO dates such as "Sunday, 2026-03-15" (the
+weekday label is dropped, only the ISO date governs) — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -181,7 +183,16 @@ def read_claims_csv(path):
     untouched so the gates quarantine it normally. A
     weekday-prefixed ordinal date ("Sunday, March 15th,
     2026") strips both the weekday and the ordinal suffix
-    before parsing and governs the same way.
+    before parsing and governs the same way. A service_date
+    in weekday-prefixed ISO form ("Sunday, 2026-03-15" or
+    "Mon, 2026-03-16 10:30:00", the way email-style
+    timestamps write dates) has its weekday label stripped
+    on read and then normalizes the same way, so it
+    governs; the weekday itself is not validated against
+    the calendar date, while an impossible weekday-
+    prefixed ISO date ("Monday, 2026-02-30") or a bogus
+    weekday label ("Funday, 2026-03-15") is left untouched
+    so the gates quarantine it normally.
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -333,6 +344,26 @@ def read_claims_csv(path):
                     pass
             elif isinstance(date, str) and (" " in date or "T" in date):
                 candidate = date
+                # Weekday-prefixed ISO form: "Sunday, 2026-03-15"
+                # or "Mon, 2026-03-16 10:30:00", the way
+                # email-style timestamps write dates — the
+                # weekday label is dropped (it is not validated
+                # against the date) and the remainder parses as
+                # an ISO date or datetime. A bogus weekday label
+                # ("Funday, 2026-03-15") is not stripped, so
+                # parsing fails and the gates quarantine it
+                # normally, as does an impossible weekday-
+                # prefixed date ("Monday, 2026-02-30"). This
+                # branch is only reached by values no earlier
+                # branch claimed, so weekday-prefixed month-name
+                # dates still take the month-name branch above.
+                weekday_stripped = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", candidate,
+                    flags=re.IGNORECASE)
+                if weekday_stripped != candidate:
+                    candidate = weekday_stripped
                 # Strip a timezone suffix before parsing: a trailing
                 # "Z", or a well-formed numeric offset (hours 00-14,
                 # minutes 00-59, colon optional). Anything else is
@@ -349,7 +380,8 @@ def read_claims_csv(path):
                 for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
                             "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M",
                             "%Y-%m-%d %H:%M:%S.%f",
-                            "%Y-%m-%dT%H:%M:%S.%f"):
+                            "%Y-%m-%dT%H:%M:%S.%f",
+                            "%Y-%m-%d"):
                     try:
                         parsed = datetime.strptime(candidate, fmt)
                         break
