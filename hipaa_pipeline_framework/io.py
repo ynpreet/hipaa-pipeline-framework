@@ -18,7 +18,9 @@ timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
 "2026.03.15", compact dates such as "20260315", and
 hyphenated month-name dates such as "15-Mar-2026", and
 numeric hyphen dates such as "03-15-2026", and
-underscore-separated dates such as "2026_03_15" — skips blank
+underscore-separated dates such as "2026_03_15", and
+weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
+(the weekday label is dropped, only the date part governs) — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -167,7 +169,19 @@ def read_claims_csv(path):
     dates) normalizes the same way, so "2026_03_15" governs;
     an impossible underscore-separated date (e.g.
     "2026_02_30") is left untouched so the gates quarantine
-    it normally.
+    it normally. A service_date in weekday-prefixed month-name
+    form ("Sunday, March 15, 2026" or "Mon, 16 Mar 2026", the
+    way human-readable exports and email-style timestamps
+    write dates) has its weekday label stripped on read and
+    then normalizes the same way, so it governs; the weekday
+    itself is not validated against the calendar date (it is
+    a label, not the date), while an impossible weekday-
+    prefixed date (e.g. "Monday, Feb 30, 2026") or a bogus
+    weekday label (e.g. "Funday, March 15, 2026") is left
+    untouched so the gates quarantine it normally. A
+    weekday-prefixed ordinal date ("Sunday, March 15th,
+    2026") strips both the weekday and the ordinal suffix
+    before parsing and governs the same way.
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -259,9 +273,23 @@ def read_claims_csv(path):
                 # ordinal date ("Feb 30th, 2026") still fails
                 # every format and quarantines normally.
                 candidates = [date]
-                stripped = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", date)
-                if stripped != date:
-                    candidates.append(stripped)
+                # Weekday-prefixed form: "Sunday, March 15, 2026"
+                # or "Mon, 16 Mar 2026" — the weekday label is
+                # dropped (it is not validated against the date)
+                # and the remainder parses as a month-name date.
+                # Full weekday names come first in the pattern
+                # so "Tuesday" is not half-stripped as "Tue".
+                weekday_stripped = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
+                    flags=re.IGNORECASE)
+                if weekday_stripped != date:
+                    candidates.append(weekday_stripped)
+                for base in list(candidates):
+                    stripped = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", base)
+                    if stripped != base and stripped not in candidates:
+                        candidates.append(stripped)
                 for candidate in candidates:
                     for fmt in ("%b %d, %Y", "%B %d, %Y",
                                 "%d %b %Y", "%d %B %Y",

@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-71 stdlib-only tests (Oct 26, 2026, all passing): hash determinism and
+73 stdlib-only tests (Oct 27, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -143,6 +143,28 @@ datetimes ("03/15/2026 10:30:00" or "03/15/2026T09:00:00"
 read as their date part and govern; "02/30/2026 10:00:00"
 still quarantines as unparseable_date).
 No dependencies, no real patient data.
+
+Oct 27, 2026 build block (4:05 AM run): weekday-prefixed
+month-name dates (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written
+with a weekday label in front of a month-name date
+("Sunday, March 15, 2026", "Mon, 16 Mar 2026", or a
+weekday-prefixed ordinal date "Sunday, March 15th, 2026",
+the way human-readable exports and email-style timestamps
+write dates) now has the weekday label stripped on read and
+normalizes to ISO form (YYYY-MM-DD) and governs instead of
+quarantining as unparseable_date, while an impossible
+weekday-prefixed date ("Monday, Feb 30, 2026") or a bogus
+weekday label ("Funday, March 15, 2026") is left untouched
+so the gates quarantine it normally; the quality gates stay
+strict and see only the normalized value; 2 new tests (suite
+now 73, all passing). Demo re-verified same run (10,000 in →
+1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.586s; governed, quarantine, and summary.json
+outputs byte-identical to pre-run outputs; audit.csv 10,001
+lines; zero raw member IDs, zero patient names in all
+outputs; CLI smoke-tested on a weekday-prefixed-date 2-row
+CSV: 2 in, 1 governed, 1 quarantined).
 
 Oct 26, 2026 build block (10:05 PM run): ordinal month-name
 dates (`read_claims_csv` in

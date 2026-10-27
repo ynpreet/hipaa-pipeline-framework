@@ -182,6 +182,29 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   outputs; audit.csv 10,001 lines; zero raw member IDs, zero
   patient names in all outputs; CLI smoke-tested on a BOM-marked,
   padded 2-row CSV: 1 governed, 1 quarantined).
+- Oct 27, 2026 build block (4:05 AM run): weekday-prefixed
+  month-name dates (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written
+  with a weekday label in front of a month-name date
+  ("Sunday, March 15, 2026", "Mon, 16 Mar 2026", or a
+  weekday-prefixed ordinal date "Sunday, March 15th, 2026",
+  the way human-readable exports and email-style
+  timestamps write dates) now has the weekday label
+  stripped on read and normalizes to ISO form (YYYY-MM-DD)
+  and governs instead of quarantining as unparseable_date;
+  the weekday itself is not validated against the calendar
+  date (it is a label, not the date), while an impossible
+  weekday-prefixed date ("Monday, Feb 30, 2026") or a bogus
+  weekday label ("Funday, March 15, 2026") is left untouched
+  so the gates quarantine it normally; the quality gates
+  stay strict and see only the normalized value; 2 new
+  tests (suite now 73, all passing). Demo re-verified same
+  run (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.586s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines; zero raw member IDs, zero patient
+  names in all outputs; CLI smoke-tested on a weekday-
+  prefixed-date 2-row CSV: 2 in, 1 governed, 1 quarantined).
 - Oct 26, 2026 build block (10:05 PM run): ordinal month-name
   dates (read_claims_csv in
   hipaa_pipeline_framework/io.py) — a service_date written
