@@ -15,7 +15,9 @@ governs, the time part is dropped),
 datetime-stamped dates such as "2026-03-15 10:30:00",
 timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
 "2026-03-15 10:30:00+05:30", dot-separated dates such as
-"2026.03.15", compact dates such as "20260315", and
+"2026.03.15", compact dates such as "20260315", weekday-prefixed
+compact dates such as "Sunday, 20260315" (the weekday label is
+dropped, only the compact date governs), and
 hyphenated month-name dates such as "15-Mar-2026", and
 numeric hyphen dates such as "03-15-2026", and
 underscore-separated dates such as "2026_03_15", and
@@ -161,8 +163,16 @@ def read_claims_csv(path):
     so the gates quarantine it normally. A service_date in
     compact form (YYYYMMDD, the basic ISO 8601 form, another
     export convention) normalizes the same way, so "20260315"
-    governs; an impossible compact date (e.g. "20260230") is
-    left untouched so the gates quarantine it normally.
+    governs; a weekday-prefixed compact date ("Sunday,
+    20260315" or "Mon, 20260316", the way email-style
+    timestamps write dates) has its weekday label stripped
+    on read and then normalizes the same way, so it governs;
+    the weekday itself is not validated against the calendar
+    date, while an impossible weekday-prefixed compact date
+    ("Monday, 20260230") or a bogus weekday label ("Funday,
+    20260315") is left untouched so the gates quarantine it
+    normally; an impossible compact date (e.g. "20260230")
+    is left untouched so the gates quarantine it normally.
     A service_date in hyphenated month-name form ("15-Mar-2026"
     or "Mar-15-2026", abbreviated or full month name, the way
     some exports write dates without spaces) normalizes the same
@@ -381,14 +391,33 @@ def read_claims_csv(path):
                         break
                     except ValueError:
                         continue
-            elif isinstance(date, str) and date.isdigit() and len(date) == 8:
+            elif isinstance(date, str) and (
+                    (date.isdigit() and len(date) == 8)
+                    or re.fullmatch(
+                        r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+\d{8}", date,
+                        flags=re.IGNORECASE)):
                 # Compact form: YYYYMMDD (basic ISO 8601, the way
-                # some EHR and API exports write dates). An
-                # impossible compact date fails parsing and is
-                # left untouched so the gates quarantine it.
+                # some EHR and API exports write dates), or the
+                # weekday-prefixed compact form ("Sunday,
+                # 20260315" or "Mon, 20260316", the way
+                # email-style timestamps write dates) — the
+                # weekday label is dropped (it is not validated
+                # against the date) and the remainder parses as
+                # a compact date. An impossible compact date
+                # fails parsing and is left untouched so the
+                # gates quarantine it normally, as does a bogus
+                # weekday label ("Funday, 20260315"), which the
+                # pattern does not strip.
+                compact_date = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
+                    flags=re.IGNORECASE)
                 try:
                     cleaned["service_date"] = datetime.strptime(
-                        date, "%Y%m%d").strftime("%Y-%m-%d")
+                        compact_date, "%Y%m%d").strftime("%Y-%m-%d")
                 except ValueError:
                     pass
             elif isinstance(date, str) and (" " in date or "T" in date):
