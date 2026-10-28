@@ -225,6 +225,27 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   names in all outputs; CLI smoke-tested on a
   weekday-prefixed-numeric-hyphen-date 2-row CSV: 2 in,
   1 governed, 1 quarantined).
+- Oct 28, 2026 build block (4:05 PM run): weekday-prefixed
+  underscore-separated dates (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written
+  with a weekday label in front of an underscore-separated
+  date ("Sunday, 2026_03_15" or "Mon, 2026_03_16", the way
+  email-style timestamps write dates) now has the weekday
+  label stripped on read and normalizes to ISO form
+  (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date, while an impossible weekday-prefixed
+  underscore date ("Monday, 2026_02_30") or a bogus weekday
+  label ("Funday, 2026_03_15") is left untouched so the
+  gates quarantine it normally; the quality gates stay
+  strict and see only the normalized value; 2 new tests
+  (suite now 85, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 1.016s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines; zero raw member IDs, zero patient
+  names in all outputs; CLI smoke-tested on a
+  weekday-prefixed-underscore-date 2-row CSV: 2 in,
+  1 governed, 1 quarantined).
 - Oct 27, 2026 build block (10:05 PM run): weekday-prefixed
   dot-separated dates (read_claims_csv in
   hipaa_pipeline_framework/io.py) — a service_date written
