@@ -22,7 +22,11 @@ underscore-separated dates such as "2026_03_15", and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
 weekday-prefixed ISO dates such as "Sunday, 2026-03-15" (the
-weekday label is dropped, only the ISO date governs) — skips blank
+weekday label is dropped, only the ISO date governs), and
+weekday-prefixed slash dates such as "Sunday, 03/15/2026" (the
+weekday label is dropped, only the slash date governs), and
+weekday-prefixed dot-separated dates such as "Sunday, 2026.03.15"
+(the weekday label is dropped, only the dot date governs) — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -141,7 +145,15 @@ def read_claims_csv(path):
     read, so "2026.03.15" governs instead of quarantining as
     unparseable_date; an impossible dot-separated date (e.g.
     "2026.02.30") is left untouched so the gates quarantine it
-    normally. A service_date written with a month name ("Mar 15,
+    normally. A service_date in weekday-prefixed dot-separated
+    form ("Sunday, 2026.03.15" or "Mon, 2026.03.16", the way
+    email-style timestamps write dates) has its weekday label
+    stripped on read and then normalizes the same way, so it
+    governs; the weekday itself is not validated against the
+    calendar date, while an impossible weekday-prefixed dot
+    date ("Monday, 2026.02.30") or a bogus weekday label
+    ("Funday, 2026.03.15") is left untouched so the gates
+    quarantine it normally. A service_date written with a month name ("Mar 15,
     2026" or "15 Mar 2026", abbreviated or full month name, the
     way human-readable exports write dates) normalizes the same
     way, so it governs; an impossible month-name date (e.g.
@@ -192,7 +204,18 @@ def read_claims_csv(path):
     the calendar date, while an impossible weekday-
     prefixed ISO date ("Monday, 2026-02-30") or a bogus
     weekday label ("Funday, 2026-03-15") is left untouched
-    so the gates quarantine it normally.
+    so the gates quarantine it normally. A service_date in
+    weekday-prefixed slash form ("Sunday, 03/15/2026", "Mon,
+    15/03/2026", or a weekday-prefixed slash datetime "Tues,
+    03/16/2026 10:30:00", the way email-style timestamps write
+    dates) has its weekday label stripped on read and then
+    normalizes the same way as a plain slash date, with the
+    same US-first order, so it governs; the weekday itself is
+    not validated against the calendar date, while an
+    impossible weekday-prefixed slash date ("Monday,
+    02/30/2026") or a bogus weekday label ("Funday,
+    03/15/2026") is left untouched so the gates quarantine
+    it normally.
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -215,10 +238,23 @@ def read_claims_csv(path):
                     "$", "").replace(",", "").strip()
             date = cleaned.get("service_date")
             if isinstance(date, str) and "/" in date:
+                # Weekday-prefixed slash form: "Sunday, 03/15/2026"
+                # or "Mon, 15/03/2026" — the weekday label is
+                # dropped (it is not validated against the date)
+                # and the remainder parses as a slash date. A
+                # bogus label ("Funday, 03/15/2026") is not
+                # stripped, so parsing fails and the gates
+                # quarantine it normally, as does an impossible
+                # weekday-prefixed date ("Monday, 02/30/2026").
+                slash_date = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
+                    flags=re.IGNORECASE)
                 for fmt in ("%m/%d/%Y", "%Y/%m/%d", "%d/%m/%Y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(
-                            date, fmt).strftime("%Y-%m-%d")
+                            slash_date, fmt).strftime("%Y-%m-%d")
                         break
                     except ValueError:
                         continue
@@ -239,7 +275,7 @@ def read_claims_csv(path):
                                 "%d/%m/%YT%H:%M:%S"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
-                                date, fmt).strftime("%Y-%m-%d")
+                                slash_date, fmt).strftime("%Y-%m-%d")
                             break
                         except ValueError:
                             continue
@@ -249,9 +285,22 @@ def read_claims_csv(path):
                 # unambiguous day-first date (first component
                 # above 12) reaches the DD/MM/YYYY attempt.
             elif isinstance(date, str) and "." in date:
+                # Weekday-prefixed dot form: "Sunday, 2026.03.15"
+                # or "Mon, 2026.03.16" — the weekday label is
+                # dropped (it is not validated against the date)
+                # and the remainder parses as a dot-separated
+                # date. A bogus label ("Funday, 2026.03.15") is
+                # not stripped, so parsing fails and the gates
+                # quarantine it normally, as does an impossible
+                # weekday-prefixed date ("Monday, 2026.02.30").
+                dot_date = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
+                    flags=re.IGNORECASE)
                 try:
                     cleaned["service_date"] = datetime.strptime(
-                        date, "%Y.%m.%d").strftime("%Y-%m-%d")
+                        dot_date, "%Y.%m.%d").strftime("%Y-%m-%d")
                 except ValueError:
                     # Not a real calendar date in dot form:
                     # left untouched, gates quarantine it

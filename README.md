@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-75 stdlib-only tests (Oct 27, 2026, all passing): hash determinism and
+79 stdlib-only tests (Oct 27, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -143,6 +143,50 @@ datetimes ("03/15/2026 10:30:00" or "03/15/2026T09:00:00"
 read as their date part and govern; "02/30/2026 10:00:00"
 still quarantines as unparseable_date).
 No dependencies, no real patient data.
+
+Oct 27, 2026 build block (10:05 PM run): weekday-prefixed
+dot-separated dates (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written
+with a weekday label in front of a dot-separated date
+("Sunday, 2026.03.15" or "Mon, 2026.03.16", the way
+email-style timestamps write dates) now has the weekday
+label stripped on read and normalizes to ISO form
+(YYYY-MM-DD) and governs instead of quarantining as
+unparseable_date, while an impossible weekday-prefixed dot
+date ("Monday, 2026.02.30") or a bogus weekday label
+("Funday, 2026.03.15") is left untouched so the gates
+quarantine it normally; the quality gates stay strict and
+see only the normalized value; 2 new tests (suite now 79,
+all passing). Demo re-verified same run (10,000 in → 1,589
+governed, 8,411 quarantined, reasons unchanged; runtime
+0.546s; governed, quarantine, and summary.json outputs
+byte-identical to pre-run outputs; audit.csv 10,001 lines;
+zero raw member IDs, zero patient names in all outputs; CLI
+smoke-tested on a weekday-prefixed-dot-date 2-row CSV: 2 in,
+1 governed, 1 quarantined).
+
+Oct 27, 2026 build block (4:05 PM run): weekday-prefixed
+slash dates (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written
+with a weekday label in front of a slash date or slash
+datetime ("Sunday, 03/15/2026", "Mon, 15/03/2026", or a
+weekday-prefixed slash datetime "Tues, 03/16/2026 10:30:00",
+the way email-style timestamps write dates) now has the
+weekday label stripped on read and normalizes to ISO form
+(YYYY-MM-DD) and governs instead of quarantining as
+unparseable_date, with the same US-first order ("Sun,
+03/04/2026" still reads as 2026-03-04), while an impossible
+weekday-prefixed slash date ("Monday, 02/30/2026") or a bogus
+weekday label ("Funday, 03/15/2026") is left untouched so
+the gates quarantine it normally; the quality gates stay
+strict and see only the normalized value; 2 new tests (suite
+now 77, all passing). Demo re-verified same run (10,000 in →
+1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.567s; governed, quarantine, and summary.json
+outputs byte-identical to pre-run outputs; audit.csv 10,001
+lines; zero raw member IDs, zero patient names in all outputs; CLI
+smoke-tested on a weekday-prefixed-slash-date 2-row CSV: 2 in,
+1 governed, 1 quarantined).
 
 Oct 27, 2026 build block (10:05 AM run): weekday-prefixed
 ISO dates (`read_claims_csv` in
