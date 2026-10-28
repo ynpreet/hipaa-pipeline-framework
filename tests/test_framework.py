@@ -643,6 +643,33 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.BAD_DATE: 1})
 
+    def test_read_claims_csv_normalizes_weekday_prefixed_underscore_dates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,\"Sunday, 2026_03_15\",120.50\n"
+                            "M-100002,\"Mon, 2026_03_16\",200.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0]["service_date"], "2026-03-15")
+            self.assertEqual(rows[1]["service_date"], "2026-03-16")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 2)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_weekday_prefixed_underscore_date_still_quarantines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,\"Monday, 2026_02_30\",120.50\n"
+                            "M-100002,\"Funday, 2026_03_15\",200.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 2)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 2)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 2})
+
     def test_read_claims_csv_normalizes_ordinal_month_name_dates(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"
