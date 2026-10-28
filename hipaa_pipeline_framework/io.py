@@ -28,7 +28,9 @@ weekday label is dropped, only the ISO date governs), and
 weekday-prefixed slash dates such as "Sunday, 03/15/2026" (the
 weekday label is dropped, only the slash date governs), and
 weekday-prefixed dot-separated dates such as "Sunday, 2026.03.15"
-(the weekday label is dropped, only the dot date governs) — skips blank
+(the weekday label is dropped, only the dot date governs), and
+weekday-prefixed numeric hyphen dates such as "Sunday, 03-15-2026"
+(the weekday label is dropped, only the hyphen date governs) — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -373,21 +375,38 @@ def read_claims_csv(path):
                             continue
                     if cleaned["service_date"] != date:
                         break
-            elif isinstance(date, str) and re.fullmatch(
-                    r"\d{1,2}-\d{1,2}-\d{4}", date):
+            elif isinstance(date, str) and (
+                    re.fullmatch(r"\d{1,2}-\d{1,2}-\d{4}", date)
+                    or re.fullmatch(
+                        r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+\d{1,2}-\d{1,2}-\d{4}",
+                        date, flags=re.IGNORECASE)):
                 # Numeric hyphen form: "03-15-2026" (US) or an
-                # unambiguous day-first "15-03-2026". The US form
-                # is tried first, mirroring the slash-date rule,
-                # so only a first component above 12 reaches the
-                # DD-MM-YYYY attempt. An ISO date never reaches
-                # here: its four-digit first component does not
-                # match the pattern. An impossible date fails
-                # every format and is left untouched so the gates
-                # quarantine it normally.
+                # unambiguous day-first "15-03-2026", or the
+                # weekday-prefixed form ("Sunday, 03-15-2026" or
+                # "Mon, 15-03-2026", the way email-style
+                # timestamps write dates) — the weekday label is
+                # dropped (it is not validated against the date)
+                # and the remainder parses as a numeric hyphen
+                # date. The US form is tried first, mirroring the
+                # slash-date rule, so only a first component
+                # above 12 reaches the DD-MM-YYYY attempt. An ISO
+                # date never reaches here: its four-digit first
+                # component does not match the pattern. An
+                # impossible date fails every format and is left
+                # untouched so the gates quarantine it normally,
+                # as does a bogus weekday label ("Funday,
+                # 03-15-2026"), which the pattern does not strip.
+                hyphen_date = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
+                    flags=re.IGNORECASE)
                 for fmt in ("%m-%d-%Y", "%d-%m-%Y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(
-                            date, fmt).strftime("%Y-%m-%d")
+                            hyphen_date, fmt).strftime("%Y-%m-%d")
                         break
                     except ValueError:
                         continue
