@@ -21,6 +21,9 @@ dropped, only the compact date governs), and
 hyphenated month-name dates such as "15-Mar-2026", and
 numeric hyphen dates such as "03-15-2026", and
 underscore-separated dates such as "2026_03_15", and
+weekday-prefixed underscore-separated dates such as
+"Sunday, 2026_03_15" (the weekday label is dropped, only the
+underscore date governs), and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
 weekday-prefixed ISO dates such as "Sunday, 2026-03-15" (the
@@ -195,7 +198,16 @@ def read_claims_csv(path):
     dates) normalizes the same way, so "2026_03_15" governs;
     an impossible underscore-separated date (e.g.
     "2026_02_30") is left untouched so the gates quarantine
-    it normally. A service_date in weekday-prefixed month-name
+    it normally. A service_date in weekday-prefixed
+    underscore-separated form ("Sunday, 2026_03_15" or "Mon,
+    2026_03_16", the way email-style timestamps write dates)
+    has its weekday label stripped on read and then normalizes
+    the same way, so it governs; the weekday itself is not
+    validated against the calendar date, while an impossible
+    weekday-prefixed underscore date ("Monday, 2026_02_30")
+    or a bogus weekday label ("Funday, 2026_03_15") is left
+    untouched so the gates quarantine it normally.
+    A service_date in weekday-prefixed month-name
     form ("Sunday, March 15, 2026" or "Mon, 16 Mar 2026", the
     way human-readable exports and email-style timestamps
     write dates) has its weekday label stripped on read and
@@ -317,15 +329,33 @@ def read_claims_csv(path):
                     # Not a real calendar date in dot form:
                     # left untouched, gates quarantine it
                     pass
-            elif isinstance(date, str) and re.fullmatch(
-                    r"\d{4}_\d{2}_\d{2}", date):
+            elif isinstance(date, str) and (
+                    re.fullmatch(r"\d{4}_\d{2}_\d{2}", date)
+                    or re.fullmatch(
+                        r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+\d{4}_\d{2}_\d{2}",
+                        date, flags=re.IGNORECASE)):
                 # Underscore-separated form: YYYY_MM_DD (the way
                 # some exports and file-naming conventions write
-                # dates). An impossible date fails parsing and
-                # is left untouched so the gates quarantine it.
+                # dates), or the weekday-prefixed form ("Sunday,
+                # 2026_03_15" or "Mon, 2026_03_16", the way
+                # email-style timestamps write dates) — the
+                # weekday label is dropped (it is not validated
+                # against the date) and the remainder parses as
+                # an underscore-separated date. An impossible date
+                # fails parsing and is left untouched so the gates
+                # quarantine it, as does a bogus weekday label
+                # ("Funday, 2026_03_15"), which the pattern does
+                # not strip.
+                underscore_date = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
+                    flags=re.IGNORECASE)
                 try:
                     cleaned["service_date"] = datetime.strptime(
-                        date, "%Y_%m_%d").strftime("%Y-%m-%d")
+                        underscore_date, "%Y_%m_%d").strftime("%Y-%m-%d")
                 except ValueError:
                     pass
             elif isinstance(date, str) and any(
