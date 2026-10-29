@@ -20,6 +20,8 @@ compact dates such as "Sunday, 20260315" (the weekday label is
 dropped, only the compact date governs), and
 hyphenated month-name dates such as "15-Mar-2026", and
 numeric hyphen dates such as "03-15-2026", and
+dot-separated datetimes such as "2026.03.15 10:30:00" (the
+date part governs, the time part is dropped), and
 underscore-separated dates such as "2026_03_15", and
 weekday-prefixed underscore-separated dates such as
 "Sunday, 2026_03_15" (the weekday label is dropped, only the
@@ -152,7 +154,12 @@ def read_claims_csv(path):
     read, so "2026.03.15" governs instead of quarantining as
     unparseable_date; an impossible dot-separated date (e.g.
     "2026.02.30") is left untouched so the gates quarantine it
-    normally. A service_date in weekday-prefixed dot-separated
+    normally. A dot-separated datetime ("2026.03.15 10:30:00"
+    or "2026.03.15T09:00:00", the way some exports write dot
+    dates with a time stamp) normalizes to its date part the
+    same way, so it governs; an impossible dot datetime (e.g.
+    "2026.02.30 10:00:00") or a garbage time part is left
+    untouched so the gates quarantine it normally. A service_date in weekday-prefixed dot-separated
     form ("Sunday, 2026.03.15" or "Mon, 2026.03.16", the way
     email-style timestamps write dates) has its weekday label
     stripped on read and then normalizes the same way, so it
@@ -326,9 +333,28 @@ def read_claims_csv(path):
                     cleaned["service_date"] = datetime.strptime(
                         dot_date, "%Y.%m.%d").strftime("%Y-%m-%d")
                 except ValueError:
-                    # Not a real calendar date in dot form:
+                    # Dot-separated datetime: "2026.03.15 10:30:00"
+                    # or "2026.03.15T09:00:00", the way some
+                    # exports write dot dates with a time stamp
+                    # — the date part governs, the time part is
+                    # dropped. An impossible dot datetime (e.g.
+                    # "2026.02.30 10:00:00") or a garbage time
+                    # part fails every format and is left
+                    # untouched so the gates quarantine it.
+                    for fmt in ("%Y.%m.%d %H:%M:%S",
+                                "%Y.%m.%d %H:%M",
+                                "%Y.%m.%d %H:%M:%S.%f",
+                                "%Y.%m.%dT%H:%M:%S",
+                                "%Y.%m.%dT%H:%M",
+                                "%Y.%m.%dT%H:%M:%S.%f"):
+                        try:
+                            cleaned["service_date"] = datetime.strptime(
+                                dot_date, fmt).strftime("%Y-%m-%d")
+                            break
+                        except ValueError:
+                            continue
+                    # else: not a real calendar date in dot form:
                     # left untouched, gates quarantine it
-                    pass
             elif isinstance(date, str) and (
                     re.fullmatch(r"\d{4}_\d{2}_\d{2}", date)
                     or re.fullmatch(

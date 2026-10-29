@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-85 stdlib-only tests (Oct 28, 2026, all passing): hash determinism and
+87 stdlib-only tests (Oct 28, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -124,6 +124,9 @@ an impossible date with a valid suffix, or a malformed offset,
 still quarantines as unparseable_date), and
 dot-separated dates ("2026.03.15" reads as 2026-03-15 and
 governs; "2026.02.30" still quarantines as unparseable_date),
+and dot-separated datetimes ("2026.03.15 10:30:00" or
+"2026.03.15T09:00:00" read as their date part and govern;
+"2026.02.30 10:00:00" still quarantines as unparseable_date),
 and month-name dates ("Mar 15, 2026" or "15 Mar 2026" read as
 2026-03-15 and govern; "Feb 30, 2026" still quarantines as
 unparseable_date), and day-first slash dates ("15/03/2026"
@@ -207,6 +210,26 @@ outputs byte-identical to pre-run outputs; audit.csv
 10,001 lines; zero raw member IDs, zero patient names in
 all outputs; CLI smoke-tested on a
 weekday-prefixed-underscore-date 2-row CSV: 2 in,
+1 governed, 1 quarantined).
+
+Oct 28, 2026 build block (10:05 PM run): dot-separated
+datetimes (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written
+as a dot-separated date carrying a time stamp
+("2026.03.15 10:30:00" or "2026.03.15T09:00:00", the way
+some exports write dot dates with a time stamp) now
+normalizes to its date part (YYYY-MM-DD) on read and
+governs instead of quarantining as unparseable_date,
+while an impossible dot datetime ("2026.02.30 10:00:00")
+or a garbage time part is left untouched so the gates
+quarantine it normally; the quality gates stay strict and
+see only the normalized value; 2 new tests (suite now 87,
+all passing). Demo re-verified same run (10,000 in → 1,589
+governed, 8,411 quarantined, reasons unchanged; runtime
+0.775s; governed, quarantine, and summary.json outputs
+byte-identical to pre-run outputs; audit.csv 10,001 lines;
+zero raw member IDs, zero patient names in all outputs; CLI
+smoke-tested on a dot-separated-datetime 2-row CSV: 2 in,
 1 governed, 1 quarantined).
 
 Oct 27, 2026 build block (10:05 PM run): weekday-prefixed
