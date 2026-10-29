@@ -312,6 +312,52 @@ def read_claims_csv(path):
                             break
                         except ValueError:
                             continue
+                    if cleaned["service_date"] == date:
+                        # Timezone-suffixed slash datetime:
+                        # "03/15/2026 10:30:00Z" or
+                        # "03/15/2026T09:00:00-04:00", the way
+                        # API and EHR exports write slash
+                        # datetimes with a zone — the suffix is
+                        # stripped (a trailing "Z", or a
+                        # well-formed numeric offset, hours
+                        # 00-14, minutes 00-59, colon optional)
+                        # and the date part governs; the offset
+                        # itself is not converted. A malformed
+                        # suffix ("+99:99") is left in place so
+                        # parsing fails and the gates quarantine
+                        # it normally, as does an impossible date
+                        # carrying a valid suffix
+                        # ("02/30/2026 10:00:00Z").
+                        tz_stripped = slash_date
+                        if tz_stripped.endswith("Z"):
+                            tz_stripped = tz_stripped[:-1]
+                        else:
+                            suffix = re.search(
+                                r"([+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                                tz_stripped)
+                            if suffix is not None:
+                                tz_stripped = tz_stripped[:-len(
+                                    suffix.group(1))]
+                        if tz_stripped != slash_date:
+                            for fmt in ("%m/%d/%Y %H:%M:%S",
+                                        "%m/%d/%Y %H:%M",
+                                        "%m/%d/%Y %H:%M:%S.%f",
+                                        "%m/%d/%YT%H:%M:%S",
+                                        "%m/%d/%YT%H:%M",
+                                        "%Y/%m/%d %H:%M:%S",
+                                        "%Y/%m/%d %H:%M",
+                                        "%Y/%m/%dT%H:%M:%S",
+                                        "%d/%m/%Y %H:%M:%S",
+                                        "%d/%m/%Y %H:%M",
+                                        "%d/%m/%YT%H:%M:%S"):
+                                try:
+                                    cleaned["service_date"] = (
+                                        datetime.strptime(
+                                            tz_stripped,
+                                            fmt).strftime("%Y-%m-%d"))
+                                    break
+                                except ValueError:
+                                    continue
                 # else: not a real calendar date in any slash
                 # form: left untouched, gates quarantine it.
                 # The US form is tried first, so only an

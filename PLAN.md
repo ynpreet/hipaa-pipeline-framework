@@ -675,6 +675,32 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   smoke-tested on a blank-row 2-row CSV: 2 in, 2 governed,
   0 quarantined).
 
+- Oct 29, 2026 build block (4:05 PM run):
+  timezone-suffixed slash datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written
+  as a slash date carrying a time stamp and a timezone
+  suffix ("03/15/2026 10:30:00Z",
+  "03/15/2026T09:00:00-04:00", or a weekday-prefixed
+  "Sunday, 03/16/2026 10:30:00+05:30", the way API and EHR
+  exports write slash datetimes with a zone) now has the
+  suffix stripped on read and normalizes to its date part
+  (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date, with the same US-first order
+  ("15/03/2026 10:30:00Z" governs as 2026-03-15), while an
+  impossible timezone-suffixed slash datetime
+  ("02/30/2026 10:00:00Z") or a malformed suffix
+  ("03/15/2026 10:30:00+99:99") is left untouched so the
+  gates quarantine it normally; the quality gates stay
+  strict and see only the normalized value; 2 new tests
+  (suite now 93, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.583s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines; zero raw member IDs, zero patient
+  names in all outputs; CLI smoke-tested on a
+  timezone-suffixed slash-datetime 2-row CSV: 2 in,
+  1 governed, 1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
