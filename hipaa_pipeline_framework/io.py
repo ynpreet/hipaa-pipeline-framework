@@ -35,7 +35,9 @@ weekday label is dropped, only the slash date governs), and
 weekday-prefixed dot-separated dates such as "Sunday, 2026.03.15"
 (the weekday label is dropped, only the dot date governs), and
 weekday-prefixed numeric hyphen dates such as "Sunday, 03-15-2026"
-(the weekday label is dropped, only the hyphen date governs) — skips blank
+(the weekday label is dropped, only the hyphen date governs), and
+month-name datetimes such as "Mar 15, 2026 10:30:00" (the date part
+governs, the time part is dropped) — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -399,7 +401,25 @@ def read_claims_csv(path):
                 # are stripped before the second attempt, so the
                 # ordinal form governs too; an impossible
                 # ordinal date ("Feb 30th, 2026") still fails
-                # every format and quarantines normally.
+                # every format and quarantines normally. A
+                # month-name datetime ("Mar 15, 2026 10:30:00"
+                # or "15 Mar 2026T09:00:00", the way exports
+                # write month-name dates with a time stamp)
+                # normalizes to its date part the same way, so
+                # it governs; an impossible month-name datetime
+                # (e.g. "Feb 30, 2026 10:00:00") or a garbage
+                # time part is left untouched so the gates
+                # quarantine it normally. A weekday-prefixed
+                # month-name datetime ("Sunday, Mar 15, 2026
+                # 10:30:00") strips the weekday label first and
+                # then normalizes the same way. A timezone
+                # suffix on a month-name datetime ("Mar 15,
+                # 2026 10:30:00Z" or "15 Mar 2026T09:00:00-04:00",
+                # the way exports write month-name datetimes
+                # with a zone) is stripped before parsing, so
+                # it governs; a malformed suffix ("Mar 15,
+                # 2026 10:30:00+99:99") is left in place so the
+                # gates quarantine it normally.
                 candidates = [date]
                 # Weekday-prefixed form: "Sunday, March 15, 2026"
                 # or "Mon, 16 Mar 2026" — the weekday label is
@@ -418,11 +438,41 @@ def read_claims_csv(path):
                     stripped = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", base)
                     if stripped != base and stripped not in candidates:
                         candidates.append(stripped)
+                for base in list(candidates):
+                    tz_stripped = base
+                    if tz_stripped.endswith("Z"):
+                        tz_stripped = tz_stripped[:-1]
+                    else:
+                        suffix = re.search(
+                            r"([+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                            tz_stripped)
+                        if suffix is not None:
+                            tz_stripped = tz_stripped[:-len(
+                                suffix.group(1))]
+                    if (tz_stripped != base
+                            and tz_stripped not in candidates):
+                        candidates.append(tz_stripped)
                 for candidate in candidates:
                     for fmt in ("%b %d, %Y", "%B %d, %Y",
                                 "%d %b %Y", "%d %B %Y",
                                 "%d-%b-%Y", "%b-%d-%Y",
-                                "%d-%B-%Y", "%B-%d-%Y"):
+                                "%d-%B-%Y", "%B-%d-%Y",
+                                "%b %d, %Y %H:%M:%S",
+                                "%B %d, %Y %H:%M:%S",
+                                "%b %d, %Y %H:%M",
+                                "%B %d, %Y %H:%M",
+                                "%b %d, %YT%H:%M:%S",
+                                "%B %d, %YT%H:%M:%S",
+                                "%d %b %Y %H:%M:%S",
+                                "%d %B %Y %H:%M:%S",
+                                "%d %b %Y %H:%M",
+                                "%d %B %Y %H:%M",
+                                "%d %b %YT%H:%M:%S",
+                                "%d %B %YT%H:%M:%S",
+                                "%d-%b-%Y %H:%M:%S",
+                                "%b-%d-%Y %H:%M:%S",
+                                "%d-%B-%Y %H:%M:%S",
+                                "%B-%d-%Y %H:%M:%S"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 candidate, fmt).strftime("%Y-%m-%d")

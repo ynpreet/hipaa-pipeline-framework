@@ -266,6 +266,53 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   names in all outputs; CLI smoke-tested on a
   dot-separated-datetime 2-row CSV: 2 in, 1 governed,
   1 quarantined).
+- Oct 29, 2026 build block (10:05 AM run):
+  timezone-suffixed month-name datetimes (read_claims_csv
+  in hipaa_pipeline_framework/io.py) — a service_date
+  written as a month-name datetime carrying a timezone
+  suffix ("Mar 15, 2026 10:30:00Z",
+  "15 Mar 2026T09:00:00-04:00", or a weekday-prefixed
+  "Sunday, Mar 15, 2026 10:30:00+05:00", the way exports
+  write month-name datetimes with a zone) now has the
+  suffix stripped on read and normalizes to its date part
+  (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date, while an impossible timezone-suffixed
+  month-name datetime ("Feb 30, 2026 10:00:00Z") or a
+  malformed suffix ("Mar 15, 2026 10:30:00+99:99") is left
+  untouched so the gates quarantine it normally; the
+  quality gates stay strict and see only the normalized
+  value; 2 new tests (suite now 91, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.965s;
+  governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001
+  lines; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a timezone-suffixed
+  month-name-datetime 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+- Oct 29, 2026 build block (4:05 AM run): month-name
+  datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written
+  as a month-name date carrying a time stamp
+  ("Mar 15, 2026 10:30:00", "15 Mar 2026T09:00:00", or a
+  hyphenated month-name datetime "17-Mar-2026 10:30:00",
+  the way some exports write month-name dates with a time
+  stamp) now normalizes to its date part (YYYY-MM-DD) on
+  read and governs instead of quarantining as
+  unparseable_date, including weekday-prefixed forms
+  ("Sunday, Mar 15, 2026 10:30:00"), while an impossible
+  month-name datetime ("Feb 30, 2026 10:00:00") or a
+  garbage time part is left untouched so the gates
+  quarantine it normally; the quality gates stay strict
+  and see only the normalized value; 2 new tests (suite
+  now 89, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.742s; governed, quarantine, and
+  summary.json outputs stable across a repeat run;
+  audit.csv 10,001 lines; zero raw member IDs, zero patient
+  names in all outputs; CLI smoke-tested on a
+  month-name-datetime 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
 - Oct 27, 2026 build block (10:05 PM run): weekday-prefixed
   dot-separated dates (read_claims_csv in
   hipaa_pipeline_framework/io.py) — a service_date written
