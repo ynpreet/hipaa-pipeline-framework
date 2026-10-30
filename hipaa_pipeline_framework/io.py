@@ -26,6 +26,9 @@ underscore-separated dates such as "2026_03_15", and
 weekday-prefixed underscore-separated dates such as
 "Sunday, 2026_03_15" (the weekday label is dropped, only the
 underscore date governs), and
+timezone-suffixed compact datetimes such as
+"20260315 10:30:00Z" or "20260315T09:00:00-04:00" (the suffix
+is dropped, only the date part governs), and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
 weekday-prefixed ISO dates such as "Sunday, 2026-03-15" (the
@@ -187,6 +190,16 @@ def read_claims_csv(path):
     20260315") is left untouched so the gates quarantine it
     normally; an impossible compact date (e.g. "20260230")
     is left untouched so the gates quarantine it normally.
+    A timezone-suffixed compact datetime ("20260315
+    10:30:00Z", "20260315T09:00:00-04:00", or a
+    weekday-prefixed "Sunday, 20260316 10:30:00+05:30", the
+    way API and EHR exports write compact datetimes with a
+    zone) has its suffix stripped on read and normalizes to
+    its date part the same way, so it governs; an impossible
+    timezone-suffixed compact datetime ("20260230
+    10:00:00Z") or a malformed suffix ("20260315
+    10:30:00+99:99") is left untouched so the gates
+    quarantine it normally.
     A service_date in hyphenated month-name form ("15-Mar-2026"
     or "Mar-15-2026", abbreviated or full month name, the way
     some exports write dates without spaces) normalizes the same
@@ -609,7 +622,14 @@ def read_claims_csv(path):
                         r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                         r"Thu|Fri|Sat|Sun)[,\s]+\d{8}", date,
-                        flags=re.IGNORECASE)):
+                        flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8}[ T]\d{2}:\d{2}(?::\d{2})?"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        date, flags=re.IGNORECASE)):
                 # Compact form: YYYYMMDD (basic ISO 8601, the way
                 # some EHR and API exports write dates), or the
                 # weekday-prefixed compact form ("Sunday,
@@ -617,21 +637,49 @@ def read_claims_csv(path):
                 # email-style timestamps write dates) — the
                 # weekday label is dropped (it is not validated
                 # against the date) and the remainder parses as
-                # a compact date. An impossible compact date
-                # fails parsing and is left untouched so the
+                # a compact date. A timezone-suffixed compact
+                # datetime ("20260315 10:30:00Z",
+                # "20260315T09:00:00-04:00", or a weekday-prefixed
+                # "Sunday, 20260316 10:30:00+05:30", the way API
+                # and EHR exports write compact datetimes with a
+                # zone) has its suffix stripped (a trailing "Z",
+                # or a well-formed numeric offset, hours 00-14,
+                # minutes 00-59, colon optional) and normalizes
+                # to its date part the same way; the offset
+                # itself is not converted. An impossible compact
+                # date fails parsing and is left untouched so the
                 # gates quarantine it normally, as does a bogus
                 # weekday label ("Funday, 20260315"), which the
-                # pattern does not strip.
+                # pattern does not strip, and a malformed suffix
+                # ("20260315 10:30:00+99:99"), which the guard
+                # does not match, so the value falls through to
+                # the generic datetime branch and quarantines.
                 compact_date = re.sub(
                     r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                if compact_date.endswith("Z"):
+                    compact_date = compact_date[:-1]
+                else:
+                    suffix = re.search(
+                        r"([+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                        compact_date)
+                    if suffix is not None:
+                        compact_date = compact_date[:-len(
+                            suffix.group(1))]
                 try:
                     cleaned["service_date"] = datetime.strptime(
                         compact_date, "%Y%m%d").strftime("%Y-%m-%d")
                 except ValueError:
-                    pass
+                    for fmt in ("%Y%m%d %H:%M:%S", "%Y%m%d %H:%M",
+                                "%Y%m%dT%H:%M:%S", "%Y%m%dT%H:%M"):
+                        try:
+                            cleaned["service_date"] = datetime.strptime(
+                                compact_date, fmt).strftime("%Y-%m-%d")
+                            break
+                        except ValueError:
+                            continue
             elif isinstance(date, str) and (" " in date or "T" in date):
                 candidate = date
                 # Weekday-prefixed ISO form: "Sunday, 2026-03-15"
