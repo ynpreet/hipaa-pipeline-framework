@@ -401,6 +401,47 @@ def read_claims_csv(path):
                             break
                         except ValueError:
                             continue
+                    if cleaned["service_date"] == date:
+                        # Timezone-suffixed dot datetime:
+                        # "2026.03.15 10:30:00Z" or
+                        # "2026.03.15T09:00:00-04:00", the way
+                        # API and EHR exports write dot
+                        # datetimes with a zone — the suffix is
+                        # stripped (a trailing "Z", or a
+                        # well-formed numeric offset, hours
+                        # 00-14, minutes 00-59, colon optional)
+                        # and the date part governs; the offset
+                        # itself is not converted. A malformed
+                        # suffix ("+99:99") is left in place so
+                        # parsing fails and the gates quarantine
+                        # it normally, as does an impossible date
+                        # carrying a valid suffix
+                        # ("2026.02.30 10:00:00Z").
+                        tz_stripped = dot_date
+                        if tz_stripped.endswith("Z"):
+                            tz_stripped = tz_stripped[:-1]
+                        else:
+                            suffix = re.search(
+                                r"([+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                                tz_stripped)
+                            if suffix is not None:
+                                tz_stripped = tz_stripped[:-len(
+                                    suffix.group(1))]
+                        if tz_stripped != dot_date:
+                            for fmt in ("%Y.%m.%d %H:%M:%S",
+                                        "%Y.%m.%d %H:%M",
+                                        "%Y.%m.%d %H:%M:%S.%f",
+                                        "%Y.%m.%dT%H:%M:%S",
+                                        "%Y.%m.%dT%H:%M",
+                                        "%Y.%m.%dT%H:%M:%S.%f"):
+                                try:
+                                    cleaned["service_date"] = (
+                                        datetime.strptime(
+                                            tz_stripped,
+                                            fmt).strftime("%Y-%m-%d"))
+                                    break
+                                except ValueError:
+                                    continue
                     # else: not a real calendar date in dot form:
                     # left untouched, gates quarantine it
             elif isinstance(date, str) and (
