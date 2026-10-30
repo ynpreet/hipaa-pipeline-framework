@@ -26,6 +26,9 @@ underscore-separated dates such as "2026_03_15", and
 weekday-prefixed underscore-separated dates such as
 "Sunday, 2026_03_15" (the weekday label is dropped, only the
 underscore date governs), and
+timezone-suffixed underscore datetimes such as
+"2026_03_15 10:30:00Z" or "2026_03_15T09:00:00-04:00" (the suffix
+is dropped, only the date part governs), and
 timezone-suffixed compact datetimes such as
 "20260315 10:30:00Z" or "20260315T09:00:00-04:00" (the suffix
 is dropped, only the date part governs), and
@@ -39,6 +42,9 @@ weekday-prefixed dot-separated dates such as "Sunday, 2026.03.15"
 (the weekday label is dropped, only the dot date governs), and
 weekday-prefixed numeric hyphen dates such as "Sunday, 03-15-2026"
 (the weekday label is dropped, only the hyphen date governs), and
+timezone-suffixed numeric hyphen datetimes such as
+"03-15-2026 10:30:00Z" or "15-03-2026T09:00:00-04:00" (the suffix
+is dropped, only the date part governs), and
 month-name datetimes such as "Mar 15, 2026 10:30:00" (the date part
 governs, the time part is dropped) — skips blank
 rows outright, and still
@@ -215,6 +221,15 @@ def read_claims_csv(path):
     quarantine it normally. An already-ISO date ("2026-03-15")
     is not touched by this form — its four-digit first
     component does not match the numeric-hyphen pattern.
+    A numeric hyphen datetime ("03-15-2026 10:30:00") or a
+    timezone-suffixed numeric hyphen datetime ("03-15-2026
+    10:30:00Z", "15-03-2026T09:00:00-04:00", or a
+    weekday-prefixed "Sunday, 03-16-2026 10:30:00+05:30")
+    normalizes to its date part the same way, with the same
+    US-first order; an impossible timezone-suffixed numeric
+    hyphen datetime ("02-30-2026 10:00:00Z") or a malformed
+    suffix ("03-15-2026 10:30:00+99:99") is left untouched
+    so the gates quarantine it normally.
     A service_date in underscore-separated form (YYYY_MM_DD,
     the way some exports and file-naming conventions write
     dates) normalizes the same way, so "2026_03_15" governs;
@@ -229,6 +244,16 @@ def read_claims_csv(path):
     weekday-prefixed underscore date ("Monday, 2026_02_30")
     or a bogus weekday label ("Funday, 2026_03_15") is left
     untouched so the gates quarantine it normally.
+    An underscore datetime ("2026_03_15 10:30:00") or a
+    timezone-suffixed underscore datetime ("2026_03_15
+    10:30:00Z", "2026_03_15T09:00:00-04:00", or a
+    weekday-prefixed "Sunday, 2026_03_16 10:30:00+05:30")
+    has its suffix stripped on read and normalizes to its
+    date part the same way, so it governs; an impossible
+    timezone-suffixed underscore datetime ("2026_02_30
+    10:00:00Z") or a malformed suffix ("2026_03_15
+    10:30:00+99:99") is left untouched so the gates
+    quarantine it normally.
     A service_date in weekday-prefixed month-name
     form ("Sunday, March 15, 2026" or "Mon, 16 Mar 2026", the
     way human-readable exports and email-style timestamps
@@ -463,6 +488,13 @@ def read_claims_csv(path):
                         r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                         r"Thu|Fri|Sat|Sun)[,\s]+\d{4}_\d{2}_\d{2}",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{4}_\d{2}_\d{2}[ T]\d{2}:\d{2}"
+                        r"(?::\d{2})?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
                         date, flags=re.IGNORECASE)):
                 # Underscore-separated form: YYYY_MM_DD (the way
                 # some exports and file-naming conventions write
@@ -471,21 +503,56 @@ def read_claims_csv(path):
                 # email-style timestamps write dates) — the
                 # weekday label is dropped (it is not validated
                 # against the date) and the remainder parses as
-                # an underscore-separated date. An impossible date
-                # fails parsing and is left untouched so the gates
-                # quarantine it, as does a bogus weekday label
-                # ("Funday, 2026_03_15"), which the pattern does
-                # not strip.
+                # an underscore-separated date. An underscore
+                # datetime ("2026_03_15 10:30:00", the way some
+                # exports write underscore dates with a time
+                # stamp) normalizes to its date part the same
+                # way, as does a timezone-suffixed underscore
+                # datetime ("2026_03_15 10:30:00Z",
+                # "2026_03_15T09:00:00-04:00", or a
+                # weekday-prefixed "Sunday, 2026_03_16
+                # 10:30:00+05:30", the way API and EHR exports
+                # write underscore datetimes with a zone) — the
+                # suffix is stripped (a trailing "Z", or a
+                # well-formed numeric offset, hours 00-14,
+                # minutes 00-59, colon optional) and the date
+                # part governs; the offset itself is not
+                # converted. An impossible date fails parsing
+                # and is left untouched so the gates quarantine
+                # it, as does a bogus weekday label ("Funday,
+                # 2026_03_15"), which the pattern does not
+                # strip, and a malformed suffix ("2026_03_15
+                # 10:30:00+99:99"), which the guard does not
+                # match, so the value falls through to the
+                # generic datetime branch and quarantines.
                 underscore_date = re.sub(
                     r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                if underscore_date.endswith("Z"):
+                    underscore_date = underscore_date[:-1]
+                else:
+                    suffix = re.search(
+                        r"([+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                        underscore_date)
+                    if suffix is not None:
+                        underscore_date = underscore_date[:-len(
+                            suffix.group(1))]
                 try:
                     cleaned["service_date"] = datetime.strptime(
                         underscore_date, "%Y_%m_%d").strftime("%Y-%m-%d")
                 except ValueError:
-                    pass
+                    for fmt in ("%Y_%m_%d %H:%M:%S",
+                                "%Y_%m_%d %H:%M",
+                                "%Y_%m_%dT%H:%M:%S",
+                                "%Y_%m_%dT%H:%M"):
+                        try:
+                            cleaned["service_date"] = datetime.strptime(
+                                underscore_date, fmt).strftime("%Y-%m-%d")
+                            break
+                        except ValueError:
+                            continue
             elif isinstance(date, str) and any(
                     month in date for month in
                     ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -587,6 +654,13 @@ def read_claims_csv(path):
                         r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                         r"Thu|Fri|Sat|Sun)[,\s]+\d{1,2}-\d{1,2}-\d{4}",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-\d{4}[ T]\d{2}:\d{2}"
+                        r"(?::\d{2})?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
                         date, flags=re.IGNORECASE)):
                 # Numeric hyphen form: "03-15-2026" (US) or an
                 # unambiguous day-first "15-03-2026", or the
@@ -604,12 +678,43 @@ def read_claims_csv(path):
                 # untouched so the gates quarantine it normally,
                 # as does a bogus weekday label ("Funday,
                 # 03-15-2026"), which the pattern does not strip.
+                # A numeric hyphen datetime ("03-15-2026
+                # 10:30:00", the way some exports write hyphen
+                # dates with a time stamp) normalizes to its
+                # date part the same way, as does a
+                # timezone-suffixed numeric hyphen datetime
+                # ("03-15-2026 10:30:00Z",
+                # "15-03-2026T09:00:00-04:00", or a
+                # weekday-prefixed "Sunday, 03-16-2026
+                # 10:30:00+05:30", the way API and EHR exports
+                # write hyphen datetimes with a zone) — the
+                # suffix is stripped (a trailing "Z", or a
+                # well-formed numeric offset, hours 00-14,
+                # minutes 00-59, colon optional) and the date
+                # part governs; the offset itself is not
+                # converted. A malformed suffix ("03-15-2026
+                # 10:30:00+99:99") does not match the guard, so
+                # the value falls through to the generic
+                # datetime branch and quarantines.
                 hyphen_date = re.sub(
                     r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
-                for fmt in ("%m-%d-%Y", "%d-%m-%Y"):
+                if hyphen_date.endswith("Z"):
+                    hyphen_date = hyphen_date[:-1]
+                else:
+                    suffix = re.search(
+                        r"([+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                        hyphen_date)
+                    if suffix is not None:
+                        hyphen_date = hyphen_date[:-len(
+                            suffix.group(1))]
+                for fmt in ("%m-%d-%Y %H:%M:%S", "%m-%d-%Y %H:%M",
+                            "%m-%d-%YT%H:%M:%S", "%m-%d-%YT%H:%M",
+                            "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M",
+                            "%d-%m-%YT%H:%M:%S", "%d-%m-%YT%H:%M",
+                            "%m-%d-%Y", "%d-%m-%Y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(
                             hyphen_date, fmt).strftime("%Y-%m-%d")
