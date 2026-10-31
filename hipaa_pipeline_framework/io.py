@@ -29,9 +29,15 @@ underscore date governs), and
 timezone-suffixed underscore datetimes such as
 "2026_03_15 10:30:00Z" or "2026_03_15T09:00:00-04:00" (the suffix
 is dropped, only the date part governs), and
+fractional-second underscore datetimes such as
+"2026_03_15 10:30:00.123Z" (the fractional seconds are dropped
+with the time part, only the date part governs), and
 timezone-suffixed compact datetimes such as
 "20260315 10:30:00Z" or "20260315T09:00:00-04:00" (the suffix
 is dropped, only the date part governs), and
+fractional-second compact datetimes such as
+"20260315 10:30:00.123Z" (the fractional seconds are dropped
+with the time part, only the date part governs), and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
 weekday-prefixed ISO dates such as "Sunday, 2026-03-15" (the
@@ -208,7 +214,15 @@ def read_claims_csv(path):
     timezone-suffixed compact datetime ("20260230
     10:00:00Z") or a malformed suffix ("20260315
     10:30:00+99:99") is left untouched so the gates
-    quarantine it normally.
+    quarantine it normally. A fractional-second compact
+    datetime ("20260315 10:30:00.123Z", the way
+    high-resolution exports write compact datetimes)
+    normalizes the same way — the fractional seconds are
+    dropped with the time part — as does a plain
+    fractional-second compact datetime without a suffix
+    ("20260315 10:30:00.999"); an impossible fractional
+    compact datetime or a malformed suffix is left
+    untouched so the gates quarantine it normally.
     A service_date in hyphenated month-name form ("15-Mar-2026"
     or "Mar-15-2026", abbreviated or full month name, the way
     some exports write dates without spaces) normalizes the same
@@ -260,7 +274,17 @@ def read_claims_csv(path):
     timezone-suffixed underscore datetime ("2026_02_30
     10:00:00Z") or a malformed suffix ("2026_03_15
     10:30:00+99:99") is left untouched so the gates
-    quarantine it normally.
+    quarantine it normally. A fractional-second underscore
+    datetime ("2026_03_15 10:30:00.123Z",
+    "2026_03_15T09:00:00.5-04:00", or a weekday-prefixed
+    "Sunday, 2026_03_16 10:30:00.123456+05:30", the way
+    high-resolution API and EHR exports write underscore
+    datetimes) normalizes the same way — the fractional
+    seconds are dropped with the time part — as does a plain
+    fractional-second underscore datetime without a suffix
+    ("2026_03_15 10:30:00.999"); an impossible fractional
+    underscore datetime or a malformed suffix is left
+    untouched so the gates quarantine it normally.
     A service_date in weekday-prefixed month-name
     form ("Sunday, March 15, 2026" or "Mon, 16 Mar 2026", the
     way human-readable exports and email-style timestamps
@@ -513,7 +537,8 @@ def read_claims_csv(path):
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{4}_\d{2}_\d{2}[ T]\d{2}:\d{2}"
-                        r"(?::\d{2})?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        r"(?::\d{2}(?:\.\d+)?)?"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
                         date, flags=re.IGNORECASE)):
                 # Underscore-separated form: YYYY_MM_DD (the way
                 # some exports and file-naming conventions write
@@ -536,7 +561,12 @@ def read_claims_csv(path):
                 # well-formed numeric offset, hours 00-14,
                 # minutes 00-59, colon optional) and the date
                 # part governs; the offset itself is not
-                # converted. An impossible date fails parsing
+                # converted. A fractional-second underscore
+                # datetime ("2026_03_15 10:30:00.123Z", the
+                # way high-resolution exports write underscore
+                # datetimes) normalizes the same way — the
+                # fractional seconds are dropped with the time
+                # part. An impossible date fails parsing
                 # and is left untouched so the gates quarantine
                 # it, as does a bogus weekday label ("Funday,
                 # 2026_03_15"), which the pattern does not
@@ -562,7 +592,9 @@ def read_claims_csv(path):
                     cleaned["service_date"] = datetime.strptime(
                         underscore_date, "%Y_%m_%d").strftime("%Y-%m-%d")
                 except ValueError:
-                    for fmt in ("%Y_%m_%d %H:%M:%S",
+                    for fmt in ("%Y_%m_%d %H:%M:%S.%f",
+                                "%Y_%m_%dT%H:%M:%S.%f",
+                                "%Y_%m_%d %H:%M:%S",
                                 "%Y_%m_%d %H:%M",
                                 "%Y_%m_%dT%H:%M:%S",
                                 "%Y_%m_%dT%H:%M"):
@@ -763,6 +795,13 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{8}[ T]\d{2}:\d{2}(?::\d{2})?"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8}[ T]\d{2}:\d{2}:\d{2}\.\d+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
                         date, flags=re.IGNORECASE)):
                 # Compact form: YYYYMMDD (basic ISO 8601, the way
                 # some EHR and API exports write dates), or the
@@ -780,7 +819,17 @@ def read_claims_csv(path):
                 # or a well-formed numeric offset, hours 00-14,
                 # minutes 00-59, colon optional) and normalizes
                 # to its date part the same way; the offset
-                # itself is not converted. An impossible compact
+                # itself is not converted. A fractional-second
+                # compact datetime ("20260315 10:30:00.123Z",
+                # "20260315T09:00:00.5-04:00", or a
+                # weekday-prefixed "Sunday, 20260316
+                # 10:30:00.123456+05:30", the way high-resolution
+                # API and EHR exports write compact datetimes)
+                # normalizes the same way — the fractional
+                # seconds are dropped with the time part — as
+                # does a plain fractional-second compact
+                # datetime without a suffix ("20260315
+                # 10:30:00.999"). An impossible compact
                 # date fails parsing and is left untouched so the
                 # gates quarantine it normally, as does a bogus
                 # weekday label ("Funday, 20260315"), which the
@@ -806,7 +855,9 @@ def read_claims_csv(path):
                     cleaned["service_date"] = datetime.strptime(
                         compact_date, "%Y%m%d").strftime("%Y-%m-%d")
                 except ValueError:
-                    for fmt in ("%Y%m%d %H:%M:%S", "%Y%m%d %H:%M",
+                    for fmt in ("%Y%m%d %H:%M:%S.%f",
+                                "%Y%m%dT%H:%M:%S.%f",
+                                "%Y%m%d %H:%M:%S", "%Y%m%d %H:%M",
                                 "%Y%m%dT%H:%M:%S", "%Y%m%dT%H:%M"):
                         try:
                             cleaned["service_date"] = datetime.strptime(

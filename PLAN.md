@@ -836,6 +836,60 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   on a fractional-second numeric-hyphen-datetime 2-row CSV:
   2 in, 1 governed, 1 quarantined).
 
+- Oct 31, 2026 build block (4:05 AM run):
+  fractional-second compact datetimes (read_claims_csv
+  in hipaa_pipeline_framework/io.py) — a service_date written
+  as a compact datetime carrying fractional seconds
+  ("20260315 10:30:00.123Z",
+  "20260315T09:00:00.5-04:00", or a weekday-prefixed
+  "Sunday, 20260316 10:30:00.123456+05:30", the way
+  high-resolution API and EHR exports write compact
+  datetimes) now normalizes to its date part (YYYY-MM-DD)
+  and governs instead of quarantining as unparseable_date,
+  as does a plain fractional-second compact datetime
+  without a suffix ("20260315 10:30:00.999"); while an
+  impossible fractional-second compact datetime
+  ("20260230 10:00:00.123Z") or a malformed suffix
+  ("20260315 10:30:00.123+99:99") is left untouched so the
+  gates quarantine it normally; the quality gates stay
+  strict and see only the normalized value; 2 new tests
+  (suite now 105, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.457s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, differing only in its timestamp
+  column; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a fractional-second
+  compact-datetime 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+
+- Oct 31, 2026 build block (10:05 AM run):
+  fractional-second underscore datetimes (read_claims_csv
+  in hipaa_pipeline_framework/io.py) — a service_date written
+  as an underscore datetime carrying fractional seconds
+  ("2026_03_15 10:30:00.123Z",
+  "2026_03_15T09:00:00.5-04:00", or a weekday-prefixed
+  "Sunday, 2026_03_16 10:30:00.123456+05:30", the way
+  high-resolution API and EHR exports write underscore
+  datetimes) now normalizes to its date part (YYYY-MM-DD)
+  and governs instead of quarantining as unparseable_date,
+  as does a plain fractional-second underscore datetime
+  without a suffix ("2026_03_15 10:30:00.999"); while an
+  impossible fractional-second underscore datetime
+  ("2026_02_30 10:00:00.123Z") or a malformed suffix
+  ("2026_03_15 10:30:00.123+99:99") is left untouched so the
+  gates quarantine it normally; the quality gates stay
+  strict and see only the normalized value; 2 new tests
+  (suite now 107, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.477s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, differing only in its timestamp
+  column; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a fractional-second
+  underscore-datetime 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
