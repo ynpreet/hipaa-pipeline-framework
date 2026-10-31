@@ -45,6 +45,9 @@ weekday-prefixed numeric hyphen dates such as "Sunday, 03-15-2026"
 timezone-suffixed numeric hyphen datetimes such as
 "03-15-2026 10:30:00Z" or "15-03-2026T09:00:00-04:00" (the suffix
 is dropped, only the date part governs), and
+fractional-second numeric hyphen datetimes such as
+"03-15-2026 10:30:00.123Z" (the fractional seconds are dropped
+with the time part, only the date part governs), and
 month-name datetimes such as "Mar 15, 2026 10:30:00" (the date part
 governs, the time part is dropped) — skips blank
 rows outright, and still
@@ -226,7 +229,11 @@ def read_claims_csv(path):
     10:30:00Z", "15-03-2026T09:00:00-04:00", or a
     weekday-prefixed "Sunday, 03-16-2026 10:30:00+05:30")
     normalizes to its date part the same way, with the same
-    US-first order; an impossible timezone-suffixed numeric
+    US-first order; a fractional-second numeric hyphen datetime
+    ("03-15-2026 10:30:00.123Z", the way high-resolution exports
+    write hyphen datetimes) normalizes the same way — the
+    fractional seconds are dropped with the time part. An
+    impossible timezone-suffixed numeric
     hyphen datetime ("02-30-2026 10:00:00Z") or a malformed
     suffix ("03-15-2026 10:30:00+99:99") is left untouched
     so the gates quarantine it normally.
@@ -401,9 +408,21 @@ def read_claims_csv(path):
                 # The US form is tried first, so only an
                 # unambiguous day-first date (first component
                 # above 12) reaches the DD/MM/YYYY attempt.
-            elif isinstance(date, str) and "." in date:
-                # Weekday-prefixed dot form: "Sunday, 2026.03.15"
-                # or "Mon, 2026.03.16" — the weekday label is
+            elif isinstance(date, str) and re.match(
+                    r"(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+)?\d{4}\.",
+                    date, flags=re.IGNORECASE):
+                # Dot-separated form only: the branch claims
+                # year-first dot dates ("2026.03.15", optionally
+                # weekday-prefixed), not every value carrying a
+                # dot — a fractional second in another family
+                # ("03-15-2026 10:30:00.123Z",
+                # "2026-03-15T09:00:00.123Z") must fall through
+                # to its own branch instead of being claimed
+                # here and left unparseable. A
+                # weekday-prefixed dot form ("Sunday, 2026.03.15"
+                # or "Mon, 2026.03.16") has its weekday label
                 # dropped (it is not validated against the date)
                 # and the remainder parses as a dot-separated
                 # date. A bogus label ("Funday, 2026.03.15") is
@@ -660,7 +679,8 @@ def read_claims_csv(path):
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-\d{4}[ T]\d{2}:\d{2}"
-                        r"(?::\d{2})?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        r"(?::\d{2}(?:\.\d+)?)?"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
                         date, flags=re.IGNORECASE)):
                 # Numeric hyphen form: "03-15-2026" (US) or an
                 # unambiguous day-first "15-03-2026", or the
@@ -692,7 +712,12 @@ def read_claims_csv(path):
                 # well-formed numeric offset, hours 00-14,
                 # minutes 00-59, colon optional) and the date
                 # part governs; the offset itself is not
-                # converted. A malformed suffix ("03-15-2026
+                # converted. A fractional-second hyphen datetime
+                # ("03-15-2026 10:30:00.123Z", the way
+                # high-resolution exports write hyphen datetimes)
+                # normalizes the same way — the fractional
+                # seconds are dropped with the time part. A
+                # malformed suffix ("03-15-2026
                 # 10:30:00+99:99") does not match the guard, so
                 # the value falls through to the generic
                 # datetime branch and quarantines.
@@ -710,7 +735,11 @@ def read_claims_csv(path):
                     if suffix is not None:
                         hyphen_date = hyphen_date[:-len(
                             suffix.group(1))]
-                for fmt in ("%m-%d-%Y %H:%M:%S", "%m-%d-%Y %H:%M",
+                for fmt in ("%m-%d-%Y %H:%M:%S.%f",
+                            "%m-%d-%YT%H:%M:%S.%f",
+                            "%d-%m-%Y %H:%M:%S.%f",
+                            "%d-%m-%YT%H:%M:%S.%f",
+                            "%m-%d-%Y %H:%M:%S", "%m-%d-%Y %H:%M",
                             "%m-%d-%YT%H:%M:%S", "%m-%d-%YT%H:%M",
                             "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M",
                             "%d-%m-%YT%H:%M:%S", "%d-%m-%YT%H:%M",

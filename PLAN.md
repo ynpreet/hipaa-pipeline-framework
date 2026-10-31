@@ -803,6 +803,39 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   timezone-suffixed numeric-hyphen-datetime 2-row CSV: 2 in,
   1 governed, 1 quarantined).
 
+- Oct 30, 2026 build block (10:05 PM run):
+  fractional-second numeric hyphen datetimes (read_claims_csv
+  in hipaa_pipeline_framework/io.py) — a service_date written
+  as a numeric hyphen datetime carrying fractional seconds
+  ("03-15-2026 10:30:00.123Z",
+  "15-03-2026T09:00:00.5-04:00", or a weekday-prefixed
+  "Sunday, 03-16-2026 10:30:00.123456+05:30", the way
+  high-resolution API and EHR exports write hyphen datetimes)
+  now normalizes to its date part (YYYY-MM-DD) and governs
+  instead of quarantining as unparseable_date, with the same
+  US-first order ("03-04-2026T08:00:00.25Z" governs as
+  2026-03-04), as does a plain fractional-second hyphen
+  datetime without a suffix ("03-18-2026 10:30:00.999");
+  while an impossible fractional-second hyphen datetime
+  ("02-30-2026 10:00:00.123Z") or a malformed suffix
+  ("03-15-2026 10:30:00.123+99:99") is left untouched so the
+  gates quarantine it normally. The fix also narrowed the
+  dot-separated branch to year-first dot dates only, so a
+  fractional second in another family no longer gets claimed
+  by the dot branch and left unparseable — ISO fractional
+  datetimes ("2026-03-15T09:00:00.123Z") now govern through
+  the generic datetime branch as a side effect, verified, not
+  claimed as a separate feature; the quality gates stay
+  strict and see only the normalized value; 2 new tests
+  (suite now 103, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.989s; governed and quarantine outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines,
+  differing only in its timestamp column; zero raw member
+  IDs, zero patient names in all outputs; CLI smoke-tested
+  on a fractional-second numeric-hyphen-datetime 2-row CSV:
+  2 in, 1 governed, 1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
