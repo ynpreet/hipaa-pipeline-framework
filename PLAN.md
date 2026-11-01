@@ -890,6 +890,129 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   underscore-datetime 2-row CSV: 2 in, 1 governed,
   1 quarantined).
 
+- Oct 31, 2026 build block (4:05 PM run):
+  fractional-second month-name datetimes (read_claims_csv
+  in hipaa_pipeline_framework/io.py) — a service_date written
+  as a month-name datetime carrying fractional seconds
+  ("Mar 15, 2026 10:30:00.123Z",
+  "15 Mar 2026T09:00:00.5-04:00", or a weekday-prefixed
+  "Sunday, March 16, 2026 10:30:00.123456+05:30", the way
+  high-resolution exports write month-name datetimes) now
+  normalizes to its date part (YYYY-MM-DD) and governs
+  instead of quarantining as unparseable_date, as does a
+  plain fractional-second month-name datetime without a
+  suffix ("Mar 18, 2026 10:30:00.999") and a hyphenated
+  month-name fractional datetime ("15-Mar-2026
+  08:00:00.25Z"); while an impossible fractional-second
+  month-name datetime ("Feb 30, 2026 10:00:00.123Z") or a
+  malformed suffix ("Mar 15, 2026 10:30:00.123+99:99") is
+  left untouched so the gates quarantine it normally; the
+  quality gates stay strict and see only the normalized
+  value; 2 new tests (suite now 109, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.453s; governed,
+  quarantine, and summary.json outputs byte-identical to
+  pre-run outputs; audit.csv 10,001 lines and audit.jsonl
+  differing only in their timestamp columns; zero raw member
+  IDs, zero patient names in all outputs; CLI smoke-tested
+  on a fractional-second month-name-datetime 2-row CSV: 2
+  in, 1 governed, 1 quarantined).
+
+- Oct 31, 2026 build block (10:05 PM run):
+  fractional-second slash datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written
+  as a slash datetime carrying fractional seconds
+  ("03/15/2026 10:30:00.123Z",
+  "15/03/2026T09:00:00.5-04:00", or a weekday-prefixed
+  "Sunday, 03/16/2026 10:30:00.123456+05:30", the way
+  high-resolution API and EHR exports write slash
+  datetimes) now normalizes to its date part (YYYY-MM-DD)
+  and governs instead of quarantining as unparseable_date,
+  with the same US-first order ("16/03/2026
+  10:30:00.123Z" governs as 2026-03-16), as does a plain
+  fractional-second slash datetime without a suffix
+  ("03/18/2026 10:30:00.999") and a year-first fractional
+  slash datetime ("2026/03/15 08:00:00.25Z"); the US
+  fractional form already governed through the existing
+  slash branch, and this block closes the day-first,
+  year-first, and weekday-prefixed fractional gaps; while
+  an impossible fractional-second slash datetime
+  ("02/30/2026 10:00:00.123Z") or a malformed suffix
+  ("03/15/2026 10:30:00.123+99:99") is left untouched so
+  the gates quarantine it normally; the quality gates stay
+  strict and see only the normalized value; 2 new tests
+  (suite now 111, all passing). This push also carries the
+  Oct 31 4:05 PM run's fractional-second month-name
+  datetime block (suite 109), which had not been pushed
+  before — remote head before this push was still the
+  107-test commit 5384cee5. Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.432s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, differing only in its timestamp
+  column; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a fractional-second
+  slash-datetime 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+
+- Nov 1, 2026 build block (3:05 AM run):
+  T-separated hyphenated month-name datetimes
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  service_date written as a hyphenated month-name datetime
+  with a T separator ("15-Mar-2026T09:00:00" or
+  "Mar-15-2026T09:00:00.123Z", the way exports write
+  hyphenated month-name datetimes with a T separator) now
+  normalizes to its date part (YYYY-MM-DD) and governs
+  instead of quarantining as unparseable_date, with the same
+  timezone-suffix stripping ("Mar-15-2026T09:00:00Z",
+  "15-Mar-2026T09:00:00.5-04:00") and fractional-second
+  handling, including weekday-prefixed ("Sunday,
+  16-Mar-2026T09:00:00.123Z") and full-month ("March-15-2026T09:00:00")
+  forms; the space-separated hyphenated datetimes already
+  governed, this block closes the T-separated gap; while an
+  impossible T-separated hyphenated month-name datetime
+  ("30-Feb-2026T10:00:00.123Z") or a malformed suffix
+  ("Mar-15-2026T10:30:00.123+99:99") is left untouched so
+  the gates quarantine it normally; the quality gates stay
+  strict and see only the normalized value; 2 new tests
+  (suite now 113, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.450s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines; zero raw member IDs, zero patient
+  names in all outputs; CLI smoke-tested on a
+  T-separated hyphenated month-name-datetime 2-row CSV: 2
+  in, 1 governed, 1 quarantined).
+
+- Nov 1, 2026 build block (9:05 AM run):
+  AM/PM month-name datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written
+  as a month-name datetime on a 12-hour clock
+  ("Mar 15, 2026 10:30:00 AM", "15 Mar 2026 02:30 PM", or a
+  fractional-second "March 15, 2026 10:30:00.123 AM", the way
+  exports write month-name datetimes with an AM/PM marker)
+  now has the marker dropped on read and normalizes to its
+  date part (YYYY-MM-DD) and governs instead of quarantining
+  as unparseable_date, with the same marker handling for
+  weekday-prefixed ("Sunday, Mar 16, 2026 09:00:00 pm"),
+  hyphenated ("15-Mar-2026 10:30:00 AM"), and ordinal
+  ("Mar 15th, 2026 2:30pm", spaced or attached marker)
+  forms, since the marker is stripped as a candidate before
+  the ordinal and timezone steps run; while an impossible
+  AM/PM datetime ("Feb 30, 2026 10:00:00 AM") or a
+  malformed marker ("Mar 15, 2026 10:30:00 XM") is left
+  untouched so the gates quarantine it normally; the
+  quality gates stay strict and see only the normalized
+  value; 2 new tests (suite now 115, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.405s; governed,
+  quarantine, and summary.json outputs byte-identical to
+  pre-run outputs; audit.csv 10,001 lines, differing only
+  in its timestamp column; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on an
+  AM/PM month-name-datetime 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-101 stdlib-only tests (Oct 30, 2026, all passing): hash determinism and
+115 stdlib-only tests (Nov 1, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -838,6 +838,79 @@ summary.json outputs byte-identical to pre-run outputs;
 audit.csv 10,001 lines; zero raw member IDs, zero patient
 names in all outputs; CLI smoke-tested on a
 timezone-suffixed compact-datetime 2-row CSV: 2 in,
+1 governed, 1 quarantined).
+
+Oct 31, 2026 build block (4:05 AM run): fractional-second
+compact datetimes (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written
+as a compact datetime carrying fractional seconds
+("20260315 10:30:00.123Z", "20260315T09:00:00.5-04:00", or
+a weekday-prefixed "Sunday, 20260316 10:30:00.123456+05:30",
+the way high-resolution API and EHR exports write compact
+datetimes) now normalizes to its date part (YYYY-MM-DD)
+and governs instead of quarantining as unparseable_date,
+as does a plain fractional-second compact datetime without
+a suffix ("20260315 10:30:00.999"), while an impossible
+fractional-second compact datetime ("20260230
+10:00:00.123Z") or a malformed suffix ("20260315
+10:30:00.123+99:99") is left untouched so the gates
+quarantine it normally; the quality gates stay strict and
+see only the normalized value; 2 new tests (suite now 105,
+all passing). Demo re-verified same run (10,000 in → 1,589
+governed, 8,411 quarantined, reasons unchanged; runtime
+0.457s; governed, quarantine, and summary.json outputs
+byte-identical to pre-run outputs; audit.csv 10,001 lines;
+zero raw member IDs, zero patient names in all outputs; CLI
+smoke-tested on a fractional-second compact-datetime 2-row
+CSV: 2 in, 1 governed, 1 quarantined).
+
+Nov 1, 2026 build block (3:05 AM run): T-separated
+hyphenated month-name datetimes (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written
+as a hyphenated month-name datetime with a T separator
+("15-Mar-2026T09:00:00" or "Mar-15-2026T09:00:00.123Z")
+now normalizes to its date part (YYYY-MM-DD) and governs
+instead of quarantining as unparseable_date, with the same
+timezone-suffix and fractional-second handling, including
+weekday-prefixed and full-month forms; while an impossible
+T-separated hyphenated month-name datetime
+("30-Feb-2026T10:00:00.123Z") or a malformed suffix
+("Mar-15-2026T10:30:00.123+99:99") is left untouched so the
+gates quarantine it normally; the quality gates stay strict
+and see only the normalized value; 2 new tests (suite now
+113, all passing). Demo re-verified same run (10,000 in →
+1,589 governed, 8,411 quarantined, reasons unchanged;
+runtime 0.450s; governed, quarantine, and summary.json
+outputs byte-identical to pre-run outputs; audit.csv
+10,001 lines; zero raw member IDs, zero patient names in
+all outputs; CLI smoke-tested on a T-separated
+hyphenated month-name-datetime 2-row CSV: 2 in, 1
+governed, 1 quarantined).
+
+Nov 1, 2026 build block (9:05 AM run): AM/PM
+month-name datetimes (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written
+as a month-name datetime on a 12-hour clock
+("Mar 15, 2026 10:30:00 AM", "15 Mar 2026 02:30 PM", or a
+fractional-second "March 15, 2026 10:30:00.123 AM", the way
+exports write month-name datetimes with an AM/PM marker)
+now has the marker dropped on read and normalizes to its
+date part (YYYY-MM-DD) and governs instead of quarantining
+as unparseable_date, with the same marker handling for
+weekday-prefixed ("Sunday, Mar 16, 2026 09:00:00 pm"),
+hyphenated ("15-Mar-2026 10:30:00 AM"), and ordinal
+("Mar 15th, 2026 2:30pm", spaced or attached marker)
+forms; while an impossible AM/PM datetime
+("Feb 30, 2026 10:00:00 AM") or a malformed marker
+("Mar 15, 2026 10:30:00 XM") is left untouched so the gates
+quarantine it normally; the quality gates stay strict and
+see only the normalized value; 2 new tests (suite now 115,
+all passing). Demo re-verified same run (10,000 in → 1,589
+governed, 8,411 quarantined, reasons unchanged; runtime
+0.405s; governed, quarantine, and summary.json outputs
+byte-identical to pre-run outputs; audit.csv 10,001 lines;
+zero raw member IDs, zero patient names in all outputs; CLI
+smoke-tested on an AM/PM month-name-datetime 2-row CSV: 2 in,
 1 governed, 1 quarantined).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)

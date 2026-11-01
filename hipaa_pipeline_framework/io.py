@@ -11,7 +11,10 @@ day-first slash dates such as "15/03/2026" (unambiguous only:
 the US form keeps priority, so a date whose first component
 could be a month still reads as MM/DD/YYYY),
 slash datetimes such as "03/15/2026 10:30:00" (the date part
-governs, the time part is dropped),
+governs, the time part is dropped), and
+fractional-second slash datetimes such as
+"03/15/2026 10:30:00.123Z" (the fractional seconds are dropped
+with the time part, only the date part governs), and
 datetime-stamped dates such as "2026-03-15 10:30:00",
 timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
 "2026-03-15 10:30:00+05:30", dot-separated dates such as
@@ -55,7 +58,12 @@ fractional-second numeric hyphen datetimes such as
 "03-15-2026 10:30:00.123Z" (the fractional seconds are dropped
 with the time part, only the date part governs), and
 month-name datetimes such as "Mar 15, 2026 10:30:00" (the date part
-governs, the time part is dropped) — skips blank
+governs, the time part is dropped), and
+fractional-second month-name datetimes such as
+"Mar 15, 2026 10:30:00.123Z" (the fractional seconds are dropped
+with the time part, only the date part governs), and
+AM/PM month-name datetimes such as "Mar 15, 2026 10:30:00 AM" (the
+marker is dropped, only the date part governs) — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -145,9 +153,19 @@ def read_claims_csv(path):
     ("03/15/2026 10:30:00" or "03/15/2026T09:00:00", the way
     spreadsheet exports write slash datetimes) normalizes to
     its date part the same way, with the same US-first order;
-    an impossible slash datetime (e.g. "02/30/2026 10:00:00")
+    a fractional-second slash datetime ("03/15/2026
+    10:30:00.123Z", "15/03/2026T09:00:00.5-04:00", or a
+    weekday-prefixed "Sunday, 03/16/2026
+    10:30:00.123456+05:30", the way high-resolution API and
+    EHR exports write slash datetimes) normalizes the same
+    way — the fractional seconds are dropped with the time
+    part — as does a plain fractional-second slash datetime
+    without a suffix ("03/18/2026 10:30:00.999"); an
+    impossible slash datetime (e.g. "02/30/2026 10:00:00")
     or a garbage time part is left untouched so the gates
-    quarantine it normally.
+    quarantine it normally, as is a fractional slash datetime
+    with a malformed suffix ("03/15/2026
+    10:30:00.123+99:99").
     A service_date carrying a time stamp
     (a space- or "T"-separated datetime such as "2026-03-15
     10:30:00" or "2026-03-15T09:00:00", the way spreadsheet
@@ -369,12 +387,17 @@ def read_claims_csv(path):
                                 "%m/%d/%Y %H:%M:%S.%f",
                                 "%m/%d/%YT%H:%M:%S",
                                 "%m/%d/%YT%H:%M",
+                                "%m/%d/%YT%H:%M:%S.%f",
                                 "%Y/%m/%d %H:%M:%S",
                                 "%Y/%m/%d %H:%M",
+                                "%Y/%m/%d %H:%M:%S.%f",
                                 "%Y/%m/%dT%H:%M:%S",
+                                "%Y/%m/%dT%H:%M:%S.%f",
                                 "%d/%m/%Y %H:%M:%S",
                                 "%d/%m/%Y %H:%M",
-                                "%d/%m/%YT%H:%M:%S"):
+                                "%d/%m/%Y %H:%M:%S.%f",
+                                "%d/%m/%YT%H:%M:%S",
+                                "%d/%m/%YT%H:%M:%S.%f"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 slash_date, fmt).strftime("%Y-%m-%d")
@@ -413,12 +436,17 @@ def read_claims_csv(path):
                                         "%m/%d/%Y %H:%M:%S.%f",
                                         "%m/%d/%YT%H:%M:%S",
                                         "%m/%d/%YT%H:%M",
+                                        "%m/%d/%YT%H:%M:%S.%f",
                                         "%Y/%m/%d %H:%M:%S",
                                         "%Y/%m/%d %H:%M",
+                                        "%Y/%m/%d %H:%M:%S.%f",
                                         "%Y/%m/%dT%H:%M:%S",
+                                        "%Y/%m/%dT%H:%M:%S.%f",
                                         "%d/%m/%Y %H:%M:%S",
                                         "%d/%m/%Y %H:%M",
-                                        "%d/%m/%YT%H:%M:%S"):
+                                        "%d/%m/%Y %H:%M:%S.%f",
+                                        "%d/%m/%YT%H:%M:%S",
+                                        "%d/%m/%YT%H:%M:%S.%f"):
                                 try:
                                     cleaned["service_date"] = (
                                         datetime.strptime(
@@ -627,7 +655,18 @@ def read_claims_csv(path):
                 # it governs; an impossible month-name datetime
                 # (e.g. "Feb 30, 2026 10:00:00") or a garbage
                 # time part is left untouched so the gates
-                # quarantine it normally. A weekday-prefixed
+                # quarantine it normally. A fractional-second
+                # month-name datetime ("Mar 15, 2026
+                # 10:30:00.123Z" or "15 Mar 2026T09:00:00.5-04:00",
+                # the way high-resolution exports write
+                # month-name datetimes) normalizes the same way
+                # — the fractional seconds are dropped with the
+                # time part — as does a plain fractional-second
+                # month-name datetime without a suffix ("Mar 15,
+                # 2026 10:30:00.999"); an impossible fractional
+                # month-name datetime or a malformed suffix is
+                # left untouched so the gates quarantine it
+                # normally. A weekday-prefixed
                 # month-name datetime ("Sunday, Mar 15, 2026
                 # 10:30:00") strips the weekday label first and
                 # then normalizes the same way. A timezone
@@ -637,7 +676,24 @@ def read_claims_csv(path):
                 # with a zone) is stripped before parsing, so
                 # it governs; a malformed suffix ("Mar 15,
                 # 2026 10:30:00+99:99") is left in place so the
-                # gates quarantine it normally.
+                # gates quarantine it normally. A T-separated
+                # hyphenated month-name datetime
+                # ("15-Mar-2026T09:00:00" or
+                # "Mar-15-2026T09:00:00.123Z", the way exports
+                # write hyphenated month-name datetimes with a
+                # T separator) normalizes to its date part the
+                # same way, with the same timezone-suffix and
+                # fractional-second handling; an impossible
+                # T-separated hyphenated month-name datetime
+                # or a malformed suffix is left untouched so
+                # the gates quarantine it normally. An AM/PM
+                # month-name datetime ("Mar 15, 2026 10:30:00
+                # AM" or "15 Mar 2026 02:30 PM", the way exports
+                # write month-name datetimes on a 12-hour
+                # clock) has its marker dropped and normalizes
+                # the same way; an impossible AM/PM datetime
+                # or a malformed marker ("10:30:00 XM") is left
+                # untouched so the gates quarantine it normally.
                 candidates = [date]
                 # Weekday-prefixed form: "Sunday, March 15, 2026"
                 # or "Mon, 16 Mar 2026" — the weekday label is
@@ -652,6 +708,27 @@ def read_claims_csv(path):
                     flags=re.IGNORECASE)
                 if weekday_stripped != date:
                     candidates.append(weekday_stripped)
+                # AM/PM form: "Mar 15, 2026 10:30:00 AM" or
+                # "15 Mar 2026 02:30 PM", the way exports write
+                # month-name datetimes on a 12-hour clock — the
+                # marker (spaced or attached, either case) is
+                # dropped and the remainder parses as a
+                # month-name datetime; only the date part
+                # governs, so the hour itself needs no
+                # conversion. A malformed marker ("10:30:00 XM")
+                # is not stripped, so parsing fails and the
+                # gates quarantine it normally, as does an
+                # impossible AM/PM datetime ("Feb 30, 2026
+                # 10:00:00 AM"). Added before the ordinal and
+                # timezone steps so those also apply to the
+                # AM/PM-stripped candidates.
+                for base in list(candidates):
+                    ampm_stripped = re.sub(
+                        r"\s*(?:AM|PM)$", "", base,
+                        flags=re.IGNORECASE).rstrip()
+                    if (ampm_stripped != base
+                            and ampm_stripped not in candidates):
+                        candidates.append(ampm_stripped)
                 for base in list(candidates):
                     stripped = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", base)
                     if stripped != base and stripped not in candidates:
@@ -690,7 +767,27 @@ def read_claims_csv(path):
                                 "%d-%b-%Y %H:%M:%S",
                                 "%b-%d-%Y %H:%M:%S",
                                 "%d-%B-%Y %H:%M:%S",
-                                "%B-%d-%Y %H:%M:%S"):
+                                "%B-%d-%Y %H:%M:%S",
+                                "%d-%b-%YT%H:%M:%S",
+                                "%b-%d-%YT%H:%M:%S",
+                                "%d-%B-%YT%H:%M:%S",
+                                "%B-%d-%YT%H:%M:%S",
+                                "%b %d, %Y %H:%M:%S.%f",
+                                "%B %d, %Y %H:%M:%S.%f",
+                                "%b %d, %YT%H:%M:%S.%f",
+                                "%B %d, %YT%H:%M:%S.%f",
+                                "%d %b %Y %H:%M:%S.%f",
+                                "%d %B %Y %H:%M:%S.%f",
+                                "%d %b %YT%H:%M:%S.%f",
+                                "%d %B %YT%H:%M:%S.%f",
+                                "%d-%b-%Y %H:%M:%S.%f",
+                                "%b-%d-%Y %H:%M:%S.%f",
+                                "%d-%B-%Y %H:%M:%S.%f",
+                                "%B-%d-%Y %H:%M:%S.%f",
+                                "%d-%b-%YT%H:%M:%S.%f",
+                                "%b-%d-%YT%H:%M:%S.%f",
+                                "%d-%B-%YT%H:%M:%S.%f",
+                                "%B-%d-%YT%H:%M:%S.%f"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 candidate, fmt).strftime("%Y-%m-%d")
