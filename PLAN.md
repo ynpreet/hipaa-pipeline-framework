@@ -1040,6 +1040,34 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   on an AM/PM slash-datetime 2-row CSV: 2 in, 1 governed,
   1 quarantined).
 
+- Nov 1, 2026 build block (9:05 PM run):
+  AM/PM dot datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  a dot-separated datetime on a 12-hour clock
+  ("2026.03.15 10:30:00 AM", "2026.03.15T09:00:00 PM", or a
+  fractional-second "2026.03.15 10:30:00.123 AM", the way
+  exports write dot datetimes with an AM/PM marker)
+  now has the marker dropped on read and normalizes to its
+  date part (YYYY-MM-DD) and governs instead of quarantining
+  as unparseable_date, with the same marker handling for
+  weekday-prefixed ("Sunday, 2026.03.16 09:00:00 pm") and
+  attached-marker ("2026.03.15 2:30pm") forms, since the
+  marker is stripped as a candidate before the dot datetime
+  formats run; while an impossible AM/PM dot datetime
+  ("2026.02.30 10:00:00 AM") or a malformed marker
+  ("2026.03.15 10:30:00 XM") is left untouched so the gates
+  quarantine it normally; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 119,
+  all passing; README count updated to 119, which also
+  corrects the 115 figure left by the prior run). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.475s; governed,
+  quarantine, and summary.json outputs byte-identical to
+  pre-run outputs; audit.csv 10,001 lines; zero raw member
+  IDs, zero patient names in all outputs; CLI smoke-tested
+  on an AM/PM dot-datetime 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

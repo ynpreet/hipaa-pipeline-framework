@@ -27,6 +27,8 @@ hyphenated month-name dates such as "15-Mar-2026", and
 numeric hyphen dates such as "03-15-2026", and
 dot-separated datetimes such as "2026.03.15 10:30:00" (the
 date part governs, the time part is dropped), and
+AM/PM dot-separated datetimes such as "2026.03.15 10:30:00 AM"
+(the marker is dropped, only the date part governs), and
 underscore-separated dates such as "2026_03_15", and
 weekday-prefixed underscore-separated dates such as
 "Sunday, 2026_03_15" (the weekday label is dropped, only the
@@ -199,7 +201,13 @@ def read_claims_csv(path):
     dates with a time stamp) normalizes to its date part the
     same way, so it governs; an impossible dot datetime (e.g.
     "2026.02.30 10:00:00") or a garbage time part is left
-    untouched so the gates quarantine it normally. A service_date in weekday-prefixed dot-separated
+    untouched so the gates quarantine it normally. An AM/PM dot
+    datetime ("2026.03.15 10:30:00 AM" or a weekday-prefixed
+    "Sunday, 2026.03.16 09:00:00 pm", the way exports write dot
+    datetimes on a 12-hour clock) has its marker dropped on read
+    and normalizes the same way; an impossible AM/PM dot datetime
+    or a malformed marker is left untouched so the gates
+    quarantine it normally. A service_date in weekday-prefixed dot-separated
     form ("Sunday, 2026.03.15" or "Mon, 2026.03.16", the way
     email-style timestamps write dates) has its weekday label
     stripped on read and then normalizes the same way, so it
@@ -502,6 +510,21 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # AM/PM dot datetime: "2026.03.15 10:30:00 AM"
+                # or "2026.03.15 10:30:00.123 AM", the way
+                # exports write dot datetimes on a 12-hour
+                # clock — the marker (spaced or attached,
+                # either case) is dropped and the remainder
+                # parses as a dot datetime; only the date part
+                # governs, so the hour itself needs no
+                # conversion. A malformed marker
+                # ("10:30:00 XM") is not stripped, so parsing
+                # fails and the gates quarantine it normally,
+                # as does an impossible AM/PM datetime
+                # ("2026.02.30 10:00:00 AM").
+                dot_date = re.sub(
+                    r"\s*(?:AM|PM)$", "", dot_date,
+                    flags=re.IGNORECASE).rstrip()
                 try:
                     cleaned["service_date"] = datetime.strptime(
                         dot_date, "%Y.%m.%d").strftime("%Y-%m-%d")
