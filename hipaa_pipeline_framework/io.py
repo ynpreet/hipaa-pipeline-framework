@@ -15,6 +15,8 @@ governs, the time part is dropped), and
 fractional-second slash datetimes such as
 "03/15/2026 10:30:00.123Z" (the fractional seconds are dropped
 with the time part, only the date part governs), and
+AM/PM slash datetimes such as "03/15/2026 10:30:00 AM" (the
+marker is dropped, only the date part governs), and
 datetime-stamped dates such as "2026-03-15 10:30:00",
 timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
 "2026-03-15 10:30:00+05:30", dot-separated dates such as
@@ -371,6 +373,20 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # AM/PM slash datetime: "03/15/2026 10:30:00 AM"
+                # or "15/03/2026 02:30 PM", the way exports write
+                # slash datetimes on a 12-hour clock — the marker
+                # (spaced or attached, either case) is dropped
+                # and the remainder parses as a slash datetime;
+                # only the date part governs, so the hour itself
+                # needs no conversion. A malformed marker
+                # ("10:30:00 XM") is not stripped, so parsing
+                # fails and the gates quarantine it normally, as
+                # does an impossible AM/PM datetime ("02/30/2026
+                # 10:00:00 AM").
+                slash_date = re.sub(
+                    r"\s*(?:AM|PM)$", "", slash_date,
+                    flags=re.IGNORECASE).rstrip()
                 for fmt in ("%m/%d/%Y", "%Y/%m/%d", "%d/%m/%Y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(
