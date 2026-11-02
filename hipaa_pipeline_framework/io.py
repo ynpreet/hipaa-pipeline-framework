@@ -39,6 +39,8 @@ is dropped, only the date part governs), and
 fractional-second underscore datetimes such as
 "2026_03_15 10:30:00.123Z" (the fractional seconds are dropped
 with the time part, only the date part governs), and
+AM/PM underscore datetimes such as "2026_03_15 10:30:00 AM"
+(the marker is dropped, only the date part governs), and
 timezone-suffixed compact datetimes such as
 "20260315 10:30:00Z" or "20260315T09:00:00-04:00" (the suffix
 is dropped, only the date part governs), and
@@ -250,8 +252,22 @@ def read_claims_csv(path):
     fractional-second compact datetime without a suffix
     ("20260315 10:30:00.999"); an impossible fractional
     compact datetime or a malformed suffix is left
-    untouched so the gates quarantine it normally.
-    A service_date in hyphenated month-name form ("15-Mar-2026"
+    untouched so the gates quarantine it normally. An AM/PM compact
+    datetime ("20260315 10:30:00 AM", "20260315T09:00:00 PM", or a
+    fractional-second "20260315 10:30:00.123 AM", the way
+    exports write compact datetimes with an AM/PM marker)
+    now has the marker dropped on read and normalizes to its
+    date part (YYYY-MM-DD) and governs instead of quarantining
+    as unparseable_date, with the same marker handling for
+    weekday-prefixed ("Sunday, 20260316 09:00:00 pm") and
+    attached-marker ("20260315 2:30pm") forms, since the
+    marker is stripped as a candidate before the compact datetime
+    formats run; while an impossible AM/PM compact datetime
+    ("20260230 10:00:00 AM") or a malformed marker ("20260315
+    10:30:00 XM") is left untouched so the gates quarantine it
+    normally; the quality gates stay strict and see only the
+    normalized value. A service_date in hyphenated month-name
+    form ("15-Mar-2026"
     or "Mar-15-2026", abbreviated or full month name, the way
     some exports write dates without spaces) normalizes the same
     way, so it governs; an impossible hyphenated month-name date
@@ -312,7 +328,22 @@ def read_claims_csv(path):
     fractional-second underscore datetime without a suffix
     ("2026_03_15 10:30:00.999"); an impossible fractional
     underscore datetime or a malformed suffix is left
-    untouched so the gates quarantine it normally.
+    untouched so the gates quarantine it normally. An AM/PM
+    underscore datetime ("2026_03_15 10:30:00 AM",
+    "2026_03_15T09:00:00 PM", or a fractional-second
+    "2026_03_15 10:30:00.123 AM", the way exports write
+    underscore datetimes with an AM/PM marker) now has the
+    marker dropped on read and normalizes to its date part
+    (YYYY-MM-DD) and governs instead of quarantining as
+    unparseable_date, with the same marker handling for
+    weekday-prefixed ("Sunday, 2026_03_16 09:00:00 pm") and
+    attached-marker ("2026_03_15 2:30pm") forms, since the
+    marker is stripped as a candidate before the underscore
+    datetime formats run; while an impossible AM/PM underscore
+    datetime ("2026_02_30 10:00:00 AM") or a malformed marker
+    ("2026_03_15 10:30:00 XM") is left untouched so the gates
+    quarantine it normally; the quality gates stay strict and
+    see only the normalized value.
     A service_date in weekday-prefixed month-name
     form ("Sunday, March 15, 2026" or "Mon, 16 Mar 2026", the
     way human-readable exports and email-style timestamps
@@ -606,6 +637,13 @@ def read_claims_csv(path):
                         r"\d{4}_\d{2}_\d{2}[ T]\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{4}_\d{2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Underscore-separated form: YYYY_MM_DD (the way
                 # some exports and file-naming conventions write
@@ -633,7 +671,22 @@ def read_claims_csv(path):
                 # way high-resolution exports write underscore
                 # datetimes) normalizes the same way — the
                 # fractional seconds are dropped with the time
-                # part. An impossible date fails parsing
+                # part. An AM/PM underscore datetime
+                # ("2026_03_15 10:30:00 AM", the way exports
+                # write underscore datetimes on a 12-hour
+                # clock) has its marker dropped on read and
+                # normalizes to its date part the same way,
+                # with the same marker handling for
+                # weekday-prefixed ("Sunday, 2026_03_16
+                # 09:00:00 pm") and attached-marker
+                # ("2026_03_15 2:30pm") forms, since the marker
+                # is stripped as a candidate before the
+                # underscore datetime formats run; while an
+                # impossible AM/PM underscore datetime
+                # ("2026_02_30 10:00:00 AM") or a malformed
+                # marker ("2026_03_15 10:30:00 XM") is left
+                # untouched so the gates quarantine it
+                # normally. An impossible date fails parsing
                 # and is left untouched so the gates quarantine
                 # it, as does a bogus weekday label ("Funday,
                 # 2026_03_15"), which the pattern does not
@@ -646,6 +699,21 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # AM/PM underscore datetime: "2026_03_15 10:30:00 AM"
+                # or "2026_03_15 10:30:00.123 AM", the way
+                # exports write underscore datetimes on a 12-hour
+                # clock — the marker (spaced or attached,
+                # either case) is dropped and the remainder
+                # parses as an underscore datetime; only the date
+                # part governs, so the hour itself needs no
+                # conversion. A malformed marker
+                # ("10:30:00 XM") is not stripped, so parsing
+                # fails and the gates quarantine it normally, as
+                # does an impossible AM/PM datetime
+                # ("2026_02_30 10:00:00 AM").
+                underscore_date = re.sub(
+                    r"\s*(?:AM|PM)$", "", underscore_date,
+                    flags=re.IGNORECASE).rstrip()
                 if underscore_date.endswith("Z"):
                     underscore_date = underscore_date[:-1]
                 else:
@@ -938,6 +1006,13 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{8}[ T]\d{2}:\d{2}:\d{2}\.\d+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Compact form: YYYYMMDD (basic ISO 8601, the way
                 # some EHR and API exports write dates), or the
@@ -978,6 +1053,21 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # AM/PM compact datetime: "20260315 10:30:00 AM"
+                # or "20260315 10:30:00.123 AM", the way
+                # exports write compact datetimes on a 12-hour
+                # clock — the marker (spaced or attached,
+                # either case) is dropped and the remainder
+                # parses as a compact datetime; only the date
+                # part governs, so the hour itself needs no
+                # conversion. A malformed marker
+                # ("10:30:00 XM") is not stripped, so parsing
+                # fails and the gates quarantine it normally,
+                # as does an impossible AM/PM datetime
+                # ("20260230 10:00:00 AM").
+                compact_date = re.sub(
+                    r"\s*(?:AM|PM)$", "", compact_date,
+                    flags=re.IGNORECASE).rstrip()
                 if compact_date.endswith("Z"):
                     compact_date = compact_date[:-1]
                 else:
