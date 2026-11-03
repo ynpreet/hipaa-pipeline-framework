@@ -1508,6 +1508,74 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.BAD_DATE: 2})
 
+    def test_read_claims_csv_normalizes_ampm_iso_datetimes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,2026-03-15 10:30:00 AM,120.50\n"
+                            "M-100002,2026-03-15 10:30:00.123 AM,200.00\n"
+                            "M-100003,2026-03-15T09:00:00 PM,310.00\n"
+                            "M-100004,\"Sunday, 2026-03-16 09:00:00 pm\",410.00\n"
+                            "M-100005,2026-03-15 2:30pm,510.00\n"
+                            "M-100006,2026-03-17T08:00:00.25 PM,610.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 6)
+            self.assertEqual(rows[0]["service_date"], "2026-03-15")
+            self.assertEqual(rows[1]["service_date"], "2026-03-15")
+            self.assertEqual(rows[2]["service_date"], "2026-03-15")
+            self.assertEqual(rows[3]["service_date"], "2026-03-16")
+            self.assertEqual(rows[4]["service_date"], "2026-03-15")
+            self.assertEqual(rows[5]["service_date"], "2026-03-17")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 6)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_ampm_iso_datetime_still_quarantines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,2026-02-30 10:00:00 AM,120.50\n"
+                            "M-100002,2026-03-15 10:30:00 XM,200.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 2)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 2)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 2})
+
+    def test_read_claims_csv_normalizes_ampm_tz_iso_datetimes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,2026-03-15 10:30:00 AM Z,120.50\n"
+                            "M-100002,2026-03-15T09:00:00 PM -04:00,200.00\n"
+                            "M-100003,2026-03-15 10:30:00.123 AM +05:30,310.00\n"
+                            "M-100004,\"Sunday, 2026-03-16 09:00:00 pm Z\",410.00\n"
+                            "M-100005,2026-03-15 10:30:00Z AM,510.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 5)
+            self.assertEqual(rows[0]["service_date"], "2026-03-15")
+            self.assertEqual(rows[1]["service_date"], "2026-03-15")
+            self.assertEqual(rows[2]["service_date"], "2026-03-15")
+            self.assertEqual(rows[3]["service_date"], "2026-03-16")
+            self.assertEqual(rows[4]["service_date"], "2026-03-15")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 5)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_ampm_tz_iso_datetime_still_quarantines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,2026-02-30 10:00:00 AM Z,120.50\n"
+                            "M-100002,2026-03-15 10:30:00 AM +99:99,200.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 2)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 2)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 2})
+
     def test_read_claims_csv_normalizes_datetime_stamped_dates(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"

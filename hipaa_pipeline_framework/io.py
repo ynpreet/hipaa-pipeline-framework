@@ -18,6 +18,8 @@ with the time part, only the date part governs), and
 AM/PM slash datetimes such as "03/15/2026 10:30:00 AM" (the
 marker is dropped, only the date part governs), and
 datetime-stamped dates such as "2026-03-15 10:30:00",
+AM/PM ISO datetimes such as "2026-03-15 10:30:00 AM" (the
+marker is dropped, only the date part governs), and
 timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
 "2026-03-15 10:30:00+05:30", dot-separated dates such as
 "2026.03.15", compact dates such as "20260315", weekday-prefixed
@@ -184,6 +186,21 @@ def read_claims_csv(path):
     is left untouched so the gates quarantine it normally. The quality
     gates themselves stay strict: they see only the normalized
     value, never the raw formatting.
+    An AM/PM ISO datetime ("2026-03-15 10:30:00 AM" or
+    "2026-03-15T09:00:00 PM", the way exports write ISO
+    datetimes on a 12-hour clock) has its marker dropped on read
+    and normalizes to its date part (YYYY-MM-DD) the same way,
+    with the same marker handling for weekday-prefixed
+    ("Sunday, 2026-03-16 09:00:00 pm") and attached-marker
+    ("2026-03-15 2:30pm") forms, since the marker is stripped
+    before the ISO datetime formats run; a timezone suffix
+    trailing the marker ("2026-03-15 10:30:00 AM Z" or
+    "2026-03-15T09:00:00 PM -04:00") is dropped first so the
+    marker strips normally; while an impossible
+    AM/PM ISO datetime ("2026-02-30 10:00:00 AM") or a
+    malformed marker ("2026-03-15 10:30:00 XM") is left
+    untouched so the gates quarantine it normally; the quality
+    gates stay strict and see only the normalized value.
     A datetime-stamped date carrying a timezone suffix — a trailing
     "Z" (UTC) or a numeric offset such as "+05:30" or "-0500", the
     way API and EHR exports write timestamps — has that suffix
@@ -1150,6 +1167,38 @@ def read_claims_csv(path):
                     flags=re.IGNORECASE)
                 if weekday_stripped != candidate:
                     candidate = weekday_stripped
+                # A timezone suffix trailing the AM/PM marker:
+                # "2026-03-15 10:30:00 AM Z" or
+                # "2026-03-15T09:00:00 PM -04:00", the way
+                # exports write a zoned 12-hour timestamp — the
+                # suffix is dropped first so the marker below
+                # is at the end again and strips normally; a
+                # malformed suffix ("AM +99:99") is not a
+                # well-formed designator or offset, so it stays
+                # and parsing fails and the gates quarantine
+                # the value normally.
+                if candidate.endswith("Z"):
+                    candidate = candidate[:-1].rstrip()
+                else:
+                    _ampm_suffix = re.search(
+                        r"([+-](?:0\d|1[0-4]):?[0-5]\d)$", candidate)
+                    if _ampm_suffix is not None:
+                        candidate = candidate[
+                            :-len(_ampm_suffix.group(1))].rstrip()
+                # AM/PM ISO datetime: "2026-03-15 10:30:00 AM" or
+                # "2026-03-15T09:00:00 PM", the way exports write
+                # ISO datetimes on a 12-hour clock — the marker
+                # (spaced or attached, either case) is dropped
+                # and the remainder parses as an ISO datetime;
+                # only the date part governs, so the hour itself
+                # needs no conversion. A malformed marker
+                # ("10:30:00 XM") is not stripped, so parsing
+                # fails and the gates quarantine it normally, as
+                # does an impossible AM/PM datetime
+                # ("2026-02-30 10:00:00 AM").
+                candidate = re.sub(
+                    r"\s*(?:AM|PM)$", "", candidate,
+                    flags=re.IGNORECASE).rstrip()
                 # Strip a timezone suffix before parsing: a trailing
                 # "Z", or a well-formed numeric offset (hours 00-14,
                 # minutes 00-59, colon optional). Anything else is

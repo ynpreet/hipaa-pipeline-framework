@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-125 stdlib-only tests (Nov 2, 2026, all passing): hash determinism and
+129 stdlib-only tests (Nov 3, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -964,6 +964,60 @@ governed, 8,411 quarantined, reasons unchanged; runtime
 byte-identical to pre-run outputs; audit.csv 10,001 lines;
 zero raw member IDs, zero patient names in all outputs; CLI
 smoke-tested on an AM/PM underscore-datetime 2-row CSV: 2 in,
+1 governed, 1 quarantined).
+
+Nov 2, 2026 build block (3:05 PM run): AM/PM numeric hyphen
+datetimes (`read_claims_csv` in
+`hipaa_pipeline_framework/io.py`) — a service_date written as
+a numeric hyphen datetime on a 12-hour clock
+("03-15-2026 10:30:00 AM", "15-03-2026T09:00:00 PM", or a
+fractional-second "03-15-2026 10:30:00.123 AM", the way
+exports write hyphen datetimes with an AM/PM marker)
+now has the marker dropped on read and normalizes to its
+date part (YYYY-MM-DD) and governs instead of quarantining
+as unparseable_date, with the same US-first order
+("03-04-2026 10:30:00 AM" governs as 2026-03-04), and the
+same marker handling for weekday-prefixed
+("Sunday, 03-16-2026 09:00:00 pm") and attached-marker
+("03-15-2026 2:30pm") forms, since the marker is stripped
+before the hyphen datetime formats run; while an
+impossible AM/PM hyphen datetime ("02-30-2026 10:00:00
+AM") or a malformed marker ("03-15-2026 10:30:00 XM") is
+left untouched so the gates quarantine it normally; the
+quality gates stay strict and see only the normalized
+value; 2 new tests (suite now 125, all passing). Demo
+re-verified same run (10,000 in → 1,589 governed, 8,411
+quarantined, reasons unchanged; runtime 0.438s; governed,
+quarantine, and summary.json outputs byte-identical to
+pre-run outputs; audit.csv 10,001 lines; zero raw member
+IDs, zero patient names in all outputs; CLI smoke-tested
+on an AM/PM numeric-hyphen-datetime 2-row CSV: 2 in,
+1 governed, 1 quarantined).
+
+Nov 3, 2026 build block (3:05 AM run): AM/PM ISO datetimes
+(`read_claims_csv` in `hipaa_pipeline_framework/io.py`) — a
+service_date written as an ISO datetime on a 12-hour clock
+("2026-03-15 10:30:00 AM", "2026-03-15T09:00:00 PM", or a
+fractional-second "2026-03-15 10:30:00.123 AM", the way
+exports write ISO datetimes with an AM/PM marker)
+now has the marker dropped on read and normalizes to its
+date part (YYYY-MM-DD) and governs instead of quarantining
+as unparseable_date, with the same marker handling for
+weekday-prefixed ("Sunday, 2026-03-16 09:00:00 pm") and
+attached-marker ("2026-03-15 2:30pm") forms, since the
+marker is stripped in the generic ISO-datetime branch
+before the ISO datetime formats run; while an
+impossible AM/PM ISO datetime ("2026-02-30 10:00:00 AM")
+or a malformed marker ("2026-03-15 10:30:00 XM") is
+left untouched so the gates quarantine it normally; the
+quality gates stay strict and see only the normalized
+value; 2 new tests (suite now 127, all passing). Demo
+re-verified same run (10,000 in → 1,589 governed, 8,411
+quarantined, reasons unchanged; runtime 0.443s; governed,
+quarantine, and summary.json outputs byte-identical to
+pre-run outputs; audit.csv 10,001 lines; zero raw member
+IDs, zero patient names in all outputs; CLI smoke-tested
+on an AM/PM ISO-datetime 2-row CSV: 2 in,
 1 governed, 1 quarantined).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
