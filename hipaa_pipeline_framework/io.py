@@ -63,6 +63,8 @@ is dropped, only the date part governs), and
 fractional-second numeric hyphen datetimes such as
 "03-15-2026 10:30:00.123Z" (the fractional seconds are dropped
 with the time part, only the date part governs), and
+AM/PM numeric hyphen datetimes such as "03-15-2026 10:30:00 AM"
+(the marker is dropped, only the date part governs), and
 month-name datetimes such as "Mar 15, 2026 10:30:00" (the date part
 governs, the time part is dropped), and
 fractional-second month-name datetimes such as
@@ -917,6 +919,13 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-\d{4}[ T]\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-\d{4}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Numeric hyphen form: "03-15-2026" (US) or an
                 # unambiguous day-first "15-03-2026", or the
@@ -952,8 +961,21 @@ def read_claims_csv(path):
                 # ("03-15-2026 10:30:00.123Z", the way
                 # high-resolution exports write hyphen datetimes)
                 # normalizes the same way — the fractional
-                # seconds are dropped with the time part. A
-                # malformed suffix ("03-15-2026
+                # seconds are dropped with the time part. An
+                # AM/PM numeric hyphen datetime ("03-15-2026
+                # 10:30:00 AM", the way exports write hyphen
+                # datetimes on a 12-hour clock) has its marker
+                # dropped on read and normalizes to its date
+                # part the same way, with the same marker
+                # handling for weekday-prefixed ("Sunday,
+                # 03-16-2026 09:00:00 pm") and attached-marker
+                # ("03-15-2026 2:30pm") forms, since the marker
+                # is stripped before the hyphen datetime formats
+                # run; while an impossible AM/PM hyphen datetime
+                # ("02-30-2026 10:00:00 AM") or a malformed
+                # marker ("03-15-2026 10:30:00 XM") is left
+                # untouched so the gates quarantine it normally.
+                # A malformed suffix ("03-15-2026
                 # 10:30:00+99:99") does not match the guard, so
                 # the value falls through to the generic
                 # datetime branch and quarantines.
@@ -962,6 +984,21 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # AM/PM numeric hyphen datetime: "03-15-2026
+                # 10:30:00 AM" or "03-15-2026 10:30:00.123 AM",
+                # the way exports write hyphen datetimes on a
+                # 12-hour clock — the marker (spaced or attached,
+                # either case) is dropped and the remainder
+                # parses as a numeric hyphen datetime; only the
+                # date part governs, so the hour itself needs no
+                # conversion. A malformed marker
+                # ("10:30:00 XM") is not stripped, so parsing
+                # fails and the gates quarantine it normally, as
+                # does an impossible AM/PM datetime
+                # ("02-30-2026 10:00:00 AM").
+                hyphen_date = re.sub(
+                    r"\s*(?:AM|PM)$", "", hyphen_date,
+                    flags=re.IGNORECASE).rstrip()
                 if hyphen_date.endswith("Z"):
                     hyphen_date = hyphen_date[:-1]
                 else:

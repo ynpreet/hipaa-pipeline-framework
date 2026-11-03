@@ -1120,6 +1120,34 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   CLI smoke-tested on an AM/PM underscore-datetime 2-row CSV:
   2 in, 1 governed, 1 quarantined).
 
+- Nov 2, 2026 build block (3:05 PM run):
+  AM/PM numeric hyphen datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  a numeric hyphen datetime on a 12-hour clock
+  ("03-15-2026 10:30:00 AM", "15-03-2026T09:00:00 PM", or a
+  fractional-second "03-15-2026 10:30:00.123 AM", the way
+  exports write hyphen datetimes with an AM/PM marker)
+  now has the marker dropped on read and normalizes to its
+  date part (YYYY-MM-DD) and governs instead of quarantining
+  as unparseable_date, with the same US-first order
+  ("03-04-2026 10:30:00 AM" governs as 2026-03-04), and the
+  same marker handling for weekday-prefixed
+  ("Sunday, 03-16-2026 09:00:00 pm") and attached-marker
+  ("03-15-2026 2:30pm") forms, since the marker is stripped
+  before the hyphen datetime formats run; while an
+  impossible AM/PM hyphen datetime ("02-30-2026 10:00:00
+  AM") or a malformed marker ("03-15-2026 10:30:00 XM") is
+  left untouched so the gates quarantine it normally; the
+  quality gates stay strict and see only the normalized
+  value; 2 new tests (suite now 125, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.438s; governed,
+  quarantine, and summary.json outputs byte-identical to
+  pre-run outputs; audit.csv 10,001 lines; zero raw member
+  IDs, zero patient names in all outputs; CLI smoke-tested
+  on an AM/PM numeric-hyphen-datetime 2-row CSV: 2 in,
+  1 governed, 1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
