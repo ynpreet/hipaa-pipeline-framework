@@ -49,6 +49,9 @@ fractional-second underscore datetimes such as
 with the time part, only the date part governs), and
 AM/PM underscore datetimes such as "2026_03_15 10:30:00 AM"
 (the marker is dropped, only the date part governs), and
+AM/PM timezone-suffixed underscore datetimes such as
+"2026_03_15 10:30:00 AM Z" (the suffix trailing the marker is
+dropped first, then the marker, only the date part governs), and
 timezone-suffixed compact datetimes such as
 "20260315 10:30:00Z" or "20260315T09:00:00-04:00" (the suffix
 is dropped, only the date part governs), and
@@ -720,6 +723,22 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{4}_\d{2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{4}_\d{2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{4}_\d{2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Underscore-separated form: YYYY_MM_DD (the way
                 # some exports and file-naming conventions write
@@ -762,6 +781,19 @@ def read_claims_csv(path):
                 # ("2026_02_30 10:00:00 AM") or a malformed
                 # marker ("2026_03_15 10:30:00 XM") is left
                 # untouched so the gates quarantine it
+                # normally. An AM/PM timezone-suffixed
+                # underscore datetime ("2026_03_15 10:30:00
+                # AM Z", "2026_03_15T09:00:00 PM -04:00", or a
+                # weekday-prefixed "Sunday, 2026_03_16
+                # 10:30:00 am +05:30") has the suffix trailing
+                # the marker dropped first so the marker
+                # strips normally, and the suffix-before-
+                # marker order ("2026_03_15 10:30:00Z AM")
+                # governs too; while an impossible AM/PM
+                # timezone-suffixed underscore datetime
+                # ("2026_02_30 10:00:00 AM Z") or a malformed
+                # suffix ("2026_03_15 10:30:00 AM +99:99") is
+                # left untouched so the gates quarantine it
                 # normally. An impossible date fails parsing
                 # and is left untouched so the gates quarantine
                 # it, as does a bogus weekday label ("Funday,
@@ -775,6 +807,25 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # AM/PM timezone-suffixed underscore datetime:
+                # "2026_03_15 10:30:00 AM Z" or
+                # "2026_03_15T09:00:00 PM -04:00", the way
+                # exports write zoned 12-hour underscore
+                # timestamps — the suffix trailing the marker
+                # (a "Z", or a well-formed numeric offset) is
+                # dropped first so the marker strips normally
+                # below; the suffix-before-marker order
+                # ("2026_03_15 10:30:00Z AM") governs too, via
+                # the suffix strip after the marker strip
+                # further down. A malformed suffix
+                # ("10:30:00 AM +99:99") is not stripped, so
+                # the marker does not strip either and the
+                # gates quarantine it normally, as does an
+                # impossible date carrying a valid suffix
+                # ("2026_02_30 10:00:00 AM Z").
+                underscore_date = re.sub(
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"\1", underscore_date, flags=re.IGNORECASE)
                 # AM/PM underscore datetime: "2026_03_15 10:30:00 AM"
                 # or "2026_03_15 10:30:00.123 AM", the way
                 # exports write underscore datetimes on a 12-hour
