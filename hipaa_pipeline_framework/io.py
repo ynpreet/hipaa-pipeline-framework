@@ -17,6 +17,9 @@ fractional-second slash datetimes such as
 with the time part, only the date part governs), and
 AM/PM slash datetimes such as "03/15/2026 10:30:00 AM" (the
 marker is dropped, only the date part governs), and
+AM/PM timezone-suffixed slash datetimes such as
+"03/15/2026 10:30:00 AM Z" (the suffix trailing the marker is
+dropped first, then the marker, only the date part governs), and
 datetime-stamped dates such as "2026-03-15 10:30:00",
 AM/PM ISO datetimes such as "2026-03-15 10:30:00 AM" (the
 marker is dropped, only the date part governs), and
@@ -431,6 +434,24 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # AM/PM timezone-suffixed slash datetime:
+                # "03/15/2026 10:30:00 AM Z" or
+                # "03/15/2026T09:00:00 PM -04:00", the way
+                # exports write zoned 12-hour slash timestamps
+                # — the suffix trailing the marker (a "Z", or a
+                # well-formed numeric offset) is dropped first
+                # so the marker strips normally below; the
+                # suffix-before-marker order ("03/15/2026
+                # 10:30:00Z AM") already governed and still
+                # does, via the timezone branch further down. A
+                # malformed suffix ("10:30:00 AM +99:99") is not
+                # stripped, so the marker does not strip either
+                # and the gates quarantine it normally, as does
+                # an impossible date carrying a valid suffix
+                # ("02/30/2026 10:00:00 AM Z").
+                slash_date = re.sub(
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"\1", slash_date, flags=re.IGNORECASE)
                 # AM/PM slash datetime: "03/15/2026 10:30:00 AM"
                 # or "15/03/2026 02:30 PM", the way exports write
                 # slash datetimes on a 12-hour clock — the marker

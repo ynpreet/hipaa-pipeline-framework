@@ -1201,6 +1201,36 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   on an AM/PM ISO-datetime 2-row CSV: 2 in,
   1 governed, 1 quarantined).
 
+- Nov 3, 2026 build block (3:05 PM run):
+  AM/PM timezone-suffixed slash datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as a
+  slash datetime on a 12-hour clock carrying a timezone suffix
+  AFTER the AM/PM marker ("03/15/2026 10:30:00 AM Z",
+  "03/15/2026T09:00:00 PM -04:00", or a fractional-second
+  "03/15/2026 10:30:00.123 AM +05:30", the way exports write
+  zoned 12-hour slash timestamps) now has the suffix dropped
+  first so the marker strips normally, then normalizes to its
+  date part (YYYY-MM-DD) and governs instead of quarantining
+  as unparseable_date, with the same US-first order
+  ("15/03/2026 10:30:00 AM Z" governs as 2026-03-15), and the
+  same handling for weekday-prefixed
+  ("Sunday, 03/16/2026 09:00:00 pm Z") forms; the
+  suffix-before-marker order ("03/15/2026 10:30:00Z AM")
+  already governed and still does; while an impossible
+  AM/PM timezone-suffixed slash datetime
+  ("02/30/2026 10:00:00 AM Z") or a malformed suffix
+  ("03/15/2026 10:30:00 AM +99:99") is left untouched so the
+  gates quarantine it normally; the quality gates stay
+  strict and see only the normalized value; 2 new tests
+  (suite now 131, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.415s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines; zero raw member IDs, zero patient
+  names in all outputs; CLI smoke-tested on an AM/PM
+  timezone-suffixed slash-datetime 2-row CSV: 2 in,
+  1 governed, 1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
