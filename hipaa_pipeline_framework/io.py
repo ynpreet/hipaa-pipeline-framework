@@ -34,6 +34,9 @@ dot-separated datetimes such as "2026.03.15 10:30:00" (the
 date part governs, the time part is dropped), and
 AM/PM dot-separated datetimes such as "2026.03.15 10:30:00 AM"
 (the marker is dropped, only the date part governs), and
+AM/PM timezone-suffixed dot-separated datetimes such as
+"2026.03.15 10:30:00 AM Z" (the suffix trailing the marker is
+dropped first, then the marker, only the date part governs), and
 underscore-separated dates such as "2026_03_15", and
 weekday-prefixed underscore-separated dates such as
 "Sunday, 2026_03_15" (the weekday label is dropped, only the
@@ -581,6 +584,24 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # AM/PM timezone-suffixed dot datetime:
+                # "2026.03.15 10:30:00 AM Z" or
+                # "2026.03.15T09:00:00 PM -04:00", the way
+                # exports write zoned 12-hour dot timestamps
+                # — the suffix trailing the marker (a "Z", or a
+                # well-formed numeric offset) is dropped first
+                # so the marker strips normally below; the
+                # suffix-before-marker order ("2026.03.15
+                # 10:30:00Z AM") already governed and still
+                # does, via the timezone branch further down. A
+                # malformed suffix ("10:30:00 AM +99:99") is not
+                # stripped, so the marker does not strip either
+                # and the gates quarantine it normally, as does
+                # an impossible date carrying a valid suffix
+                # ("2026.02.30 10:00:00 AM Z").
+                dot_date = re.sub(
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"\1", dot_date, flags=re.IGNORECASE)
                 # AM/PM dot datetime: "2026.03.15 10:30:00 AM"
                 # or "2026.03.15 10:30:00.123 AM", the way
                 # exports write dot datetimes on a 12-hour
