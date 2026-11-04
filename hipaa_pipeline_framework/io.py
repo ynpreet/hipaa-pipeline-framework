@@ -55,6 +55,9 @@ is dropped, only the date part governs), and
 fractional-second compact datetimes such as
 "20260315 10:30:00.123Z" (the fractional seconds are dropped
 with the time part, only the date part governs), and
+AM/PM timezone-suffixed compact datetimes such as
+"20260315 10:30:00 AM Z" (the suffix trailing the marker is
+dropped first, then the marker, only the date part governs), and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
 weekday-prefixed ISO dates such as "Sunday, 2026-03-15" (the
@@ -291,7 +294,19 @@ def read_claims_csv(path):
     ("20260230 10:00:00 AM") or a malformed marker ("20260315
     10:30:00 XM") is left untouched so the gates quarantine it
     normally; the quality gates stay strict and see only the
-    normalized value. A service_date in hyphenated month-name
+    normalized value. An AM/PM timezone-suffixed compact datetime
+    ("20260315 10:30:00 AM Z", "20260315T09:00:00 PM -04:00",
+    or a weekday-prefixed "Sunday, 20260316 10:30:00 am
+    +05:30", the way exports write zoned 12-hour compact
+    timestamps) has the suffix trailing the marker dropped
+    first so the marker strips normally, then normalizes the
+    same way; the suffix-before-marker order ("20260315
+    10:30:00Z AM") governs too, via the suffix strip after
+    the marker strip; while an impossible AM/PM
+    timezone-suffixed compact datetime ("20260230 10:00:00
+    AM Z") or a malformed suffix ("20260315 10:30:00 AM
+    +99:99") is left untouched so the gates quarantine it
+    normally. A service_date in hyphenated month-name
     form ("15-Mar-2026"
     or "Mar-15-2026", abbreviated or full month name, the way
     some exports write dates without spaces) normalizes the same
@@ -1109,6 +1124,22 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{8}[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Compact form: YYYYMMDD (basic ISO 8601, the way
                 # some EHR and API exports write dates), or the
@@ -1149,6 +1180,24 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # AM/PM timezone-suffixed compact datetime:
+                # "20260315 10:30:00 AM Z" or
+                # "20260315T09:00:00 PM -04:00", the way
+                # exports write zoned 12-hour compact timestamps
+                # — the suffix trailing the marker (a "Z", or a
+                # well-formed numeric offset) is dropped first
+                # so the marker strips normally below; the
+                # suffix-before-marker order ("20260315
+                # 10:30:00Z AM") governs too, via the suffix
+                # strip after the marker strip further down. A
+                # malformed suffix ("10:30:00 AM +99:99") is not
+                # stripped, so the marker does not strip either
+                # and the gates quarantine it normally, as does
+                # an impossible date carrying a valid suffix
+                # ("20260230 10:00:00 AM Z").
+                compact_date = re.sub(
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"\1", compact_date, flags=re.IGNORECASE)
                 # AM/PM compact datetime: "20260315 10:30:00 AM"
                 # or "20260315 10:30:00.123 AM", the way
                 # exports write compact datetimes on a 12-hour
