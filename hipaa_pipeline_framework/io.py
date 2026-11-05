@@ -20,6 +20,10 @@ marker is dropped, only the date part governs), and
 AM/PM timezone-suffixed slash datetimes such as
 "03/15/2026 10:30:00 AM Z" (the suffix trailing the marker is
 dropped first, then the marker, only the date part governs), and
+two-digit-year slash dates such as "03/15/26" (a legacy export
+convention; the two-digit year follows Python's %y pivot,
+00-68 read as 2000-2068 and 69-99 as 1969-1999, with the same
+US-first order), and
 datetime-stamped dates such as "2026-03-15 10:30:00",
 AM/PM ISO datetimes such as "2026-03-15 10:30:00 AM" (the
 marker is dropped, only the date part governs), and
@@ -85,7 +89,10 @@ fractional-second month-name datetimes such as
 "Mar 15, 2026 10:30:00.123Z" (the fractional seconds are dropped
 with the time part, only the date part governs), and
 AM/PM month-name datetimes such as "Mar 15, 2026 10:30:00 AM" (the
-marker is dropped, only the date part governs) — skips blank
+marker is dropped, only the date part governs), and
+AM/PM timezone-suffixed month-name datetimes such as
+"Mar 15, 2026 10:30:00 AM Z" (the suffix trailing the marker is
+dropped first, then the marker, only the date part governs) — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -164,6 +171,21 @@ def read_claims_csv(path):
     another export convention) normalizes the same way, so
     "2026/03/15" also governs; an impossible year-first date
     (e.g. "2026/02/30") is left untouched for the gates.
+    A service_date in two-digit-year slash form (MM/DD/YY, the
+    way legacy exports write dates) normalizes the same way, so
+    "03/15/26" governs as 2026-03-15; the two-digit year follows
+    Python's strptime %y pivot (00-68 read as 2000-2068, 69-99
+    as 1969-1999), so "03/15/99" governs as 1999-03-15. The
+    same US-first order holds ("03/04/26" reads as 2026-03-04,
+    while an unambiguous day-first "15/03/26" governs as
+    2026-03-15); a leading component above 12 with a two-digit
+    year therefore reads day-first ("26/03/15" governs as
+    2015-03-26), and there is no separate year-first two-digit
+    form. Two-digit-year slash datetimes ("03/15/26 10:30:00",
+    fractional and timezone-suffixed forms included) normalize
+    to their date part the same way; an impossible two-digit
+    date ("02/30/26") or a malformed suffix is left untouched
+    so the gates quarantine it normally.
     The day-first slash form (DD/MM/YYYY, the convention in
     non-US healthcare exports) normalizes the same way, but
     only when it is unambiguous: the US form is tried first, so
@@ -487,7 +509,21 @@ def read_claims_csv(path):
                 slash_date = re.sub(
                     r"\s*(?:AM|PM)$", "", slash_date,
                     flags=re.IGNORECASE).rstrip()
-                for fmt in ("%m/%d/%Y", "%Y/%m/%d", "%d/%m/%Y"):
+                # Two-digit-year slash form: "03/15/26" or
+                # "15/03/26", the way legacy exports write dates
+                # — the two-digit year follows Python's %y pivot
+                # (00-68 read as 2000-2068, 69-99 as 1969-1999).
+                # The US form is tried first, mirroring the
+                # four-digit rule, so only an unambiguous
+                # day-first date reaches the DD/MM/YY attempt; a
+                # leading component above 12 therefore reads
+                # day-first ("26/03/15" governs as 2015-03-26)
+                # and there is no separate year-first two-digit
+                # form. A four-digit year never reaches the %y
+                # formats: %Y matches it first, and %y fails on
+                # it (it consumes two digits, then expects "/").
+                for fmt in ("%m/%d/%Y", "%Y/%m/%d", "%d/%m/%Y",
+                            "%m/%d/%y", "%d/%m/%y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(
                             slash_date, fmt).strftime("%Y-%m-%d")
@@ -513,7 +549,18 @@ def read_claims_csv(path):
                                 "%d/%m/%Y %H:%M",
                                 "%d/%m/%Y %H:%M:%S.%f",
                                 "%d/%m/%YT%H:%M:%S",
-                                "%d/%m/%YT%H:%M:%S.%f"):
+                                "%d/%m/%YT%H:%M:%S.%f",
+                                "%m/%d/%y %H:%M:%S",
+                                "%m/%d/%y %H:%M",
+                                "%m/%d/%y %H:%M:%S.%f",
+                                "%m/%d/%yT%H:%M:%S",
+                                "%m/%d/%yT%H:%M",
+                                "%m/%d/%yT%H:%M:%S.%f",
+                                "%d/%m/%y %H:%M:%S",
+                                "%d/%m/%y %H:%M",
+                                "%d/%m/%y %H:%M:%S.%f",
+                                "%d/%m/%yT%H:%M:%S",
+                                "%d/%m/%yT%H:%M:%S.%f"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 slash_date, fmt).strftime("%Y-%m-%d")
@@ -562,7 +609,18 @@ def read_claims_csv(path):
                                         "%d/%m/%Y %H:%M",
                                         "%d/%m/%Y %H:%M:%S.%f",
                                         "%d/%m/%YT%H:%M:%S",
-                                        "%d/%m/%YT%H:%M:%S.%f"):
+                                        "%d/%m/%YT%H:%M:%S.%f",
+                                        "%m/%d/%y %H:%M:%S",
+                                        "%m/%d/%y %H:%M",
+                                        "%m/%d/%y %H:%M:%S.%f",
+                                        "%m/%d/%yT%H:%M:%S",
+                                        "%m/%d/%yT%H:%M",
+                                        "%m/%d/%yT%H:%M:%S.%f",
+                                        "%d/%m/%y %H:%M:%S",
+                                        "%d/%m/%y %H:%M",
+                                        "%d/%m/%y %H:%M:%S.%f",
+                                        "%d/%m/%yT%H:%M:%S",
+                                        "%d/%m/%yT%H:%M:%S.%f"):
                                 try:
                                     cleaned["service_date"] = (
                                         datetime.strptime(
@@ -928,6 +986,20 @@ def read_claims_csv(path):
                 # the same way; an impossible AM/PM datetime
                 # or a malformed marker ("10:30:00 XM") is left
                 # untouched so the gates quarantine it normally.
+                # An AM/PM timezone-suffixed month-name
+                # datetime ("Mar 15, 2026 10:30:00 AM Z" or
+                # "15 Mar 2026T09:00:00 PM -04:00", the way
+                # exports write zoned 12-hour month-name
+                # timestamps) has the suffix trailing the
+                # marker dropped first so the marker strips
+                # normally, and the suffix-before-marker
+                # order ("Mar 15, 2026 10:30:00Z AM") governs
+                # too; while an impossible AM/PM
+                # timezone-suffixed month-name datetime
+                # ("Feb 30, 2026 10:00:00 AM Z") or a
+                # malformed suffix ("Mar 15, 2026 10:30:00
+                # AM +99:99") is left untouched so the gates
+                # quarantine it normally.
                 candidates = [date]
                 # Weekday-prefixed form: "Sunday, March 15, 2026"
                 # or "Mon, 16 Mar 2026" — the weekday label is
@@ -942,6 +1014,30 @@ def read_claims_csv(path):
                     flags=re.IGNORECASE)
                 if weekday_stripped != date:
                     candidates.append(weekday_stripped)
+                # AM/PM timezone-suffixed month-name datetime:
+                # "Mar 15, 2026 10:30:00 AM Z" or "15 Mar
+                # 2026T09:00:00 PM -04:00", the way exports
+                # write zoned 12-hour month-name timestamps —
+                # the suffix trailing the marker (a "Z", or a
+                # well-formed numeric offset) is dropped first
+                # so the marker strips normally in the step
+                # below; the suffix-before-marker order
+                # ("Mar 15, 2026 10:30:00Z AM") governs too,
+                # via the suffix strip after the marker strip
+                # further down. A malformed suffix ("Mar 15,
+                # 2026 10:30:00 AM +99:99") is not stripped,
+                # so the marker does not strip either and the
+                # gates quarantine it normally, as does an
+                # impossible date carrying a valid suffix
+                # ("Feb 30, 2026 10:00:00 AM Z").
+                for base in list(candidates):
+                    marker_suffix_stripped = re.sub(
+                        r"((?:AM|PM))\s+"
+                        r"(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                        r"\1", base, flags=re.IGNORECASE)
+                    if (marker_suffix_stripped != base
+                            and marker_suffix_stripped not in candidates):
+                        candidates.append(marker_suffix_stripped)
                 # AM/PM form: "Mar 15, 2026 10:30:00 AM" or
                 # "15 Mar 2026 02:30 PM", the way exports write
                 # month-name datetimes on a 12-hour clock — the
