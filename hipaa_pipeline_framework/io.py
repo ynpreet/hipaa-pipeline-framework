@@ -1051,6 +1051,22 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-\d{4}[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-\d{4}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-\d{4}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Numeric hyphen form: "03-15-2026" (US) or an
                 # unambiguous day-first "15-03-2026", or the
@@ -1100,7 +1116,20 @@ def read_claims_csv(path):
                 # ("02-30-2026 10:00:00 AM") or a malformed
                 # marker ("03-15-2026 10:30:00 XM") is left
                 # untouched so the gates quarantine it normally.
-                # A malformed suffix ("03-15-2026
+                # An AM/PM timezone-suffixed numeric hyphen
+                # datetime ("03-15-2026 10:30:00 AM Z",
+                # "15-03-2026T09:00:00 PM -04:00", or a
+                # weekday-prefixed "Sunday, 03-16-2026
+                # 10:30:00 am +05:30") has the suffix trailing
+                # the marker dropped first so the marker
+                # strips normally, and the suffix-before-
+                # marker order ("03-15-2026 10:30:00Z AM")
+                # governs too; while an impossible AM/PM
+                # timezone-suffixed hyphen datetime
+                # ("02-30-2026 10:00:00 AM Z") or a malformed
+                # suffix ("03-15-2026 10:30:00 AM +99:99") is
+                # left untouched so the gates quarantine it
+                # normally. A malformed suffix ("03-15-2026
                 # 10:30:00+99:99") does not match the guard, so
                 # the value falls through to the generic
                 # datetime branch and quarantines.
@@ -1121,6 +1150,25 @@ def read_claims_csv(path):
                 # fails and the gates quarantine it normally, as
                 # does an impossible AM/PM datetime
                 # ("02-30-2026 10:00:00 AM").
+                # AM/PM timezone-suffixed numeric hyphen
+                # datetime: "03-15-2026 10:30:00 AM Z" or
+                # "03-15-2026T09:00:00 PM -04:00", the way
+                # exports write zoned 12-hour hyphen
+                # timestamps — the suffix trailing the marker
+                # (a "Z", or a well-formed numeric offset) is
+                # dropped first so the marker strips normally
+                # below; the suffix-before-marker order
+                # ("03-15-2026 10:30:00Z AM") governs too, via
+                # the suffix strip after the marker strip
+                # further down. A malformed suffix
+                # ("10:30:00 AM +99:99") is not stripped, so
+                # the marker does not strip either and the
+                # gates quarantine it normally, as does an
+                # impossible date carrying a valid suffix
+                # ("02-30-2026 10:00:00 AM Z").
+                hyphen_date = re.sub(
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"\1", hyphen_date, flags=re.IGNORECASE)
                 hyphen_date = re.sub(
                     r"\s*(?:AM|PM)$", "", hyphen_date,
                     flags=re.IGNORECASE).rstrip()
