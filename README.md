@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-147 stdlib-only tests (Nov 5, 2026, all passing): hash determinism and
+149 stdlib-only tests (Nov 6, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -1246,6 +1246,37 @@ timezone-suffixed month-name-datetime 2-row CSV: 2 in,
   lines; zero raw member IDs, zero patient names in all
   outputs; CLI smoke-tested on a two-digit-year hyphen-date
   2-row CSV: 2 in, 1 governed, 1 quarantined).
+
+- Nov 6, 2026 build block (3:05 AM run):
+  two-digit-year underscore dates and datetimes
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  service_date written in legacy two-digit-year underscore
+  form ("03_15_26" or "15_03_26", the way legacy exports
+  write dates) now normalizes to ISO form (YYYY-MM-DD) on
+  read and governs instead of quarantining as
+  unparseable_date; the two-digit year follows Python's
+  strptime %y pivot (00-68 read as 2000-2068, 69-99 as
+  1969-1999), so "03_15_99" governs as 1999-03-15; the same
+  US-first order holds ("03_04_26" reads as 2026-03-04),
+  and a leading component above 12 reads day-first
+  ("26_03_15" governs as 2015-03-26), so there is no
+  separate year-first two-digit form; two-digit-year
+  underscore datetimes ("03_15_26 10:30:00", fractional and
+  timezone-suffixed forms, and weekday-prefixed AM/PM forms
+  such as "Sunday, 03_16_26 10:30:00 am +05:30") normalize
+  to their date part the same way; while an impossible
+  two-digit-year date ("02_30_26") or a malformed suffix
+  ("03_15_26 10:30:00+99:99") is left untouched so the
+  gates quarantine it normally; the quality gates stay strict
+  and see only the normalized value; 2 new tests (suite now
+  149, all passing). Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged;
+  runtime 0.522s; governed, quarantine, and summary.json
+  outputs byte-identical to pre-run outputs; audit.csv 10,001
+  lines, differing only in its timestamp column; zero raw
+  member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a two-digit-year underscore-date 2-row CSV:
+  2 in, 1 governed, 1 quarantined).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

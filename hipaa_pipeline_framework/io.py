@@ -49,6 +49,10 @@ AM/PM timezone-suffixed dot-separated datetimes such as
 "2026.03.15 10:30:00 AM Z" (the suffix trailing the marker is
 dropped first, then the marker, only the date part governs), and
 underscore-separated dates such as "2026_03_15", and
+two-digit-year underscore-separated dates such as "03_15_26"
+(a legacy export convention; the two-digit year follows
+Python's %y pivot, 00-68 read as 2000-2068 and 69-99 as
+1969-1999, with the same US-first order), and
 weekday-prefixed underscore-separated dates such as
 "Sunday, 2026_03_15" (the weekday label is dropped, only the
 underscore date governs), and
@@ -421,6 +425,23 @@ def read_claims_csv(path):
     timezone-suffixed underscore datetime ("2026_02_30
     10:00:00Z") or a malformed suffix ("2026_03_15
     10:30:00+99:99") is left untouched so the gates
+    quarantine it normally. A service_date in
+    two-digit-year underscore-separated form ("03_15_26"
+    or "15_03_26", the way legacy exports write dates)
+    normalizes the same way, so it governs; the two-digit
+    year follows Python's strptime %y pivot (00-68 read as
+    2000-2068, 69-99 as 1969-1999), so "03_15_99" governs
+    as 1999-03-15. The same US-first order holds
+    ("03_04_26" reads as 2026-03-04, while an unambiguous
+    day-first "15_03_26" governs as 2026-03-15); a leading
+    component above 12 with a two-digit year therefore
+    reads day-first ("26_03_15" governs as 2015-03-26),
+    and there is no separate year-first two-digit form.
+    Two-digit-year underscore datetimes ("03_15_26
+    10:30:00", fractional and timezone-suffixed forms
+    included) normalize to their date part the same way;
+    an impossible two-digit date ("02_30_26") or a
+    malformed suffix is left untouched so the gates
     quarantine it normally. A fractional-second underscore
     datetime ("2026_03_15 10:30:00.123Z",
     "2026_03_15T09:00:00.5-04:00", or a weekday-prefixed
@@ -893,6 +914,43 @@ def read_claims_csv(path):
                         r"\d{4}_\d{2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
                         r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(r"\d{1,2}_\d{1,2}_\d{2}", date)
+                    or re.fullmatch(
+                        r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+\d{1,2}_\d{1,2}_\d{2}",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{2}:\d{2}"
+                        r"(?::\d{2}(?:\.\d+)?)?"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Underscore-separated form: YYYY_MM_DD (the way
                 # some exports and file-naming conventions write
@@ -948,7 +1006,25 @@ def read_claims_csv(path):
                 # ("2026_02_30 10:00:00 AM Z") or a malformed
                 # suffix ("2026_03_15 10:30:00 AM +99:99") is
                 # left untouched so the gates quarantine it
-                # normally. An impossible date fails parsing
+                # normally. A two-digit-year underscore date
+                # ("03_15_26" or "15_03_26", the way legacy
+                # exports write dates) normalizes the same way:
+                # the guard admits a two-digit year alongside
+                # the four-digit one, and the %y formats below
+                # follow Python's strptime pivot (00-68 read as
+                # 2000-2068, 69-99 as 1969-1999). The US form
+                # is tried first, so only an unambiguous
+                # day-first date reaches the DD_MM_YY attempt; a
+                # leading component above 12 therefore reads
+                # day-first ("26_03_15" governs as 2015-03-26)
+                # and there is no separate year-first two-digit
+                # form. Two-digit-year underscore datetimes
+                # (fractional and timezone-suffixed forms
+                # included) normalize to their date part the
+                # same way; an impossible two-digit date
+                # ("02_30_26") or a malformed suffix is left
+                # untouched so the gates quarantine it normally.
+                # An impossible date fails parsing
                 # and is left untouched so the gates quarantine
                 # it, as does a bogus weekday label ("Funday,
                 # 2026_03_15"), which the pattern does not
@@ -1020,6 +1096,43 @@ def read_claims_csv(path):
                             break
                         except ValueError:
                             continue
+                    if cleaned["service_date"] == date:
+                        # Two-digit-year underscore form: "03_15_26"
+                        # or "15_03_26", the way legacy exports
+                        # write dates — the two-digit year follows
+                        # Python's %y pivot (00-68 read as
+                        # 2000-2068, 69-99 as 1969-1999). The US
+                        # form is tried first, mirroring the
+                        # four-digit rule, so only an unambiguous
+                        # day-first date reaches the DD_MM_YY
+                        # attempt; a leading component above 12
+                        # therefore reads day-first ("26_03_15"
+                        # governs as 2015-03-26) and there is no
+                        # separate year-first two-digit form.
+                        # Two-digit-year underscore datetimes
+                        # (fractional and timezone-suffixed forms
+                        # included) normalize to their date part
+                        # the same way; an impossible two-digit
+                        # date ("02_30_26") or a malformed suffix
+                        # is left untouched so the gates quarantine
+                        # it normally.
+                        for fmt in ("%m_%d_%y %H:%M:%S.%f",
+                                    "%m_%d_%yT%H:%M:%S.%f",
+                                    "%d_%m_%y %H:%M:%S.%f",
+                                    "%d_%m_%yT%H:%M:%S.%f",
+                                    "%m_%d_%y %H:%M:%S", "%m_%d_%y %H:%M",
+                                    "%m_%d_%yT%H:%M:%S", "%m_%d_%yT%H:%M",
+                                    "%d_%m_%y %H:%M:%S", "%d_%m_%y %H:%M",
+                                    "%d_%m_%yT%H:%M:%S", "%d_%m_%yT%H:%M",
+                                    "%m_%d_%y", "%d_%m_%y"):
+                            try:
+                                cleaned["service_date"] = (
+                                    datetime.strptime(
+                                        underscore_date,
+                                        fmt).strftime("%Y-%m-%d"))
+                                break
+                            except ValueError:
+                                continue
             elif isinstance(date, str) and any(
                     month in date for month in
                     ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
