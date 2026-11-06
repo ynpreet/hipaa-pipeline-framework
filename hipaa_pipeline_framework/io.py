@@ -37,6 +37,10 @@ compact dates such as "Sunday, 20260315" (the weekday label is
 dropped, only the compact date governs), and
 hyphenated month-name dates such as "15-Mar-2026", and
 numeric hyphen dates such as "03-15-2026", and
+two-digit-year numeric hyphen dates such as "03-15-26" (a legacy
+export convention; the two-digit year follows Python's %y pivot,
+00-68 read as 2000-2068 and 69-99 as 1969-1999, with the same
+US-first order), and
 dot-separated datetimes such as "2026.03.15 10:30:00" (the
 date part governs, the time part is dropped), and
 AM/PM dot-separated datetimes such as "2026.03.15 10:30:00 AM"
@@ -365,6 +369,22 @@ def read_claims_csv(path):
     quarantine it normally. An already-ISO date ("2026-03-15")
     is not touched by this form — its four-digit first
     component does not match the numeric-hyphen pattern.
+    A service_date in two-digit-year numeric hyphen form
+    ("03-15-26" or "15-03-26", the way legacy exports write
+    dates) normalizes the same way, so it governs; the
+    two-digit year follows Python's %y pivot (00-68 read as
+    2000-2068, 69-99 as 1969-1999), so "03-15-99" governs as
+    1999-03-15. The same US-first order holds ("03-04-26"
+    reads as 2026-03-04, while an unambiguous day-first
+    "15-03-26" governs as 2026-03-15); a leading component
+    above 12 with a two-digit year therefore reads day-first
+    ("26-03-15" governs as 2015-03-26), and there is no
+    separate year-first two-digit form. Two-digit-year
+    hyphen datetimes ("03-15-26 10:30:00", fractional and
+    timezone-suffixed forms included) normalize to their date
+    part the same way; an impossible two-digit date
+    ("02-30-26") or a malformed suffix is left untouched so
+    the gates quarantine it normally.
     A numeric hyphen datetime ("03-15-2026 10:30:00") or a
     timezone-suffixed numeric hyphen datetime ("03-15-2026
     10:30:00Z", "15-03-2026T09:00:00-04:00", or a
@@ -1203,17 +1223,17 @@ def read_claims_csv(path):
                     if cleaned["service_date"] != date:
                         break
             elif isinstance(date, str) and (
-                    re.fullmatch(r"\d{1,2}-\d{1,2}-\d{4}", date)
+                    re.fullmatch(r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})", date)
                     or re.fullmatch(
                         r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
-                        r"Thu|Fri|Sat|Sun)[,\s]+\d{1,2}-\d{1,2}-\d{4}",
+                        r"Thu|Fri|Sat|Sun)[,\s]+\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}-\d{1,2}-\d{4}[ T]\d{2}:\d{2}"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
                         date, flags=re.IGNORECASE)
@@ -1221,14 +1241,14 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}-\d{1,2}-\d{4}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}-\d{1,2}-\d{4}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
                         date, flags=re.IGNORECASE)
@@ -1236,7 +1256,7 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}-\d{1,2}-\d{4}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
@@ -1305,6 +1325,24 @@ def read_claims_csv(path):
                 # 10:30:00+99:99") does not match the guard, so
                 # the value falls through to the generic
                 # datetime branch and quarantines.
+                # A two-digit-year numeric hyphen date
+                # ("03-15-26" or "15-03-26", the way legacy
+                # exports write dates) normalizes the same way:
+                # the guard admits a two-digit year alongside
+                # the four-digit one, and the %y formats below
+                # follow Python's strptime pivot (00-68 read as
+                # 2000-2068, 69-99 as 1969-1999). The US form
+                # is tried first, so only an unambiguous
+                # day-first date reaches the DD-MM-YY attempt; a
+                # leading component above 12 therefore reads
+                # day-first ("26-03-15" governs as 2015-03-26)
+                # and there is no separate year-first two-digit
+                # form. Two-digit-year hyphen datetimes
+                # (fractional and timezone-suffixed forms
+                # included) normalize to their date part the
+                # same way; an impossible two-digit date
+                # ("02-30-26") or a malformed suffix is left
+                # untouched so the gates quarantine it normally.
                 hyphen_date = re.sub(
                     r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
@@ -1361,7 +1399,16 @@ def read_claims_csv(path):
                             "%m-%d-%YT%H:%M:%S", "%m-%d-%YT%H:%M",
                             "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M",
                             "%d-%m-%YT%H:%M:%S", "%d-%m-%YT%H:%M",
-                            "%m-%d-%Y", "%d-%m-%Y"):
+                            "%m-%d-%Y", "%d-%m-%Y",
+                            "%m-%d-%y %H:%M:%S.%f",
+                            "%m-%d-%yT%H:%M:%S.%f",
+                            "%d-%m-%y %H:%M:%S.%f",
+                            "%d-%m-%yT%H:%M:%S.%f",
+                            "%m-%d-%y %H:%M:%S", "%m-%d-%y %H:%M",
+                            "%m-%d-%yT%H:%M:%S", "%m-%d-%yT%H:%M",
+                            "%d-%m-%y %H:%M:%S", "%d-%m-%y %H:%M",
+                            "%d-%m-%yT%H:%M:%S", "%d-%m-%yT%H:%M",
+                            "%m-%d-%y", "%d-%m-%y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(
                             hyphen_date, fmt).strftime("%Y-%m-%d")
