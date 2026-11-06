@@ -1379,6 +1379,48 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.BAD_DATE: 2})
 
+    def test_read_claims_csv_normalizes_two_digit_year_dot_dates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,03.15.26,120.50\n"
+                            "M-100002,15.03.26,200.00\n"
+                            "M-100003,03.15.26 10:30:00,310.00\n"
+                            "M-100004,15.03.26T09:00:00.5-04:00,410.00\n"
+                            "M-100005,\"Sunday, 03.16.26 10:30:00 am +05:30\",510.00\n"
+                            "M-100006,03.15.99,610.00\n"
+                            "M-100007,26.03.15,710.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 7)
+            self.assertEqual(rows[0]["service_date"], "2026-03-15")
+            self.assertEqual(rows[1]["service_date"], "2026-03-15")
+            self.assertEqual(rows[2]["service_date"], "2026-03-15")
+            self.assertEqual(rows[3]["service_date"], "2026-03-15")
+            self.assertEqual(rows[4]["service_date"], "2026-03-16")
+            # The %y pivot reads 69-99 as 1969-1999.
+            self.assertEqual(rows[5]["service_date"], "1999-03-15")
+            # A leading component above 12 reads day-first under
+            # the standing US-first order, so 26.03.15 is
+            # 26 Mar 2015 — there is no separate year-first
+            # two-digit form.
+            self.assertEqual(rows[6]["service_date"], "2015-03-26")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 7)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_two_digit_year_dot_date_still_quarantines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,02.30.26,120.50\n"
+                            "M-100002,03.15.26 10:30:00+99:99,200.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 2)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 2)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 2})
+
     def test_read_claims_csv_normalizes_fractional_second_slash_datetimes(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"

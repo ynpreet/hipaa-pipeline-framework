@@ -29,7 +29,10 @@ AM/PM ISO datetimes such as "2026-03-15 10:30:00 AM" (the
 marker is dropped, only the date part governs), and
 timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
 "2026-03-15 10:30:00+05:30", dot-separated dates such as
-"2026.03.15", compact dates such as "20260315", weekday-prefixed
+"2026.03.15", two-digit-year dot-separated dates such as
+"03.15.26" (a legacy export convention; the two-digit year
+follows Python's %y pivot, 00-68 read as 2000-2068 and 69-99
+as 1969-1999, with the same US-first order), compact dates such as "20260315", weekday-prefixed
 compact dates such as "Sunday, 20260315" (the weekday label is
 dropped, only the compact date governs), and
 hyphenated month-name dates such as "15-Mar-2026", and
@@ -251,7 +254,22 @@ def read_claims_csv(path):
     read, so "2026.03.15" governs instead of quarantining as
     unparseable_date; an impossible dot-separated date (e.g.
     "2026.02.30") is left untouched so the gates quarantine it
-    normally. A dot-separated datetime ("2026.03.15 10:30:00"
+    normally. A service_date in two-digit-year dot-separated
+    form ("03.15.26" or "15.03.26", the way legacy exports
+    write dates) normalizes the same way, so it governs; the
+    two-digit year follows Python's strptime %y pivot (00-68
+    read as 2000-2068, 69-99 as 1969-1999), so "03.15.99"
+    governs as 1999-03-15. The same US-first order holds
+    ("03.04.26" reads as 2026-03-04, while an unambiguous
+    day-first "15.03.26" governs as 2026-03-15); a leading
+    component above 12 with a two-digit year therefore reads
+    day-first ("26.03.15" governs as 2015-03-26), and there
+    is no separate year-first two-digit form. Two-digit-year
+    dot datetimes ("03.15.26 10:30:00", fractional and
+    timezone-suffixed forms included) normalize to their date
+    part the same way; an impossible two-digit date
+    ("02.30.26") or a malformed suffix is left untouched so
+    the gates quarantine it normally. A dot-separated datetime ("2026.03.15 10:30:00"
     or "2026.03.15T09:00:00", the way some exports write dot
     dates with a time stamp) normalizes to its date part the
     same way, so it governs; an impossible dot datetime (e.g.
@@ -634,19 +652,32 @@ def read_claims_csv(path):
                 # The US form is tried first, so only an
                 # unambiguous day-first date (first component
                 # above 12) reaches the DD/MM/YYYY attempt.
-            elif isinstance(date, str) and re.match(
-                    r"(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
-                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
-                    r"Thu|Fri|Sat|Sun)[,\s]+)?\d{4}\.",
-                    date, flags=re.IGNORECASE):
+            elif isinstance(date, str) and (
+                    re.match(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+)?\d{4}\.",
+                        date, flags=re.IGNORECASE)
+                    or re.match(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}\.\d{1,2}\.\d{2}(?:[ T]|$)",
+                        date, flags=re.IGNORECASE)):
                 # Dot-separated form only: the branch claims
                 # year-first dot dates ("2026.03.15", optionally
-                # weekday-prefixed), not every value carrying a
-                # dot — a fractional second in another family
-                # ("03-15-2026 10:30:00.123Z",
+                # weekday-prefixed) and two-digit-year dot dates
+                # ("03.15.26", "15.03.26", optionally
+                # weekday-prefixed or carrying a time part), not
+                # every value carrying a dot — a fractional second
+                # in another family ("03-15-2026 10:30:00.123Z",
                 # "2026-03-15T09:00:00.123Z") must fall through
                 # to its own branch instead of being claimed
-                # here and left unparseable. A
+                # here and left unparseable. The two-digit-year
+                # guard requires the two-digit year to be
+                # followed by the end of the value or a space or
+                # "T", so a four-digit-year dot date ("15.03.2026")
+                # is not claimed by it and still quarantines.
                 # weekday-prefixed dot form ("Sunday, 2026.03.15"
                 # or "Mon, 2026.03.16") has its weekday label
                 # dropped (it is not validated against the date)
@@ -693,10 +724,27 @@ def read_claims_csv(path):
                 dot_date = re.sub(
                     r"\s*(?:AM|PM)$", "", dot_date,
                     flags=re.IGNORECASE).rstrip()
-                try:
-                    cleaned["service_date"] = datetime.strptime(
-                        dot_date, "%Y.%m.%d").strftime("%Y-%m-%d")
-                except ValueError:
+                # Two-digit-year dot form: "03.15.26" or
+                # "15.03.26", the way legacy exports write dates
+                # — the two-digit year follows Python's %y pivot
+                # (00-68 read as 2000-2068, 69-99 as 1969-1999).
+                # The US form is tried first, mirroring the
+                # four-digit rule, so only an unambiguous
+                # day-first date reaches the DD.MM.YY attempt; a
+                # leading component above 12 therefore reads
+                # day-first ("26.03.15" governs as 2015-03-26)
+                # and there is no separate year-first two-digit
+                # form. A four-digit year never reaches the %y
+                # formats: %Y matches it first, and %y fails on
+                # it (it consumes two digits, then expects ".").
+                for fmt in ("%Y.%m.%d", "%m.%d.%y", "%d.%m.%y"):
+                    try:
+                        cleaned["service_date"] = datetime.strptime(
+                            dot_date, fmt).strftime("%Y-%m-%d")
+                        break
+                    except ValueError:
+                        continue
+                if cleaned["service_date"] == date:
                     # Dot-separated datetime: "2026.03.15 10:30:00"
                     # or "2026.03.15T09:00:00", the way some
                     # exports write dot dates with a time stamp
@@ -705,12 +753,28 @@ def read_claims_csv(path):
                     # "2026.02.30 10:00:00") or a garbage time
                     # part fails every format and is left
                     # untouched so the gates quarantine it.
+                    # Two-digit-year dot datetimes ("03.15.26
+                    # 10:30:00", fractional and timezone-suffixed
+                    # forms included) normalize to their date part
+                    # the same way.
                     for fmt in ("%Y.%m.%d %H:%M:%S",
                                 "%Y.%m.%d %H:%M",
                                 "%Y.%m.%d %H:%M:%S.%f",
                                 "%Y.%m.%dT%H:%M:%S",
                                 "%Y.%m.%dT%H:%M",
-                                "%Y.%m.%dT%H:%M:%S.%f"):
+                                "%Y.%m.%dT%H:%M:%S.%f",
+                                "%m.%d.%y %H:%M:%S",
+                                "%m.%d.%y %H:%M",
+                                "%m.%d.%y %H:%M:%S.%f",
+                                "%m.%d.%yT%H:%M:%S",
+                                "%m.%d.%yT%H:%M",
+                                "%m.%d.%yT%H:%M:%S.%f",
+                                "%d.%m.%y %H:%M:%S",
+                                "%d.%m.%y %H:%M",
+                                "%d.%m.%y %H:%M:%S.%f",
+                                "%d.%m.%yT%H:%M:%S",
+                                "%d.%m.%yT%H:%M",
+                                "%d.%m.%yT%H:%M:%S.%f"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 dot_date, fmt).strftime("%Y-%m-%d")
@@ -749,7 +813,19 @@ def read_claims_csv(path):
                                         "%Y.%m.%d %H:%M:%S.%f",
                                         "%Y.%m.%dT%H:%M:%S",
                                         "%Y.%m.%dT%H:%M",
-                                        "%Y.%m.%dT%H:%M:%S.%f"):
+                                        "%Y.%m.%dT%H:%M:%S.%f",
+                                        "%m.%d.%y %H:%M:%S",
+                                        "%m.%d.%y %H:%M",
+                                        "%m.%d.%y %H:%M:%S.%f",
+                                        "%m.%d.%yT%H:%M:%S",
+                                        "%m.%d.%yT%H:%M",
+                                        "%m.%d.%yT%H:%M:%S.%f",
+                                        "%d.%m.%y %H:%M:%S",
+                                        "%d.%m.%y %H:%M",
+                                        "%d.%m.%y %H:%M:%S.%f",
+                                        "%d.%m.%yT%H:%M:%S",
+                                        "%d.%m.%yT%H:%M",
+                                        "%d.%m.%yT%H:%M:%S.%f"):
                                 try:
                                     cleaned["service_date"] = (
                                         datetime.strptime(
