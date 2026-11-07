@@ -76,6 +76,9 @@ with the time part, only the date part governs), and
 AM/PM timezone-suffixed compact datetimes such as
 "20260315 10:30:00 AM Z" (the suffix trailing the marker is
 dropped first, then the marker, only the date part governs), and
+two-digit-year compact dates such as "031526" (a legacy export
+convention; the two-digit year follows Python's %y pivot, 00-68 read as
+2000-2068 and 69-99 as 1969-1999, with the same US-first order), and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
 weekday-prefixed ISO dates such as "Sunday, 2026-03-15" (the
@@ -103,7 +106,11 @@ AM/PM month-name datetimes such as "Mar 15, 2026 10:30:00 AM" (the
 marker is dropped, only the date part governs), and
 AM/PM timezone-suffixed month-name datetimes such as
 "Mar 15, 2026 10:30:00 AM Z" (the suffix trailing the marker is
-dropped first, then the marker, only the date part governs) — skips blank
+dropped first, then the marker, only the date part governs), and
+two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
+convention; the two-digit year follows Python's %y pivot, 00-68 read as
+2000-2068 and 69-99 as 1969-1999, with the same forms as the
+four-digit-year month-name dates) — skips blank
 rows outright, and still
 fails closed on a header missing a required column. write_governed_csv
 writes only governed records, under the fixed de-identified columns:
@@ -481,6 +488,38 @@ def read_claims_csv(path):
     weekday-prefixed ordinal date ("Sunday, March 15th,
     2026") strips both the weekday and the ordinal suffix
     before parsing and governs the same way. A service_date
+    in two-digit-year month-name form ("Mar 15, 26" or
+    "15 Mar 26", "15-Mar-26" or "Mar-15-26", the way legacy
+    exports write dates) normalizes the same way, so it
+    governs; the two-digit year follows Python's %y pivot
+    (00-68 read as 2000-2068, 69-99 as 1969-1999), so
+    "Mar 15, 99" governs as 1999-03-15. Two-digit-year
+    month-name datetimes ("Mar 15, 26 10:30:00", fractional
+    and timezone-suffixed forms included) and
+    weekday-prefixed and ordinal forms ("Sunday, March 16,
+    26 10:30:00 am +05:30", "March 15th, 26") normalize to
+    their date part the same way; an impossible
+    two-digit-year month-name date ("Feb 30, 26") or a
+    malformed suffix is left untouched so the gates
+    quarantine it normally. A service_date in two-digit-year
+    compact form (MMDDYY or DDMMYY, "031526" or "150326",
+    the way legacy mainframe exports write dates)
+    normalizes the same way, so it governs; the two-digit
+    year follows Python's %y pivot (00-68 read as
+    2000-2068, 69-99 as 1969-1999), so "031599" governs as
+    1999-03-15; the same US-first order holds, and a
+    leading component above 12 reads day-first ("260315"
+    governs as 2015-03-26), so there is no separate
+    year-first two-digit form. Two-digit-year compact
+    datetimes ("031526 10:30:00Z", fractional and
+    timezone-suffixed forms, and weekday-prefixed AM/PM
+    forms such as "Sunday, 031626 10:30:00 am +05:30")
+    normalize to their date part the same way; while an
+    impossible two-digit-year compact date ("023026") or a
+    malformed suffix ("031526 10:30:00+99:99") is left
+    untouched so the gates quarantine it normally; the
+    quality gates stay strict and see only the normalized
+    value. A service_date
     in weekday-prefixed ISO form ("Sunday, 2026-03-15" or
     "Mon, 2026-03-16 10:30:00", the way email-style
     timestamps write dates) has its weekday label stripped
@@ -1208,7 +1247,25 @@ def read_claims_csv(path):
                 # ("Feb 30, 2026 10:00:00 AM Z") or a
                 # malformed suffix ("Mar 15, 2026 10:30:00
                 # AM +99:99") is left untouched so the gates
-                # quarantine it normally.
+                # quarantine it normally. A two-digit-year
+                # month-name date ("Mar 15, 26" or "15 Mar 26",
+                # "15-Mar-26" or "Mar-15-26", the way legacy
+                # exports write dates) normalizes the same way:
+                # the %y formats below follow Python's strptime
+                # pivot (00-68 read as 2000-2068, 69-99 as
+                # 1969-1999), so "Mar 15, 99" governs as
+                # 1999-03-15; the four-digit formats are tried
+                # first, so a four-digit year never reaches a
+                # %y format. Two-digit-year month-name
+                # datetimes (fractional and timezone-suffixed
+                # forms included) and weekday-prefixed and
+                # ordinal forms ("Sunday, March 16, 26
+                # 10:30:00 am +05:30", "March 15th, 26")
+                # normalize to their date part the same way,
+                # through the same candidate stripping; an
+                # impossible two-digit-year month-name date
+                # ("Feb 30, 26") or a malformed suffix is left
+                # untouched so the gates quarantine it normally.
                 candidates = [date]
                 # Weekday-prefixed form: "Sunday, March 15, 2026"
                 # or "Mon, 16 Mar 2026" — the weekday label is
@@ -1326,7 +1383,47 @@ def read_claims_csv(path):
                                 "%d-%b-%YT%H:%M:%S.%f",
                                 "%b-%d-%YT%H:%M:%S.%f",
                                 "%d-%B-%YT%H:%M:%S.%f",
-                                "%B-%d-%YT%H:%M:%S.%f"):
+                                "%B-%d-%YT%H:%M:%S.%f",
+                                "%b %d, %y", "%B %d, %y",
+                                "%d %b %y", "%d %B %y",
+                                "%d-%b-%y", "%b-%d-%y",
+                                "%d-%B-%y", "%B-%d-%y",
+                                "%b %d, %y %H:%M:%S",
+                                "%B %d, %y %H:%M:%S",
+                                "%b %d, %y %H:%M",
+                                "%B %d, %y %H:%M",
+                                "%b %d, %yT%H:%M:%S",
+                                "%B %d, %yT%H:%M:%S",
+                                "%d %b %y %H:%M:%S",
+                                "%d %B %y %H:%M:%S",
+                                "%d %b %y %H:%M",
+                                "%d %B %y %H:%M",
+                                "%d %b %yT%H:%M:%S",
+                                "%d %B %yT%H:%M:%S",
+                                "%d-%b-%y %H:%M:%S",
+                                "%b-%d-%y %H:%M:%S",
+                                "%d-%B-%y %H:%M:%S",
+                                "%B-%d-%y %H:%M:%S",
+                                "%d-%b-%yT%H:%M:%S",
+                                "%b-%d-%yT%H:%M:%S",
+                                "%d-%B-%yT%H:%M:%S",
+                                "%B-%d-%yT%H:%M:%S",
+                                "%b %d, %y %H:%M:%S.%f",
+                                "%B %d, %y %H:%M:%S.%f",
+                                "%b %d, %yT%H:%M:%S.%f",
+                                "%B %d, %yT%H:%M:%S.%f",
+                                "%d %b %y %H:%M:%S.%f",
+                                "%d %B %y %H:%M:%S.%f",
+                                "%d %b %yT%H:%M:%S.%f",
+                                "%d %B %yT%H:%M:%S.%f",
+                                "%d-%b-%y %H:%M:%S.%f",
+                                "%b-%d-%y %H:%M:%S.%f",
+                                "%d-%B-%y %H:%M:%S.%f",
+                                "%B-%d-%y %H:%M:%S.%f",
+                                "%d-%b-%yT%H:%M:%S.%f",
+                                "%b-%d-%yT%H:%M:%S.%f",
+                                "%d-%B-%yT%H:%M:%S.%f",
+                                "%B-%d-%yT%H:%M:%S.%f"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 candidate, fmt).strftime("%Y-%m-%d")
@@ -1664,6 +1761,130 @@ def read_claims_csv(path):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 compact_date, fmt).strftime("%Y-%m-%d")
+                            break
+                        except ValueError:
+                            continue
+            elif isinstance(date, str) and (
+                    (date.isdigit() and len(date) == 6)
+                    or re.fullmatch(
+                        r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+\d{6}", date,
+                        flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6}[ T]\d{2}:\d{2}(?::\d{2})?"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6}[ T]\d{2}:\d{2}:\d{2}\.\d+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6}[ T]\d{1,2}:\d{2}(?::\d{2})?"
+                        r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)):
+                # Two-digit-year compact form: MMDDYY or DDMMYY
+                # ("031526" or "150326", the way legacy mainframe
+                # exports write dates) — the two-digit year
+                # follows Python's %y pivot (00-68 read as
+                # 2000-2068, 69-99 as 1969-1999), so "031599"
+                # governs as 1999-03-15; the same US-first order
+                # holds, and a leading component above 12 reads
+                # day-first ("260315" governs as 2015-03-26),
+                # so there is no separate year-first two-digit
+                # form. Weekday-prefixed, timezone-suffixed,
+                # fractional-second, and AM/PM forms normalize
+                # the same way as the eight-digit compact forms
+                # above. An impossible date ("023026") or a
+                # malformed suffix ("031526 10:30:00+99:99")
+                # fails parsing and is left untouched so the
+                # gates quarantine it normally.
+                short_compact_date = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
+                    flags=re.IGNORECASE)
+                # AM/PM timezone-suffixed compact datetime:
+                # "031526 10:30:00 AM Z" or
+                # "031526T09:00:00 PM -04:00" — the suffix
+                # trailing the marker is dropped first so the
+                # marker strips normally below; the
+                # suffix-before-marker order ("031526
+                # 10:30:00Z AM") governs too, via the suffix
+                # strip after the marker strip further down. A
+                # malformed suffix ("10:30:00 AM +99:99") is not
+                # stripped, so the marker does not strip either
+                # and the gates quarantine it normally, as does
+                # an impossible date carrying a valid suffix
+                # ("023026 10:00:00 AM Z").
+                short_compact_date = re.sub(
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"\1", short_compact_date, flags=re.IGNORECASE)
+                # AM/PM compact datetime: "031526 10:30:00 AM"
+                # or "031526 10:30:00.123 AM" — the marker
+                # (spaced or attached, either case) is dropped
+                # and the remainder parses as a compact
+                # datetime; only the date part governs. A
+                # malformed marker ("10:30:00 XM") is not
+                # stripped, so parsing fails and the gates
+                # quarantine it normally, as does an impossible
+                # AM/PM datetime ("023026 10:00:00 AM").
+                short_compact_date = re.sub(
+                    r"\s*(?:AM|PM)$", "", short_compact_date,
+                    flags=re.IGNORECASE).rstrip()
+                if short_compact_date.endswith("Z"):
+                    short_compact_date = short_compact_date[:-1]
+                else:
+                    suffix = re.search(
+                        r"([+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                        short_compact_date)
+                    if suffix is not None:
+                        short_compact_date = short_compact_date[:-len(
+                            suffix.group(1))]
+                for fmt in ("%m%d%y", "%d%m%y"):
+                    try:
+                        cleaned["service_date"] = datetime.strptime(
+                            short_compact_date, fmt).strftime("%Y-%m-%d")
+                        break
+                    except ValueError:
+                        continue
+                else:
+                    for fmt in ("%m%d%y %H:%M:%S.%f",
+                                "%m%d%yT%H:%M:%S.%f",
+                                "%d%m%y %H:%M:%S.%f",
+                                "%d%m%yT%H:%M:%S.%f",
+                                "%m%d%y %H:%M:%S", "%m%d%y %H:%M",
+                                "%m%d%yT%H:%M:%S", "%m%d%yT%H:%M",
+                                "%d%m%y %H:%M:%S", "%d%m%y %H:%M",
+                                "%d%m%yT%H:%M:%S", "%d%m%yT%H:%M"):
+                        try:
+                            cleaned["service_date"] = datetime.strptime(
+                                short_compact_date, fmt).strftime("%Y-%m-%d")
                             break
                         except ValueError:
                             continue

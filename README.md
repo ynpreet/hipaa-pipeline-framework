@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-149 stdlib-only tests (Nov 6, 2026, all passing): hash determinism and
+153 stdlib-only tests (Nov 7, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -1277,6 +1277,70 @@ timezone-suffixed month-name-datetime 2-row CSV: 2 in,
   member IDs, zero patient names in all outputs; CLI
   smoke-tested on a two-digit-year underscore-date 2-row CSV:
   2 in, 1 governed, 1 quarantined).
+
+- Nov 6, 2026 build block (9:05 PM run):
+  two-digit-year month-name dates and datetimes
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  service_date written in legacy two-digit-year month-name
+  form ("Mar 15, 26" or "15 Mar 26", "15-Mar-26" or
+  "Mar-15-26", the way legacy exports write dates) now
+  normalizes to ISO form (YYYY-MM-DD) on read and governs
+  instead of quarantining as unparseable_date; the
+  two-digit year follows Python's strptime %y pivot (00-68
+  read as 2000-2068, 69-99 as 1969-1999), so "Mar 15, 99"
+  governs as 1999-03-15; the four-digit-year formats are
+  tried first, so a four-digit year never reaches a %y
+  format; two-digit-year month-name datetimes ("Mar 15, 26
+  10:30:00", fractional and timezone-suffixed forms
+  included) and weekday-prefixed and ordinal forms
+  ("Sunday, March 16, 26 10:30:00 am +05:30",
+  "March 15th, 26") normalize to their date part the same
+  way, through the same candidate stripping; while an
+  impossible two-digit-year month-name date ("Feb 30, 26")
+  or a malformed suffix ("Mar 15, 26 10:30:00+99:99") is
+  left untouched so the gates quarantine it normally; the
+  quality gates stay strict and see only the normalized
+  value; 2 new tests (suite now 151, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.522s;
+  governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001
+  lines, differing only in its timestamp column; zero raw
+  member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a two-digit-year month-name-date 2-row
+  CSV: 2 in, 1 governed, 1 quarantined).
+
+- Nov 7, 2026 build block (3:05 AM run):
+  two-digit-year compact dates and datetimes
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  service_date written in legacy two-digit-year compact
+  form ("031526" or "150326", the way legacy mainframe
+  exports write dates) now normalizes to ISO form
+  (YYYY-MM-DD) on read and governs instead of quarantining
+  as unparseable_date; the two-digit year follows Python's
+  strptime %y pivot (00-68 read as 2000-2068, 69-99 as
+  1969-1999), so "031599" governs as 1999-03-15; the same
+  US-first order holds ("030426" reads as 2026-03-04),
+  and a leading component above 12 reads day-first
+  ("260315" governs as 2015-03-26), so there is no
+  separate year-first two-digit form; two-digit-year
+  compact datetimes ("031526 10:30:00Z", fractional and
+  timezone-suffixed forms, and weekday-prefixed AM/PM
+  forms such as "Sunday, 031626 10:30:00 am +05:30")
+  normalize to their date part the same way; while an
+  impossible two-digit-year compact date ("023026") or a
+  malformed suffix ("031526 10:30:00+99:99") is left
+  untouched so the gates quarantine it normally; the
+  quality gates stay strict and see only the normalized
+  value; 2 new tests (suite now 153, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.601s;
+  governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001
+  lines, differing only in its timestamp column; zero raw
+  member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a two-digit-year compact-date 2-row
+  CSV: 2 in, 1 governed, 1 quarantined).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
