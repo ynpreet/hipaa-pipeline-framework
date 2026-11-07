@@ -1563,6 +1563,33 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   smoke-tested on a two-digit-year compact-date 2-row
   CSV: 2 in, 1 governed, 1 quarantined).
 
+- Nov 7, 2026 build block (9:05 AM run):
+  Unix epoch timestamps (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written
+  as a bare Unix epoch — a nine- or ten-digit count of
+  seconds since 1970-01-01 UTC ("1710460800") or a twelve-
+  or thirteen-digit count of milliseconds
+  ("1710460800000"), the way API and database exports
+  write timestamps — now converts to its UTC date
+  (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; only epochs whose UTC date falls in
+  2000-01-01..2100-01-01 are accepted, so an epoch outside
+  that window ("9999999999" reads as 2286, "0000000000"
+  as 1970) is left untouched so the gates quarantine it
+  normally, as is an eleven-digit bare number, which is
+  ambiguous between seconds and milliseconds, and a bare
+  number of any other length ("12345"); a non-midnight
+  epoch still governs as its UTC date part; the quality
+  gates stay strict and see only the normalized value; 2
+  new tests (suite now 155, all passing). Demo re-verified
+  same run (10,000 in → 1,589 governed, 8,411 quarantined,
+  reasons unchanged; runtime 0.473s; governed, quarantine,
+  and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines; zero raw member IDs,
+  zero patient names in all outputs; CLI smoke-tested on
+  an epoch-timestamp 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
