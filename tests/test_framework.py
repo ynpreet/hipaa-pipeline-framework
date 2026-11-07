@@ -1605,6 +1605,42 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["governed_count"], 5)
             self.assertEqual(result["quarantined_count"], 0)
 
+    def test_read_claims_csv_normalizes_microsecond_epoch_timestamps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,1710460800000000,120.50\n"
+                            "M-100002,1710500000000000,200.00\n"
+                            "M-100003,946684800000000,310.00\n"
+                            "M-100004,4102444800000000,410.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 4)
+            self.assertEqual(rows[0]["service_date"], "2024-03-15")
+            # A non-midnight epoch still governs as its UTC date.
+            self.assertEqual(rows[1]["service_date"], "2024-03-15")
+            # Range bounds are inclusive: 2000-01-01 and 2100-01-01.
+            # The lower bound is fifteen digits, the upper sixteen.
+            self.assertEqual(rows[2]["service_date"], "2000-01-01")
+            self.assertEqual(rows[3]["service_date"], "2100-01-01")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 4)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_microsecond_epoch_still_quarantines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,9999999999999999,120.50\n"
+                            "M-100002,171046080000000,200.00\n"
+                            "M-100003,12345678901234,310.00\n"
+                            "M-100004,17104608000000000,410.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 4)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 4)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 4})
+
     def test_read_claims_csv_bad_epoch_timestamp_still_quarantines(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"
