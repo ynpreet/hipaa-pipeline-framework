@@ -1670,6 +1670,34 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   ignoring timestamps; zero raw member IDs, zero patient names
   in all outputs; CLI smoke-tested on an ordinal-date 2-row
   CSV: 2 in, 1 governed, 1 quarantined).
+- Nov 8, 2026 build block (9:05 PM run):
+  ISO week dates (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  an ISO 8601 week date ("2026-W11-1", the way scheduling
+  exports write dates) or the compact form ("2026W111") or the
+  week alone ("2026-W11", its Monday) now converts to its
+  calendar date (YYYY-MM-DD) and governs instead of
+  quarantining as unparseable_date; weekday-prefixed ("Sunday,
+  2026-W11-2"), timezone-suffixed ("2026-W11-1 10:30:00Z"),
+  and fractional-second week-date datetimes normalize to their
+  date part the same way; a week that does not exist in that
+  year ("2025-W53-1", a 52-week year) or a weekday outside 1-7
+  ("2026-W11-8") is left untouched so the gates quarantine it
+  normally, as is a weekday-prefixed week date with a bogus
+  label ("Funday, 2026-W11-1") or a malformed suffix
+  ("2026-W11-1 10:30:00+99:99"); the week-only form parses via
+  fromisocalendar because strptime's %G needs a weekday
+  directive (verified: "%G-W%V" without one raises
+  ValueError), and the parsed ISO year and week are checked
+  against the written ones; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 163,
+  all passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime
+  0.504s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines,
+  differing only in its timestamp column; zero raw member IDs,
+  zero patient names in all outputs; CLI smoke-tested on an
+  ISO-week-date 2-row CSV: 2 in, 1 governed, 1 quarantined).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

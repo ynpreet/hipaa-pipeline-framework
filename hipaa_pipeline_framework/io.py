@@ -104,6 +104,18 @@ timezone-suffixed forms, and weekday-prefixed AM/PM forms such as
 "Sunday, 2026075 10:30:00 am +05:30") normalize to their date
 part the same way; the quality gates stay strict and see only the
 normalized value, and
+ISO week dates such as "2026-W11-1" (the ISO 8601 week-date form,
+the way scheduling exports write dates) or "2026W111" (the compact
+form) or "2026-W11" (the week alone, its Monday) — the ISO week
+and weekday convert to their calendar date (YYYY-MM-DD) and govern
+instead of quarantining as unparseable_date; a week that does not
+exist in that year ("2025-W53-1", a 52-week year) or a weekday
+outside 1-7 ("2026-W11-8") is left untouched so the gates
+quarantine it normally, as is a weekday-prefixed week date with a
+bogus label ("Funday, 2026-W11-1"); week-date datetimes
+("2026-W11-1 10:30:00Z", fractional and timezone-suffixed forms)
+normalize to their date part the same way; the quality gates stay
+strict and see only the normalized value, and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
 weekday-prefixed ISO dates such as "Sunday, 2026-03-15" (the
@@ -2159,6 +2171,109 @@ def read_claims_csv(path):
                             candidate_parsed = datetime.strptime(
                                 ordinal_date, fmt)
                             if candidate_parsed.year == ordinal_year:
+                                parsed = candidate_parsed
+                            break
+                        except ValueError:
+                            continue
+                if parsed is not None:
+                    cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
+            elif isinstance(date, str) and (
+                    re.fullmatch(r"\d{4}-W\d{2}-[1-7]", date)
+                    or re.fullmatch(r"\d{4}W\d{2}[1-7]", date)
+                    or re.fullmatch(r"\d{4}-W\d{2}", date)
+                    or re.fullmatch(
+                        r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+(?:\d{4}-W\d{2}-[1-7]|"
+                        r"\d{4}W\d{2}[1-7]|\d{4}-W\d{2})",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
+                        r"[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
+                        r"[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        date, flags=re.IGNORECASE)):
+                # ISO week dates: "2026-W11-1" (the ISO 8601
+                # week-date form), "2026W111" (the compact form),
+                # or "2026-W11" (the week alone, its Monday), the
+                # way scheduling exports write dates — the ISO week
+                # and weekday convert to their calendar date and
+                # govern instead of quarantining as
+                # unparseable_date. A weekday-prefixed week date
+                # ("Sunday, 2026-W11-2", the way email-style
+                # timestamps write dates) has its weekday label
+                # dropped (it is not validated against the date)
+                # and the remainder parses as a week date. A
+                # week-date datetime ("2026-W11-1 10:30:00Z", or a
+                # fractional-second "2026-W11-1T09:00:00.123-04:00",
+                # the way API and EHR exports write week-date
+                # datetimes with a zone) has its suffix stripped
+                # and normalizes to its date part the same way; the
+                # offset itself is not converted. A week that does
+                # not exist in that year ("2025-W53-1", a 52-week
+                # year) or a weekday outside 1-7 ("2026-W11-8") is
+                # left untouched so the gates quarantine it
+                # normally, as is a weekday-prefixed week date with
+                # a bogus label ("Funday, 2026-W11-1") or a
+                # malformed suffix ("2026-W11-1 10:30:00+99:99"),
+                # which the guard does not match. strptime's
+                # %G-W%V-%u raises on a week that does not exist,
+                # and the parsed ISO year and week are checked
+                # against the written ones; the week-only form has
+                # no weekday for strptime to take, so it parses via
+                # fromisocalendar instead.
+                week_date = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
+                    flags=re.IGNORECASE)
+                if week_date.endswith("Z"):
+                    week_date = week_date[:-1]
+                else:
+                    suffix = re.search(
+                        r"([+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                        week_date)
+                    if suffix is not None:
+                        week_date = week_date[:-len(suffix.group(1))]
+                iso_year = int(week_date[:4])
+                iso_week = (int(week_date[6:8])
+                            if week_date[4] == "-"
+                            else int(week_date[5:7]))
+                parsed = None
+                if re.fullmatch(r"\d{4}-W\d{2}", week_date):
+                    try:
+                        parsed = datetime.fromisocalendar(
+                            iso_year, iso_week, 1)
+                    except ValueError:
+                        parsed = None
+                if parsed is None:
+                    for fmt in ("%G-W%V-%u", "%GW%V%u",
+                                "%G-W%V-%u %H:%M:%S.%f",
+                                "%G-W%V-%uT%H:%M:%S.%f",
+                                "%GW%V%u %H:%M:%S.%f",
+                                "%GW%V%uT%H:%M:%S.%f",
+                                "%G-W%V-%u %H:%M:%S",
+                                "%G-W%V-%u %H:%M",
+                                "%G-W%V-%uT%H:%M:%S",
+                                "%G-W%V-%uT%H:%M",
+                                "%GW%V%u %H:%M:%S",
+                                "%GW%V%u %H:%M",
+                                "%GW%V%uT%H:%M:%S",
+                                "%GW%V%uT%H:%M"):
+                        try:
+                            candidate_parsed = datetime.strptime(
+                                week_date, fmt)
+                            iso = candidate_parsed.isocalendar()
+                            if iso[0] == iso_year and iso[1] == iso_week:
                                 parsed = candidate_parsed
                             break
                         except ValueError:
