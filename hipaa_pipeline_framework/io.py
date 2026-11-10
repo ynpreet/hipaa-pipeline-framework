@@ -81,12 +81,15 @@ convention; the two-digit year follows Python's %y pivot, 00-68 read as
 2000-2068 and 69-99 as 1969-1999, with the same US-first order), and
 Unix epoch timestamps such as "1710460800" (seconds, nine or ten
 digits), "1710460800000" (milliseconds, twelve or thirteen
-digits), or "1710460800000000" (microseconds, fifteen or sixteen
-digits, the way API and database exports write timestamps) — the
+digits), "1710460800000000" (microseconds, fifteen or sixteen
+digits), or "1710460800000000000" (nanoseconds, eighteen or
+nineteen digits, the way API and database exports write
+timestamps) — the
 UTC date governs, and an epoch whose UTC date falls outside
 2000-01-01..2100-01-01, or an eleven-digit bare number (ambiguous
 between seconds and milliseconds), or a fourteen-digit bare number
-(microseconds before 2000 only), is left untouched so the gates
+(microseconds before 2000 only), or a seventeen-digit bare number
+(nanoseconds before 2000 only), is left untouched so the gates
 quarantine it normally, and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
@@ -531,20 +534,23 @@ def read_claims_csv(path):
     value. A service_date written as a Unix epoch timestamp —
     a bare nine- or ten-digit count of seconds since 1970-01-01
     UTC ("1710460800"), a twelve- or thirteen-digit count of
-    milliseconds ("1710460800000"), or a fifteen- or
+    milliseconds ("1710460800000"), a fifteen- or
     sixteen-digit count of microseconds ("1710460800000000"),
+    or an eighteen- or nineteen-digit count of nanoseconds
+    ("1710460800000000000"),
     the way API and database exports write timestamps —
     converts to its UTC date (YYYY-MM-DD) on read and governs
     instead of quarantining as unparseable_date; only epochs
     whose UTC date falls in 2000-01-01..2100-01-01 are accepted,
-    so an epoch outside that window ("9999999999999999" reads
-    as 2286, "0000000000000000" as 1970) or a bare number of any
+    so an epoch outside that window ("9999999999999999999" reads
+    as 2286, "0000000000000000000" as 1970) or a bare number of any
     other length ("12345") is left untouched so the gates
     quarantine it normally, as is an eleven-digit bare number,
     which is ambiguous between seconds and milliseconds, and a
     fourteen-digit bare number, which can only be microseconds
-    before 2000; the quality gates stay strict and see only the
-    normalized value. A service_date
+    before 2000, and a seventeen-digit bare number, which can
+    only be nanoseconds before 2000; the quality gates stay
+    strict and see only the normalized value. A service_date
     in weekday-prefixed ISO form ("Sunday, 2026-03-15" or
     "Mon, 2026-03-16 10:30:00", the way email-style
     timestamps write dates) has its weekday label stripped
@@ -1914,27 +1920,31 @@ def read_claims_csv(path):
                         except ValueError:
                             continue
             elif isinstance(date, str) and date.isdigit() and (
-                    len(date) in (9, 10, 12, 13, 15, 16)):
+                    len(date) in (9, 10, 12, 13, 15, 16, 18, 19)):
                 # Unix epoch timestamps: a bare nine- or
                 # ten-digit count of seconds since 1970-01-01 UTC
                 # ("1710460800"), a twelve- or thirteen-digit
-                # count of milliseconds ("1710460800000"), or a
+                # count of milliseconds ("1710460800000"), a
                 # fifteen- or sixteen-digit count of microseconds
-                # ("1710460800000000"), the way API and database
+                # ("1710460800000000"), or an eighteen- or
+                # nineteen-digit count of nanoseconds
+                # ("1710460800000000000"), the way API and database
                 # exports write timestamps — converts to its UTC
                 # date (YYYY-MM-DD) and governs instead of
                 # quarantining as unparseable_date. Only epochs
                 # whose UTC date falls in 2000-01-01..2100-01-01
                 # are accepted, so an epoch outside that window
-                # ("9999999999999999" reads as 2286,
-                # "0000000000000000" as 1970) is left untouched
+                # ("9999999999999999999" reads as 2286,
+                # "0000000000000000000" as 1970) is left untouched
                 # so the gates quarantine it normally, as is a
                 # bare number of any other length ("12345"), which
                 # no branch claims. An eleven-digit bare number is
                 # ambiguous — seconds past 2100 or milliseconds
                 # before 2001 — so it is left untouched too, as is
                 # a fourteen-digit bare number, which can only be
-                # microseconds before 2000. A non-midnight epoch
+                # microseconds before 2000, and a seventeen-digit
+                # bare number, which can only be nanoseconds
+                # before 2000. A non-midnight epoch
                 # still governs as its UTC date part; the time of
                 # day needs no conversion.
                 seconds = int(date)
@@ -1942,6 +1952,8 @@ def read_claims_csv(path):
                     seconds //= 1000
                 elif len(date) in (15, 16):
                     seconds //= 1000000
+                elif len(date) in (18, 19):
+                    seconds //= 1000000000
                 if 946684800 <= seconds <= 4102444800:
                     cleaned["service_date"] = datetime.fromtimestamp(
                         seconds, tz=timezone.utc).strftime("%Y-%m-%d")
