@@ -91,6 +91,19 @@ between seconds and milliseconds), or a fourteen-digit bare number
 (microseconds before 2000 only), or a seventeen-digit bare number
 (nanoseconds before 2000 only), is left untouched so the gates
 quarantine it normally, and
+ordinal (Julian) dates such as "2026074" (YYYYDDD, the day-of-year
+form the way mainframe exports write dates) or "2026-074" (the
+ISO 8601 ordinal form) — the day of the year converts to its
+calendar date (YYYY-MM-DD) and governs instead of quarantining
+as unparseable_date; a day-of-year that is not a real day of that
+year ("2026366" in 2026, which has 365 days, or "2026000") is
+left untouched so the gates quarantine it normally, as is a
+weekday-prefixed ordinal date with a bogus label ("Funday,
+2026074"); ordinal datetimes ("2026074 10:30:00Z", fractional and
+timezone-suffixed forms, and weekday-prefixed AM/PM forms such as
+"Sunday, 2026075 10:30:00 am +05:30") normalize to their date
+part the same way; the quality gates stay strict and see only the
+normalized value, and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
 weekday-prefixed ISO dates such as "Sunday, 2026-03-15" (the
@@ -551,6 +564,53 @@ def read_claims_csv(path):
     before 2000, and a seventeen-digit bare number, which can
     only be nanoseconds before 2000; the quality gates stay
     strict and see only the normalized value. A service_date
+    written as an ordinal (Julian) date — a seven-digit YYYYDDD
+    day-of-year form ("2026074", the way mainframe exports write
+    dates) or the ISO 8601 ordinal form ("2026-074") — converts
+    to its calendar date (YYYY-MM-DD) on read and governs instead
+    of quarantining as unparseable_date; a day-of-year that is not
+    a real day of that year ("2026366" in 2026, which has 365
+    days, or "2026000") is left untouched so the gates quarantine
+    it normally, as is a weekday-prefixed ordinal date with a
+    bogus label ("Funday, 2026074"), which the pattern does not
+    strip. A weekday-prefixed ordinal date ("Sunday, 2026075" or
+    "Mon, 2026-074", the way email-style timestamps write dates)
+    has its weekday label stripped on read and then normalizes the
+    same way, so it governs; the weekday itself is not validated
+    against the calendar date. An ordinal datetime ("2026074
+    10:30:00Z", "2026-074T09:00:00-04:00", or a weekday-prefixed
+    "Sunday, 2026075 10:30:00+05:30", the way API and EHR exports
+    write ordinal datetimes with a zone) has its suffix stripped
+    on read and normalizes to its date part the same way, so it
+    governs; the offset itself is not converted. A fractional-second
+    ordinal datetime ("2026074 10:30:00.123Z", the way
+    high-resolution exports write ordinal datetimes) normalizes
+    the same way — the fractional seconds are dropped with the
+    time part — as does a plain fractional-second ordinal datetime
+    without a suffix ("2026074 10:30:00.999"). An AM/PM ordinal
+    datetime ("2026074 10:30:00 AM", "2026-074T09:00:00 PM", or a
+    fractional-second "2026074 10:30:00.123 AM", the way exports
+    write ordinal datetimes on a 12-hour clock) has its marker
+    dropped on read and normalizes to its date part the same way,
+    with the same marker handling for weekday-prefixed ("Sunday,
+    2026075 09:00:00 pm") and attached-marker ("2026074 2:30pm")
+    forms, since the marker is stripped as a candidate before the
+    ordinal datetime formats run; while an impossible AM/PM ordinal
+    datetime ("2026366 10:00:00 AM") or a malformed marker
+    ("2026074 10:30:00 XM") is left untouched so the gates
+    quarantine it normally; the quality gates stay strict and see
+    only the normalized value. An AM/PM timezone-suffixed ordinal
+    datetime ("2026074 10:30:00 AM Z", "2026-074T09:00:00 PM
+    -04:00", or a weekday-prefixed "Sunday, 2026075 10:30:00 am
+    +05:30", the way exports write zoned 12-hour ordinal
+    timestamps) has the suffix trailing the marker dropped first
+    so the marker strips normally, then normalizes the same way;
+    the suffix-before-marker order ("2026074 10:30:00Z AM")
+    governs too, via the suffix strip after the marker strip;
+    while an impossible AM/PM timezone-suffixed ordinal datetime
+    ("2026366 10:00:00 AM Z") or a malformed suffix ("2026074
+    10:30:00 AM +99:99") is left untouched so the gates quarantine
+    it normally. A service_date
     in weekday-prefixed ISO form ("Sunday, 2026-03-15" or
     "Mon, 2026-03-16 10:30:00", the way email-style
     timestamps write dates) has its weekday label stripped
@@ -1919,6 +1979,192 @@ def read_claims_csv(path):
                             break
                         except ValueError:
                             continue
+            elif isinstance(date, str) and (
+                    (date.isdigit() and len(date) == 7)
+                    or re.fullmatch(r"\d{4}-\d{3}", date)
+                    or re.fullmatch(
+                        r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+(?:\d{7}|\d{4}-\d{3})",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3})[ T]\d{2}:\d{2}"
+                        r"(?::\d{2})?"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3})[ T]\d{2}:\d{2}:\d{2}\.\d+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3})[ T]\d{1,2}:\d{2}"
+                        r"(?::\d{2})?(?:\.\d+)?\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3})[ T]\d{1,2}:\d{2}"
+                        r"(?::\d{2})?(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3})[ T]\d{1,2}:\d{2}"
+                        r"(?::\d{2})?(?:\.\d+)?"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)):
+                # Ordinal (Julian) form: YYYYDDD ("2026074") or the
+                # ISO 8601 ordinal form ("2026-074"), the way
+                # mainframe exports write dates — the day of the
+                # year converts to its calendar date and governs
+                # instead of quarantining as unparseable_date. A
+                # weekday-prefixed ordinal date ("Sunday, 2026075"
+                # or "Mon, 2026-074", the way email-style
+                # timestamps write dates) has its weekday label
+                # dropped (it is not validated against the date)
+                # and the remainder parses as an ordinal date. A
+                # timezone-suffixed ordinal datetime ("2026074
+                # 10:30:00Z", "2026-074T09:00:00-04:00", or a
+                # weekday-prefixed "Sunday, 2026075
+                # 10:30:00+05:30", the way API and EHR exports
+                # write ordinal datetimes with a zone) has its
+                # suffix stripped (a trailing "Z", or a
+                # well-formed numeric offset, hours 00-14,
+                # minutes 00-59, colon optional) and normalizes
+                # to its date part the same way; the offset
+                # itself is not converted. A fractional-second
+                # ordinal datetime ("2026074 10:30:00.123Z", the
+                # way high-resolution exports write ordinal
+                # datetimes) normalizes the same way — the
+                # fractional seconds are dropped with the time
+                # part. An AM/PM ordinal datetime ("2026074
+                # 10:30:00 AM", the way exports write ordinal
+                # datetimes on a 12-hour clock) has its marker
+                # dropped on read and normalizes to its date
+                # part the same way, with the same marker
+                # handling for weekday-prefixed ("Sunday,
+                # 2026075 09:00:00 pm") and attached-marker
+                # ("2026074 2:30pm") forms, since the marker is
+                # stripped as a candidate before the ordinal
+                # datetime formats run; while an impossible
+                # AM/PM ordinal datetime ("2026366 10:00:00 AM")
+                # or a malformed marker ("2026074 10:30:00 XM")
+                # is left untouched so the gates quarantine it
+                # normally. An AM/PM timezone-suffixed ordinal
+                # datetime ("2026074 10:30:00 AM Z",
+                # "2026-074T09:00:00 PM -04:00", or a
+                # weekday-prefixed "Sunday, 2026075 10:30:00 am
+                # +05:30") has the suffix trailing the marker
+                # dropped first so the marker strips normally,
+                # and the suffix-before-marker order ("2026074
+                # 10:30:00Z AM") governs too; while an
+                # impossible AM/PM timezone-suffixed ordinal
+                # datetime ("2026366 10:00:00 AM Z") or a
+                # malformed suffix ("2026074 10:30:00 AM
+                # +99:99") is left untouched so the gates
+                # quarantine it normally. A day-of-year that is
+                # not a real day of that year ("2026366" in
+                # 2026, which has 365 days, or "2026000") is
+                # left untouched so the gates quarantine it
+                # normally: strptime's %j rolls a too-large day
+                # into the next year instead of failing, so the
+                # parsed year is checked against the written
+                # year and a mismatch rejects the value. A bogus
+                # weekday label ("Funday, 2026074") is not
+                # stripped by the pattern, so the value falls
+                # through to the generic datetime branch and
+                # quarantines, as does a malformed suffix
+                # ("2026074 10:30:00+99:99"), which the guard
+                # does not match.
+                ordinal_date = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
+                    flags=re.IGNORECASE)
+                # AM/PM timezone-suffixed ordinal datetime:
+                # "2026074 10:30:00 AM Z" or
+                # "2026-074T09:00:00 PM -04:00", the way
+                # exports write zoned 12-hour ordinal
+                # timestamps — the suffix trailing the marker
+                # (a "Z", or a well-formed numeric offset) is
+                # dropped first so the marker strips normally
+                # below; the suffix-before-marker order
+                # ("2026074 10:30:00Z AM") governs too, via the
+                # suffix strip after the marker strip further
+                # down. A malformed suffix ("10:30:00 AM
+                # +99:99") is not stripped, so the marker does
+                # not strip either and the gates quarantine it
+                # normally, as does an impossible date carrying
+                # a valid suffix ("2026366 10:00:00 AM Z").
+                ordinal_date = re.sub(
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"\1", ordinal_date, flags=re.IGNORECASE)
+                # AM/PM ordinal datetime: "2026074 10:30:00 AM"
+                # or "2026074 10:30:00.123 AM", the way exports
+                # write ordinal datetimes on a 12-hour clock —
+                # the marker (spaced or attached, either case)
+                # is dropped and the remainder parses as an
+                # ordinal datetime; only the date part governs,
+                # so the hour itself needs no conversion. A
+                # malformed marker ("10:30:00 XM") is not
+                # stripped, so parsing fails and the gates
+                # quarantine it normally, as does an impossible
+                # AM/PM datetime ("2026366 10:00:00 AM").
+                ordinal_date = re.sub(
+                    r"\s*(?:AM|PM)$", "", ordinal_date,
+                    flags=re.IGNORECASE).rstrip()
+                if ordinal_date.endswith("Z"):
+                    ordinal_date = ordinal_date[:-1]
+                else:
+                    suffix = re.search(
+                        r"([+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                        ordinal_date)
+                    if suffix is not None:
+                        ordinal_date = ordinal_date[:-len(
+                            suffix.group(1))]
+                ordinal_year = int(ordinal_date[:4])
+                parsed = None
+                for fmt in ("%Y%j", "%Y-%j"):
+                    try:
+                        candidate_parsed = datetime.strptime(
+                            ordinal_date, fmt)
+                        if candidate_parsed.year == ordinal_year:
+                            parsed = candidate_parsed
+                        break
+                    except ValueError:
+                        continue
+                if parsed is None:
+                    for fmt in ("%Y%j %H:%M:%S.%f",
+                                "%Y%jT%H:%M:%S.%f",
+                                "%Y-%j %H:%M:%S.%f",
+                                "%Y-%jT%H:%M:%S.%f",
+                                "%Y%j %H:%M:%S", "%Y%j %H:%M",
+                                "%Y%jT%H:%M:%S", "%Y%jT%H:%M",
+                                "%Y-%j %H:%M:%S", "%Y-%j %H:%M",
+                                "%Y-%jT%H:%M:%S", "%Y-%jT%H:%M"):
+                        try:
+                            candidate_parsed = datetime.strptime(
+                                ordinal_date, fmt)
+                            if candidate_parsed.year == ordinal_year:
+                                parsed = candidate_parsed
+                            break
+                        except ValueError:
+                            continue
+                if parsed is not None:
+                    cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
             elif isinstance(date, str) and date.isdigit() and (
                     len(date) in (9, 10, 12, 13, 15, 16, 18, 19)):
                 # Unix epoch timestamps: a bare nine- or

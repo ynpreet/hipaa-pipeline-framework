@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-159 stdlib-only tests (Nov 8, 2026, all passing): hash determinism and
+161 stdlib-only tests (Nov 8, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -1412,6 +1412,32 @@ governed, quarantine, and summary.json outputs byte-identical to
 pre-run outputs; audit.csv 10,001 lines, differing only in its
 timestamp column; zero raw member IDs, zero patient names in all
 outputs; CLI smoke-tested on a nanosecond-epoch 2-row CSV: 2 in,
+1 governed, 1 quarantined).
+
+Nov 8, 2026 build block (9:05 AM run):
+Ordinal (Julian) dates (read_claims_csv in
+hipaa_pipeline_framework/io.py) — a service_date written as a
+seven-digit YYYYDDD day-of-year form ("2026074", the way
+mainframe exports write dates) or the ISO 8601 ordinal form
+("2026-074") — now converts to its calendar date (YYYY-MM-DD)
+and governs instead of quarantining as unparseable_date; a
+day-of-year that is not a real day of that year ("2026366" in
+2026, which has 365 days, or "2026000") is left untouched so
+the gates quarantine it normally, as is a weekday-prefixed
+ordinal date with a bogus label ("Funday, 2026074"); weekday-
+prefixed ("Sunday, 2026075"), timezone-suffixed ("2026074
+10:30:00Z"), fractional-second, and AM/PM ordinal datetimes
+normalize to their date part the same way; the parsed year is
+checked against the written year because strptime's %j rolls a
+too-large day into the next year instead of failing; the
+quality gates stay strict and see only the normalized value; 2
+new tests (suite now 161, all passing). Demo re-verified same
+run (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+unchanged; runtime 0.489s; governed, quarantine, and
+summary.json outputs byte-identical to pre-run outputs;
+audit.csv 10,001 lines, differing only in its timestamp
+column; zero raw member IDs, zero patient names in all
+outputs; CLI smoke-tested on an ordinal-date 2-row CSV: 2 in,
 1 governed, 1 quarantined).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
