@@ -1973,6 +1973,47 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   two-digit-year-compact 2-row CSV: 2 in, 1 governed,
   1 quarantined).
 
+- Nov 11, 2026 build block (3:05 PM run):
+  space-separated timezone suffixes on ISO week-date
+  datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  an ISO week-date datetime carrying its zone after a space
+  ("2026-W11-1 10:30:00 +05:00", "2026-W11-1 10:30:00 -0400",
+  or "2026-W11-1 10:30:00 Z", the way API and EHR exports write
+  zoned week-date timestamps) now has the suffix and its
+  separating space stripped on read and normalizes to its date
+  part (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; weekday-prefixed, fractional-second,
+  T-separated, compact-form, and no-seconds forms normalize
+  the same way. Like the compact, underscore, and
+  numeric-hyphen families, the week-date guards are strict
+  fullmatches, so the fix widens the guard arm to accept an
+  optional space before the trailing zone, and adds the
+  trailing-space strip after the suffix strip that the
+  week-date branch was missing — the strip alone would never
+  have been reached. This closes a gap the Nov 11 3:05 PM
+  probe found: the space-separated form quarantined until now
+  while the attached form governed (verified by probe before
+  the fix; the same latent issue now stands only in the
+  ordinal-date family, and named zones such as GMT/EST are
+  still unhandled outside the month-name family, for later
+  runs). A malformed numeric suffix ("2026-W11-1 10:30:00
+  +99:99"), an out-of-range offset ("+25:00", "+05:60"), an
+  impossible week carrying a valid suffix ("2025-W53-1
+  10:30:00 +05:00"), or a bogus weekday label ("Funday,
+  2026-W11-1 10:30:00 +05:00") is left untouched so the
+  gates quarantine it normally; only the date part governs,
+  so no zone is ever converted; the quality gates stay
+  strict and see only the normalized value; 2 new tests
+  (suite now 179, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.660s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, audit counts match the pipeline
+  counts; zero raw member IDs in all outputs; CLI
+  smoke-tested on a space-separated-tz week-date 2-row CSV:
+  2 in, 1 governed, 1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

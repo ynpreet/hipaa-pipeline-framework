@@ -114,7 +114,9 @@ outside 1-7 ("2026-W11-8") is left untouched so the gates
 quarantine it normally, as is a weekday-prefixed week date with a
 bogus label ("Funday, 2026-W11-1"); week-date datetimes
 ("2026-W11-1 10:30:00Z", fractional and timezone-suffixed forms)
-normalize to their date part the same way; the quality gates stay
+normalize to their date part the same way, as do
+space-separated timezone-suffixed week-date datetimes
+("2026-W11-1 10:30:00 +05:00", "2026-W11-1 10:30:00 Z"); the quality gates stay
 strict and see only the normalized value, and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
@@ -2354,7 +2356,7 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
                         r"[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
                         date, flags=re.IGNORECASE)):
                 # ISO week dates: "2026-W11-1" (the ISO 8601
                 # week-date form), "2026W111" (the compact form),
@@ -2372,9 +2374,18 @@ def read_claims_csv(path):
                 # the way API and EHR exports write week-date
                 # datetimes with a zone) has its suffix stripped
                 # and normalizes to its date part the same way; the
-                # offset itself is not converted. A week that does
-                # not exist in that year ("2025-W53-1", a 52-week
-                # year) or a weekday outside 1-7 ("2026-W11-8") is
+                # offset itself is not converted. A space-separated
+                # suffix ("2026-W11-1 10:30:00 +05:00" or
+                # "2026-W11-1 10:30:00 Z", the way API and EHR
+                # exports write zoned week-date timestamps with a
+                # space before the zone) strips the same way, and
+                # the separating space goes with it — stripping the
+                # suffix alone leaves a trailing space that
+                # strptime rejects, so the space-separated form
+                # quarantined until now while the attached form
+                # governed. A week that does not exist in that year
+                # ("2025-W53-1", a 52-week year) or a weekday
+                # outside 1-7 ("2026-W11-8") is
                 # left untouched so the gates quarantine it
                 # normally, as is a weekday-prefixed week date with
                 # a bogus label ("Funday, 2026-W11-1") or a
@@ -2398,6 +2409,7 @@ def read_claims_csv(path):
                         week_date)
                     if suffix is not None:
                         week_date = week_date[:-len(suffix.group(1))]
+                week_date = week_date.rstrip()
                 iso_year = int(week_date[:4])
                 iso_week = (int(week_date[6:8])
                             if week_date[4] == "-"
