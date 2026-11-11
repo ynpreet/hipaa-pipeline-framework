@@ -1698,6 +1698,203 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   differing only in its timestamp column; zero raw member IDs,
   zero patient names in all outputs; CLI smoke-tested on an
   ISO-week-date 2-row CSV: 2 in, 1 governed, 1 quarantined).
+- Nov 9, 2026 build block (9:05 AM run):
+  space-separated timezone suffixes on month-name datetimes
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  service_date written as a month-name datetime carrying its
+  zone after a space ("Mar 15, 2026 10:30:00 +05:00", "15 Mar
+  2026 10:30:00 -0400", or "Mar 15, 2026 10:30:00 Z", the way
+  API and EHR exports write zoned month-name timestamps) now
+  has the suffix and its separating space stripped on read and
+  normalizes to its date part (YYYY-MM-DD) and governs instead
+  of quarantining as unparseable_date; a named RFC 2822 zone
+  ("Sun, 15 Mar 2026 10:30:00 GMT", "15 Mar 2026 10:30:00
+  EST", "Mar 15, 2026 10:30:00 UTC", the way email headers
+  write zoned month-name timestamps) strips the same way, but
+  only from the RFC 2822 obsolete-zone list plus UTC (UT, GMT,
+  UTC, EST, EDT, CST, CDT, MST, MDT, PST, PDT), and the
+  AM/PM marker step drops a named zone trailing a marker
+  ("Mar 15, 2026 10:30:00 AM GMT"); weekday-prefixed,
+  fractional-second, hyphenated, and AM/PM forms normalize
+  the same way. This also fixes a latent gap: stripping an
+  attached suffix left no trailing space, but stripping a
+  space-separated one left "10:30:00 " behind, which strptime
+  rejects — the space-separated form quarantined until now
+  while the attached form governed (verified by probe before
+  the fix; the same latent trailing-space issue was probed in
+  the slash, dot, compact, underscore, and numeric-hyphen
+  families and still stands there for a later run). An unknown
+  zone ("15 Mar 2026 10:30:00 XYZ"), an attached named zone
+  with no space ("15 Mar 2026 10:30:00GMT"), a malformed
+  numeric suffix ("Mar 15, 2026 10:30:00 +99:99"), an
+  impossible date carrying a valid suffix ("Feb 30, 2026
+  10:00:00 GMT"), or a bogus weekday label ("Funday, 15 Mar
+  2026 10:30:00 GMT") is left untouched so the gates
+  quarantine it normally; only the date part governs, so no
+  zone is ever converted; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 165,
+  all passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime
+  0.400s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines;
+  zero raw member IDs, zero patient names in all outputs;
+  CLI smoke-tested on a space-separated-tz 2-row CSV: 2 in,
+  1 governed, 1 quarantined).
+- Nov 9, 2026 build block (3:05 PM run):
+  space-separated timezone suffixes on slash datetimes
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  service_date written as a slash datetime carrying its zone
+  after a space ("03/15/2026 10:30:00 +05:00", "03/15/2026
+  10:30:00 -0400", or "03/15/2026 10:30:00 Z", the way API and
+  EHR exports write zoned slash timestamps) now has the suffix
+  and its separating space stripped on read and normalizes to
+  its date part (YYYY-MM-DD) and governs instead of
+  quarantining as unparseable_date; weekday-prefixed,
+  fractional-second, day-first, year-first, two-digit-year,
+  T-separated, and AM/PM forms (suffix before the marker,
+  "03/15/2026 10:30:00 +05:00 AM") normalize the same way.
+  This closes the latent trailing-space gap the 9:05 AM run
+  probed in this family: stripping a space-separated suffix
+  left "10:30:00 " behind, which strptime rejects — the
+  space-separated form quarantined until now while the
+  attached form governed (verified by probe before the fix;
+  the same latent issue still stands in the dot, compact,
+  underscore, and numeric-hyphen families for a later run).
+  A malformed numeric suffix ("03/15/2026 10:30:00 +99:99"),
+  an out-of-range offset ("+25:00", "+05:60"), a malformed
+  marker ("03/15/2026 10:30:00 +05:00 XM"), an impossible
+  date carrying a valid suffix ("02/30/2026 10:30:00
+  +05:00"), or a bogus weekday label ("Funday, 03/15/2026
+  10:30:00 +05:00") is left untouched so the gates
+  quarantine it normally; only the date part governs, so no
+  zone is ever converted; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 167,
+  all passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime
+  0.479s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines,
+  differing only in its timestamp column; audit.jsonl
+  identical ignoring timestamps; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a
+  space-separated-tz 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+- Nov 10, 2026 build block (3:05 AM run):
+  space-separated timezone suffixes on dot datetimes
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  service_date written as a dot datetime carrying its zone
+  after a space ("2026.03.15 10:30:00 +05:00", "2026.03.15
+  10:30:00 -0400", or "2026.03.15 10:30:00 Z", the way API and
+  EHR exports write zoned dot timestamps) now has the suffix
+  and its separating space stripped on read and normalizes to
+  its date part (YYYY-MM-DD) and governs instead of
+  quarantining as unparseable_date; weekday-prefixed,
+  fractional-second, two-digit-year (US and day-first),
+  T-separated, and AM/PM forms (suffix before the marker,
+  "2026.03.15 10:30:00 +05:00 AM") normalize the same way.
+  This closes the latent trailing-space gap the Nov 9 3:05 PM
+  run probed in this family: stripping a space-separated suffix
+  left "10:30:00 " behind, which strptime rejects — the
+  space-separated form quarantined until now while the
+  attached form governed (verified by probe before the fix;
+  the same latent issue still stands in the compact,
+  underscore, and numeric-hyphen families for a later run).
+  A malformed numeric suffix ("2026.03.15 10:30:00 +99:99"),
+  an out-of-range offset ("+25:00", "+05:60"), a malformed
+  marker ("2026.03.15 10:30:00 +05:00 XM"), an impossible
+  date carrying a valid suffix ("2026.02.30 10:00:00
+  +05:00"), or a bogus weekday label ("Funday, 2026.03.15
+  10:30:00 +05:00") is left untouched so the gates
+  quarantine it normally; only the date part governs, so no
+  zone is ever converted; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 169,
+  all passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime
+  0.454s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines,
+  identical ignoring its timestamp column; audit.jsonl
+  identical ignoring timestamps; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a
+  space-separated-tz 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+- Nov 10, 2026 build block (9:05 AM run):
+  space-separated timezone suffixes on compact datetimes
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  service_date written as a compact datetime carrying its zone
+  after a space ("20260315 10:30:00 +05:00", "20260315
+  10:30:00 -0400", or "20260315 10:30:00 Z", the way API and
+  EHR exports write zoned compact timestamps) now has the suffix
+  and its separating space stripped on read and normalizes to
+  its date part (YYYY-MM-DD) and governs instead of
+  quarantining as unparseable_date; weekday-prefixed,
+  fractional-second, no-seconds, no-colon-offset, T-separated,
+  and AM/PM forms (suffix before the marker,
+  "20260315 10:30:00 +05:00 AM") normalize the same way.
+  Unlike the slash and dot families, the compact guards are
+  strict fullmatches, so the fix also widens the guard arms to
+  accept an optional space before the trailing zone — the
+  trailing-space strip alone would never have been reached.
+  This closes the latent gap the Nov 10 3:05 AM run probed in
+  this family: the space-separated form quarantined until now
+  while the attached form governed (verified by probe before
+  the fix; the same latent issue still stands in the
+  two-digit-year compact, underscore, and numeric-hyphen
+  families for a later run). A malformed numeric suffix
+  ("20260315 10:30:00 +99:99"), an out-of-range offset
+  ("+25:00", "+05:60"), a malformed marker ("20260315
+  10:30:00 +05:00 XM"), an impossible date carrying a valid
+  suffix ("20260230 10:00:00 +05:00"), or a bogus weekday
+  label ("Funday, 20260315 10:30:00 +05:00") is left untouched
+  so the gates quarantine it normally; only the date part
+  governs, so no zone is ever converted; the quality gates stay
+  strict and see only the normalized value; 2 new tests (suite
+  now 171, all passing). Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged; runtime
+  0.496s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines,
+  identical ignoring its timestamp column; audit.jsonl
+  identical ignoring timestamps; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a
+  space-separated-tz 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+- Nov 10, 2026 build block (9:05 PM run):
+  space-separated timezone suffixes on underscore datetimes
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  service_date written as an underscore datetime carrying its zone
+  after a space ("2026_03_15 10:30:00 +05:00", "2026_03_15
+  10:30:00 -0400", or "2026_03_15 10:30:00 Z", the way API and
+  EHR exports write zoned underscore timestamps) now has the suffix
+  and its separating space stripped on read and normalizes to
+  its date part (YYYY-MM-DD) and governs instead of
+  quarantining as unparseable_date; weekday-prefixed,
+  fractional-second, two-digit-year, no-seconds, no-colon-offset,
+  T-separated, and AM/PM forms (suffix before the marker,
+  "2026_03_15 10:30:00 +05:00 AM") normalize the same way.
+  Like the compact family, the underscore guards are strict
+  fullmatches, so the fix also widens the guard arms to accept an
+  optional space before the trailing zone — the trailing-space
+  strip alone would never have been reached. This closes the
+  latent gap the Nov 10 3:05 AM run probed in this family: the
+  space-separated form quarantined until now while the attached
+  form governed (verified by probe before the fix; the same latent
+  issue still stands in the two-digit-year compact and
+  numeric-hyphen families for a later run). A malformed numeric
+  suffix ("2026_03_15 10:30:00 +99:99"), an out-of-range offset
+  ("+25:00", "+05:60"), a malformed marker ("2026_03_15
+  10:30:00 +05:00 XM"), an impossible date carrying a valid
+  suffix ("2026_02_30 10:00:00 +05:00"), or a bogus weekday
+  label ("Funday, 2026_03_15 10:30:00 +05:00") is left untouched
+  so the gates quarantine it normally; only the date part
+  governs, so no zone is ever converted; the quality gates stay
+  strict and see only the normalized value; 2 new tests (suite
+  now 173, all passing). Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged; runtime
+  0.447s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines,
+  identical ignoring its timestamp column; audit.jsonl
+  identical ignoring timestamps; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a
+  space-separated-tz 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

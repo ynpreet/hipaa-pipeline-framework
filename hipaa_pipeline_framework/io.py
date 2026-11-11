@@ -144,6 +144,10 @@ marker is dropped, only the date part governs), and
 AM/PM timezone-suffixed month-name datetimes such as
 "Mar 15, 2026 10:30:00 AM Z" (the suffix trailing the marker is
 dropped first, then the marker, only the date part governs), and
+space-separated timezone-suffixed month-name datetimes such as
+"Mar 15, 2026 10:30:00 +05:00" or "Sun, 15 Mar 2026 10:30:00 GMT"
+(the suffix and its separating space are dropped, only the date
+part governs; named zones are the RFC 2822 list plus UTC), and
 two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
 2000-2068 and 69-99 as 1969-1999, with the same forms as the
@@ -778,7 +782,18 @@ def read_claims_csv(path):
                         # well-formed numeric offset, hours
                         # 00-14, minutes 00-59, colon optional)
                         # and the date part governs; the offset
-                        # itself is not converted. A malformed
+                        # itself is not converted. A
+                        # space-separated suffix ("03/15/2026
+                        # 10:30:00 +05:00" or "03/15/2026
+                        # 10:30:00 Z", the way API and EHR
+                        # exports write zoned slash timestamps
+                        # with a space before the zone) strips
+                        # the same way, and the separating space
+                        # goes with it — stripping the suffix
+                        # alone leaves a trailing space that
+                        # strptime rejects, so the space-separated
+                        # form quarantined until now while the
+                        # attached form governed. A malformed
                         # suffix ("+99:99") is left in place so
                         # parsing fails and the gates quarantine
                         # it normally, as does an impossible date
@@ -794,6 +809,7 @@ def read_claims_csv(path):
                             if suffix is not None:
                                 tz_stripped = tz_stripped[:-len(
                                     suffix.group(1))]
+                        tz_stripped = tz_stripped.rstrip()
                         if tz_stripped != slash_date:
                             for fmt in ("%m/%d/%Y %H:%M:%S",
                                         "%m/%d/%Y %H:%M",
@@ -974,7 +990,18 @@ def read_claims_csv(path):
                         # well-formed numeric offset, hours
                         # 00-14, minutes 00-59, colon optional)
                         # and the date part governs; the offset
-                        # itself is not converted. A malformed
+                        # itself is not converted. A
+                        # space-separated suffix ("2026.03.15
+                        # 10:30:00 +05:00" or "2026.03.15
+                        # 10:30:00 Z", the way API and EHR
+                        # exports write zoned dot timestamps
+                        # with a space before the zone) strips
+                        # the same way, and the separating space
+                        # goes with it — stripping the suffix
+                        # alone leaves a trailing space that
+                        # strptime rejects, so the space-separated
+                        # form quarantined until now while the
+                        # attached form governed. A malformed
                         # suffix ("+99:99") is left in place so
                         # parsing fails and the gates quarantine
                         # it normally, as does an impossible date
@@ -990,6 +1017,7 @@ def read_claims_csv(path):
                             if suffix is not None:
                                 tz_stripped = tz_stripped[:-len(
                                     suffix.group(1))]
+                        tz_stripped = tz_stripped.rstrip()
                         if tz_stripped != dot_date:
                             for fmt in ("%Y.%m.%d %H:%M:%S",
                                         "%Y.%m.%d %H:%M",
@@ -1032,7 +1060,7 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{4}_\d{2}_\d{2}[ T]\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -1054,7 +1082,7 @@ def read_claims_csv(path):
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{4}_\d{2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(r"\d{1,2}_\d{1,2}_\d{2}", date)
@@ -1069,7 +1097,7 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -1091,7 +1119,7 @@ def read_claims_csv(path):
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Underscore-separated form: YYYY_MM_DD (the way
@@ -1115,8 +1143,23 @@ def read_claims_csv(path):
                 # well-formed numeric offset, hours 00-14,
                 # minutes 00-59, colon optional) and the date
                 # part governs; the offset itself is not
-                # converted. A fractional-second underscore
-                # datetime ("2026_03_15 10:30:00.123Z", the
+                # converted. A space-separated suffix
+                # ("2026_03_15 10:30:00 +05:00" or
+                # "2026_03_15 10:30:00 Z", the way API and EHR
+                # exports write zoned underscore timestamps
+                # with a space before the zone) strips the same
+                # way, and the separating space goes with it —
+                # stripping the suffix alone leaves a trailing
+                # space that strptime rejects, so the
+                # space-separated form quarantined until now
+                # while the attached form governed (verified by
+                # probe before the fix; the guard arms are
+                # strict fullmatches, so they widen to accept
+                # an optional space before the trailing zone
+                # too; the same latent issue still stands in
+                # the two-digit-year compact and numeric-hyphen
+                # families for a later run). A fractional-second
+                # underscore datetime ("2026_03_15 10:30:00.123Z", the
                 # way high-resolution exports write underscore
                 # datetimes) normalizes the same way — the
                 # fractional seconds are dropped with the time
@@ -1222,6 +1265,11 @@ def read_claims_csv(path):
                     if suffix is not None:
                         underscore_date = underscore_date[:-len(
                             suffix.group(1))]
+                # A space-separated suffix ("2026_03_15 10:30:00
+                # +05:00") leaves a trailing space behind after
+                # the strip above, which strptime rejects, so the
+                # space goes with the suffix.
+                underscore_date = underscore_date.rstrip()
                 try:
                     cleaned["service_date"] = datetime.strptime(
                         underscore_date, "%Y_%m_%d").strftime("%Y-%m-%d")
@@ -1319,7 +1367,12 @@ def read_claims_csv(path):
                 # with a zone) is stripped before parsing, so
                 # it governs; a malformed suffix ("Mar 15,
                 # 2026 10:30:00+99:99") is left in place so the
-                # gates quarantine it normally. A T-separated
+                # gates quarantine it normally. A space-separated
+                # suffix ("Mar 15, 2026 10:30:00 +05:00") or a
+                # named RFC 2822 zone ("Sun, 15 Mar 2026
+                # 10:30:00 GMT") strips the same way — see the
+                # timezone step below; an unknown zone is left
+                # in place so the gates quarantine it normally. A T-separated
                 # hyphenated month-name datetime
                 # ("15-Mar-2026T09:00:00" or
                 # "Mar-15-2026T09:00:00.123Z", the way exports
@@ -1402,7 +1455,8 @@ def read_claims_csv(path):
                 for base in list(candidates):
                     marker_suffix_stripped = re.sub(
                         r"((?:AM|PM))\s+"
-                        r"(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                        r"(Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)$",
                         r"\1", base, flags=re.IGNORECASE)
                     if (marker_suffix_stripped != base
                             and marker_suffix_stripped not in candidates):
@@ -1432,6 +1486,34 @@ def read_claims_csv(path):
                     stripped = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", base)
                     if stripped != base and stripped not in candidates:
                         candidates.append(stripped)
+                # Space-separated timezone suffix on a month-name
+                # datetime ("Mar 15, 2026 10:30:00 +05:00" or
+                # "15 Mar 2026 10:30:00 -0400", the way API and
+                # EHR exports write zoned month-name timestamps
+                # with a space before the offset): the offset
+                # is stripped, and the separating space goes
+                # with it — stripping the suffix alone leaves
+                # a trailing space that strptime rejects, so
+                # the space-separated form quarantined until
+                # now while the attached form governed. A space
+                # before a "Z" ("Mar 15, 2026 10:30:00 Z")
+                # strips the same way. A named RFC 2822 zone
+                # ("Sun, 15 Mar 2026 10:30:00 GMT", "15 Mar
+                # 2026 10:30:00 EST", "Mar 15, 2026 10:30:00
+                # UTC", the way email headers write zoned
+                # month-name timestamps) is stripped too, but
+                # only from the RFC 2822 obsolete-zone list
+                # plus UTC — UT, GMT, UTC, EST, EDT, CST, CDT,
+                # MST, MDT, PST, PDT — so an unknown zone
+                # ("15 Mar 2026 10:30:00 XYZ") is left in place
+                # and the gates quarantine it normally, as is
+                # a malformed numeric suffix ("Mar 15, 2026
+                # 10:30:00 +99:99") or an impossible date
+                # carrying a valid suffix ("Feb 30, 2026
+                # 10:00:00 GMT"). Only the date part governs,
+                # so no zone is ever converted. The AM/PM
+                # marker step above already drops a named zone
+                # trailing a marker ("10:30:00 AM GMT").
                 for base in list(candidates):
                     tz_stripped = base
                     if tz_stripped.endswith("Z"):
@@ -1443,6 +1525,15 @@ def read_claims_csv(path):
                         if suffix is not None:
                             tz_stripped = tz_stripped[:-len(
                                 suffix.group(1))]
+                        else:
+                            named = re.search(
+                                r"\s+(?:UT|GMT|UTC|EST|EDT|CST|CDT|"
+                                r"MST|MDT|PST|PDT)$",
+                                tz_stripped, flags=re.IGNORECASE)
+                            if named is not None:
+                                tz_stripped = tz_stripped[:-len(
+                                    named.group(0))]
+                    tz_stripped = tz_stripped.rstrip()
                     if (tz_stripped != base
                             and tz_stripped not in candidates):
                         candidates.append(tz_stripped)
@@ -1740,14 +1831,14 @@ def read_claims_csv(path):
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{8}[ T]\d{2}:\d{2}(?::\d{2})?"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{8}[ T]\d{2}:\d{2}:\d{2}\.\d+"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -1769,7 +1860,7 @@ def read_claims_csv(path):
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{8}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Compact form: YYYYMMDD (basic ISO 8601, the way
@@ -1788,7 +1879,20 @@ def read_claims_csv(path):
                 # or a well-formed numeric offset, hours 00-14,
                 # minutes 00-59, colon optional) and normalizes
                 # to its date part the same way; the offset
-                # itself is not converted. A fractional-second
+                # itself is not converted. A space-separated
+                # suffix ("20260315 10:30:00 +05:00" or
+                # "20260315 10:30:00 Z", the way API and EHR
+                # exports write zoned compact timestamps with a
+                # space before the zone) strips the same way,
+                # and the separating space goes with it —
+                # stripping the suffix alone leaves a trailing
+                # space that strptime rejects, so the
+                # space-separated form quarantined until now
+                # while the attached form governed (verified by
+                # probe before the fix; the same latent issue
+                # still stands in the two-digit-year compact,
+                # underscore, and numeric-hyphen families for a
+                # later run). A fractional-second
                 # compact datetime ("20260315 10:30:00.123Z",
                 # "20260315T09:00:00.5-04:00", or a
                 # weekday-prefixed "Sunday, 20260316
@@ -1853,6 +1957,11 @@ def read_claims_csv(path):
                     if suffix is not None:
                         compact_date = compact_date[:-len(
                             suffix.group(1))]
+                # A space-separated suffix ("20260315 10:30:00
+                # +05:00") leaves a trailing space behind after
+                # the strip above, which strptime rejects, so the
+                # space goes with the suffix.
+                compact_date = compact_date.rstrip()
                 try:
                     cleaned["service_date"] = datetime.strptime(
                         compact_date, "%Y%m%d").strftime("%Y-%m-%d")
