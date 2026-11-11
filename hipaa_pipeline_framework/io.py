@@ -129,6 +129,9 @@ weekday-prefixed numeric hyphen dates such as "Sunday, 03-15-2026"
 timezone-suffixed numeric hyphen datetimes such as
 "03-15-2026 10:30:00Z" or "15-03-2026T09:00:00-04:00" (the suffix
 is dropped, only the date part governs), and
+space-separated timezone-suffixed numeric hyphen datetimes such as
+"03-15-2026 10:30:00 +05:00" or "03-15-2026 10:30:00 Z" (the suffix
+and its separating space are dropped, only the date part governs), and
 fractional-second numeric hyphen datetimes such as
 "03-15-2026 10:30:00.123Z" (the fractional seconds are dropped
 with the time part, only the date part governs), and
@@ -445,7 +448,11 @@ def read_claims_csv(path):
     US-first order; a fractional-second numeric hyphen datetime
     ("03-15-2026 10:30:00.123Z", the way high-resolution exports
     write hyphen datetimes) normalizes the same way — the
-    fractional seconds are dropped with the time part. An
+    fractional seconds are dropped with the time part. A
+    space-separated suffix ("03-15-2026 10:30:00 +05:00" or
+    "03-15-2026 10:30:00 Z", the way API and EHR exports write
+    zoned hyphen timestamps with a space before the zone) strips
+    the same way, and the separating space goes with it. An
     impossible timezone-suffixed numeric
     hyphen datetime ("02-30-2026 10:00:00Z") or a malformed
     suffix ("03-15-2026 10:30:00+99:99") is left untouched
@@ -1157,8 +1164,8 @@ def read_claims_csv(path):
                 # strict fullmatches, so they widen to accept
                 # an optional space before the trailing zone
                 # too; the same latent issue still stands in
-                # the two-digit-year compact and numeric-hyphen
-                # families for a later run). A fractional-second
+                # the two-digit-year compact family for a later
+                # run). A fractional-second
                 # underscore datetime ("2026_03_15 10:30:00.123Z", the
                 # way high-resolution exports write underscore
                 # datetimes) normalizes the same way — the
@@ -1639,7 +1646,7 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -1661,7 +1668,7 @@ def read_claims_csv(path):
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Numeric hyphen form: "03-15-2026" (US) or an
@@ -1694,7 +1701,22 @@ def read_claims_csv(path):
                 # well-formed numeric offset, hours 00-14,
                 # minutes 00-59, colon optional) and the date
                 # part governs; the offset itself is not
-                # converted. A fractional-second hyphen datetime
+                # converted. A space-separated suffix
+                # ("03-15-2026 10:30:00 +05:00" or
+                # "03-15-2026 10:30:00 Z", the way API and EHR
+                # exports write zoned hyphen timestamps with a
+                # space before the zone) strips the same way,
+                # and the separating space goes with it —
+                # stripping the suffix alone leaves a trailing
+                # space that strptime rejects, so the
+                # space-separated form quarantined until now
+                # while the attached form governed (verified by
+                # probe before the fix; the guard arms are
+                # strict fullmatches, so they widen to accept
+                # an optional space before the trailing zone
+                # too; the same latent issue still stands in
+                # the two-digit-year compact family for a later
+                # run). A fractional-second hyphen datetime
                 # ("03-15-2026 10:30:00.123Z", the way
                 # high-resolution exports write hyphen datetimes)
                 # normalizes the same way — the fractional
@@ -1795,6 +1817,11 @@ def read_claims_csv(path):
                     if suffix is not None:
                         hyphen_date = hyphen_date[:-len(
                             suffix.group(1))]
+                # A space-separated suffix ("03-15-2026 10:30:00
+                # +05:00") leaves a trailing space behind after
+                # the strip above, which strptime rejects, so the
+                # space goes with the suffix.
+                hyphen_date = hyphen_date.rstrip()
                 for fmt in ("%m-%d-%Y %H:%M:%S.%f",
                             "%m-%d-%YT%H:%M:%S.%f",
                             "%d-%m-%Y %H:%M:%S.%f",
@@ -1890,9 +1917,9 @@ def read_claims_csv(path):
                 # space-separated form quarantined until now
                 # while the attached form governed (verified by
                 # probe before the fix; the same latent issue
-                # still stands in the two-digit-year compact,
-                # underscore, and numeric-hyphen families for a
-                # later run). A fractional-second
+                # in the two-digit-year compact family was
+                # closed by a later run, as were the
+                # underscore and numeric-hyphen families). A fractional-second
                 # compact datetime ("20260315 10:30:00.123Z",
                 # "20260315T09:00:00.5-04:00", or a
                 # weekday-prefixed "Sunday, 20260316
@@ -1988,14 +2015,14 @@ def read_claims_csv(path):
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{6}[ T]\d{2}:\d{2}(?::\d{2})?"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{6}[ T]\d{2}:\d{2}:\d{2}\.\d+"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2017,7 +2044,7 @@ def read_claims_csv(path):
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{6}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Two-digit-year compact form: MMDDYY or DDMMYY
@@ -2032,8 +2059,21 @@ def read_claims_csv(path):
                 # form. Weekday-prefixed, timezone-suffixed,
                 # fractional-second, and AM/PM forms normalize
                 # the same way as the eight-digit compact forms
-                # above. An impossible date ("023026") or a
-                # malformed suffix ("031526 10:30:00+99:99")
+                # above. A space-separated suffix ("031526
+                # 10:30:00 +05:00" or "031526 10:30:00 Z", the
+                # way API and EHR exports write zoned compact
+                # timestamps with a space before the zone)
+                # strips the same way, and the separating space
+                # goes with it — stripping the suffix alone
+                # leaves a trailing space that strptime rejects,
+                # so the space-separated form quarantined until
+                # now while the attached form governed (verified
+                # by probe before the fix). This closes the last
+                # latent trailing-space gap: the month-name,
+                # slash, dot, compact, underscore, and
+                # numeric-hyphen families were all closed by
+                # earlier runs. An impossible date ("023026") or
+                # a malformed suffix ("031526 10:30:00+99:99")
                 # fails parsing and is left untouched so the
                 # gates quarantine it normally.
                 short_compact_date = re.sub(
@@ -2078,6 +2118,11 @@ def read_claims_csv(path):
                     if suffix is not None:
                         short_compact_date = short_compact_date[:-len(
                             suffix.group(1))]
+                # A space-separated suffix ("031526 10:30:00
+                # +05:00") leaves a trailing space behind after
+                # the strip above, which strptime rejects, so the
+                # space goes with the suffix.
+                short_compact_date = short_compact_date.rstrip()
                 for fmt in ("%m%d%y", "%d%m%y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(
