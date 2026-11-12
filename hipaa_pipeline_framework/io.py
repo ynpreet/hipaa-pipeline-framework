@@ -102,7 +102,9 @@ weekday-prefixed ordinal date with a bogus label ("Funday,
 2026074"); ordinal datetimes ("2026074 10:30:00Z", fractional and
 timezone-suffixed forms, and weekday-prefixed AM/PM forms such as
 "Sunday, 2026075 10:30:00 am +05:30") normalize to their date
-part the same way; the quality gates stay strict and see only the
+part the same way, as do space-separated timezone-suffixed
+ordinal datetimes ("2026074 10:30:00 +05:00", "2026-074
+10:30:00 Z"); the quality gates stay strict and see only the
 normalized value, and
 ISO week dates such as "2026-W11-1" (the ISO 8601 week-date form,
 the way scheduling exports write dates) or "2026W111" (the compact
@@ -607,7 +609,14 @@ def read_claims_csv(path):
     "Sunday, 2026075 10:30:00+05:30", the way API and EHR exports
     write ordinal datetimes with a zone) has its suffix stripped
     on read and normalizes to its date part the same way, so it
-    governs; the offset itself is not converted. A fractional-second
+    governs; the offset itself is not converted. A space-separated
+    suffix ("2026074 10:30:00 +05:00" or "2026-074 10:30:00 Z",
+    the way API and EHR exports write zoned ordinal timestamps
+    with a space before the zone) strips the same way, and the
+    separating space goes with it — stripping the suffix alone
+    leaves a trailing space that strptime rejects, so the
+    space-separated form quarantined until now while the attached
+    form governed. A fractional-second
     ordinal datetime ("2026074 10:30:00.123Z", the way
     high-resolution exports write ordinal datetimes) normalizes
     the same way — the fractional seconds are dropped with the
@@ -2161,14 +2170,14 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"(?:\d{7}|\d{4}-\d{3})[ T]\d{2}:\d{2}"
                         r"(?::\d{2})?"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"(?:\d{7}|\d{4}-\d{3})[ T]\d{2}:\d{2}:\d{2}\.\d+"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?",
+                        r"(?: ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2191,7 +2200,7 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"(?:\d{7}|\d{4}-\d{3})[ T]\d{1,2}:\d{2}"
                         r"(?::\d{2})?(?:\.\d+)?"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Ordinal (Julian) form: YYYYDDD ("2026074") or the
@@ -2213,7 +2222,17 @@ def read_claims_csv(path):
                 # well-formed numeric offset, hours 00-14,
                 # minutes 00-59, colon optional) and normalizes
                 # to its date part the same way; the offset
-                # itself is not converted. A fractional-second
+                # itself is not converted. A space-separated
+                # suffix ("2026074 10:30:00 +05:00" or
+                # "2026-074 10:30:00 Z", the way API and EHR
+                # exports write zoned ordinal timestamps with a
+                # space before the zone) strips the same way,
+                # and the separating space goes with it —
+                # stripping the suffix alone leaves a trailing
+                # space that strptime rejects, so the
+                # space-separated form quarantined until now
+                # while the attached form governed. A
+                # fractional-second
                 # ordinal datetime ("2026074 10:30:00.123Z", the
                 # way high-resolution exports write ordinal
                 # datetimes) normalizes the same way — the
@@ -2303,6 +2322,11 @@ def read_claims_csv(path):
                     if suffix is not None:
                         ordinal_date = ordinal_date[:-len(
                             suffix.group(1))]
+                # A space-separated suffix ("2026074 10:30:00
+                # +05:00") leaves a trailing space behind after
+                # the strip above, which strptime rejects, so the
+                # space goes with the suffix.
+                ordinal_date = ordinal_date.rstrip()
                 ordinal_year = int(ordinal_date[:4])
                 parsed = None
                 for fmt in ("%Y%j", "%Y-%j"):
