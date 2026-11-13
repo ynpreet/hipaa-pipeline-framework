@@ -576,7 +576,21 @@ def read_claims_csv(path):
     datetime ("2026_02_30 10:00:00 AM") or a malformed marker
     ("2026_03_15 10:30:00 XM") is left untouched so the gates
     quarantine it normally; the quality gates stay strict and
-    see only the normalized value.
+    see only the normalized value. A named RFC 2822 zone on an
+    underscore datetime ("2026_03_15 10:30:00 GMT",
+    "2026_03_15T09:00:00 EST", or a weekday-prefixed "Sunday,
+    2026_03_15 10:30:00 GMT", the way email headers write zoned
+    underscore timestamps) has the zone stripped on read and
+    normalizes to its date part the same way, so it governs; the
+    same holds for a named zone trailing the AM/PM marker
+    ("2026_03_15 10:30:00 AM GMT") and for the
+    suffix-before-marker order ("2026_03_15 10:30:00 GMT AM").
+    Only the RFC 2822 obsolete-zone list plus UTC is accepted
+    (UT, GMT, UTC, EST, EDT, CST, CDT, MST, MDT, PST, PDT), so
+    an unknown zone (e.g. "2026_03_15 10:30:00 XYZ") is left in
+    place and the gates quarantine it normally, as does an
+    impossible date carrying a valid zone (e.g. "2026_02_30
+    10:00:00 GMT").
     A service_date in weekday-prefixed month-name
     form ("Sunday, March 15, 2026" or "Mon, 16 Mar 2026", the
     way human-readable exports and email-style timestamps
@@ -1174,7 +1188,8 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{4}_\d{2}_\d{2}[ T]\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?"
-                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))?",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -1189,14 +1204,16 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{4}_\d{2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?\s*(?:AM|PM)\s+"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{4}_\d{2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))"
+                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(r"\d{1,2}_\d{1,2}_\d{2}", date)
@@ -1211,7 +1228,8 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?"
-                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))?",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -1226,14 +1244,16 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?\s*(?:AM|PM)\s+"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))"
+                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Underscore-separated form: YYYY_MM_DD (the way
@@ -1305,7 +1325,26 @@ def read_claims_csv(path):
                 # ("2026_02_30 10:00:00 AM Z") or a malformed
                 # suffix ("2026_03_15 10:30:00 AM +99:99") is
                 # left untouched so the gates quarantine it
-                # normally. A two-digit-year underscore date
+                # normally. A named RFC 2822 zone on an
+                # underscore datetime ("2026_03_15 10:30:00
+                # GMT", "2026_03_15T09:00:00 EST", or a
+                # weekday-prefixed "Sunday, 2026_03_15
+                # 10:30:00 GMT", the way email headers write
+                # zoned underscore timestamps) has the zone
+                # stripped the same way and normalizes to its
+                # date part; only the RFC 2822 obsolete-zone
+                # list plus UTC is accepted (UT, GMT, UTC, EST,
+                # EDT, CST, CDT, MST, MDT, PST, PDT), so an
+                # unknown zone ("2026_03_15 10:30:00 XYZ") is
+                # left in place and the gates quarantine it
+                # normally, as does an impossible date carrying
+                # a valid zone ("2026_02_30 10:00:00 GMT").
+                # The same holds for a named zone trailing the
+                # AM/PM marker ("2026_03_15 10:30:00 AM GMT")
+                # and for the suffix-before-marker order
+                # ("2026_03_15 10:30:00 GMT AM"), which governs
+                # via the suffix strip after the marker strip.
+                # A two-digit-year underscore date
                 # ("03_15_26" or "15_03_26", the way legacy
                 # exports write dates) normalizes the same way:
                 # the guard admits a two-digit year alongside
@@ -1341,19 +1380,22 @@ def read_claims_csv(path):
                 # "2026_03_15T09:00:00 PM -04:00", the way
                 # exports write zoned 12-hour underscore
                 # timestamps — the suffix trailing the marker
-                # (a "Z", or a well-formed numeric offset) is
-                # dropped first so the marker strips normally
-                # below; the suffix-before-marker order
-                # ("2026_03_15 10:30:00Z AM") governs too, via
-                # the suffix strip after the marker strip
-                # further down. A malformed suffix
-                # ("10:30:00 AM +99:99") is not stripped, so
-                # the marker does not strip either and the
-                # gates quarantine it normally, as does an
+                # (a "Z", a well-formed numeric offset, or a
+                # named RFC 2822 zone such as "2026_03_15
+                # 10:30:00 AM GMT") is dropped first so the
+                # marker strips normally below; the
+                # suffix-before-marker order ("2026_03_15
+                # 10:30:00Z AM") governs too, via the suffix
+                # strip after the marker strip further down. A
+                # malformed suffix ("10:30:00 AM +99:99") or an
+                # unknown zone ("10:30:00 AM XYZ") is not
+                # stripped, so the marker does not strip either
+                # and the gates quarantine it normally, as does an
                 # impossible date carrying a valid suffix
                 # ("2026_02_30 10:00:00 AM Z").
                 underscore_date = re.sub(
-                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                    r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)$",
                     r"\1", underscore_date, flags=re.IGNORECASE)
                 # AM/PM underscore datetime: "2026_03_15 10:30:00 AM"
                 # or "2026_03_15 10:30:00.123 AM", the way
@@ -1379,6 +1421,15 @@ def read_claims_csv(path):
                     if suffix is not None:
                         underscore_date = underscore_date[:-len(
                             suffix.group(1))]
+                    else:
+                        named = re.search(
+                            r"\s+(?:UT|GMT|UTC|EST|EDT|CST|CDT|"
+                            r"MST|MDT|PST|PDT)$",
+                            underscore_date,
+                            flags=re.IGNORECASE)
+                        if named is not None:
+                            underscore_date = underscore_date[:-len(
+                                named.group(0))]
                 # A space-separated suffix ("2026_03_15 10:30:00
                 # +05:00") leaves a trailing space behind after
                 # the strip above, which strptime rejects, so the
