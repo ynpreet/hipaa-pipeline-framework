@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-181 stdlib-only tests (Nov 11, 2026, all passing): hash determinism and
+189 stdlib-only tests (Nov 12, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -1664,6 +1664,332 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   patient names in all outputs; CLI smoke-tested on a
   space-separated-tz 2-row CSV: 2 in, 1 governed,
   1 quarantined).
+- Nov 11, 2026 build block (3:05 AM run):
+  space-separated timezone suffixes on numeric hyphen datetimes
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  service_date written as a numeric hyphen datetime carrying its
+  zone after a space ("03-15-2026 10:30:00 +05:00", "03-15-2026
+  10:30:00 -0400", or "03-15-2026 10:30:00 Z", the way API and EHR
+  exports write zoned hyphen timestamps) now has the suffix and
+  its separating space stripped on read and normalizes to its date
+  part (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; weekday-prefixed, fractional-second,
+  two-digit-year, day-first, no-seconds, no-colon-offset,
+  T-separated, and AM/PM forms (suffix before the marker,
+  "03-15-2026 10:30:00 +05:00 AM") normalize the same way.
+  Like the compact and underscore families, the hyphen guards are
+  strict fullmatches, so the fix also widens the guard arms to
+  accept an optional space before the trailing zone — the
+  trailing-space strip alone would never have been reached.
+  This closes the latent gap the Nov 10 3:05 AM run probed in this
+  family: the space-separated form quarantined until now while the
+  attached form governed (verified by probe before the fix; the
+  same latent issue now stands only in the two-digit-year compact
+  family for a later run). A malformed numeric suffix
+  ("03-15-2026 10:30:00 +99:99"), an out-of-range offset
+  ("+25:00", "+05:60"), a malformed marker ("03-15-2026
+  10:30:00 +05:00 XM"), an impossible date carrying a valid
+  suffix ("02-30-2026 10:00:00 +05:00"), or a bogus weekday
+  label ("Funday, 03-15-2026 10:30:00 +05:00") is left untouched
+  so the gates quarantine it normally; only the date part
+  governs, so no zone is ever converted; the quality gates stay
+  strict and see only the normalized value; 2 new tests (suite
+  now 175, all passing). Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged; runtime
+  0.424s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines and
+  audit.jsonl identical ignoring their timestamp columns; zero
+  raw member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a space-separated-tz numeric-hyphen 2-row CSV:
+  2 in, 1 governed, 1 quarantined).
+- Nov 11, 2026 build block (9:05 AM run):
+  space-separated timezone suffixes on two-digit-year compact
+  datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  a two-digit-year compact datetime carrying its zone after a
+  space ("031526 10:30:00 +05:00", "031526 10:30:00 -0400",
+  or "031526 10:30:00 Z", the way API and EHR exports write
+  zoned compact timestamps) now has the suffix and its
+  separating space stripped on read and normalizes to its date
+  part (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; weekday-prefixed, fractional-second,
+  day-first, no-seconds, T-separated, and AM/PM forms (suffix
+  before the marker, "031526 10:30:00 +05:00 AM") normalize
+  the same way. Like the compact, underscore, and
+  numeric-hyphen families, the guards are strict fullmatches,
+  so the fix widens the guard arms to accept an optional space
+  before the trailing zone, and adds the trailing-space strip
+  after the suffix strip that the short-compact branch was
+  missing — the strip alone would never have been reached.
+  This closes the last latent trailing-space gap: the
+  month-name, slash, dot, compact, underscore, and
+  numeric-hyphen families were all closed by earlier runs. A
+  malformed numeric suffix ("031526 10:30:00 +99:99"), an
+  out-of-range offset ("+25:00"), an impossible date carrying
+  a valid suffix ("023026 10:30:00 +05:00"), or a bogus
+  weekday label ("Funday, 031526 10:30:00 +05:00") is left
+  untouched so the gates quarantine it normally; only the date
+  part governs, so no zone is ever converted; the quality
+  gates stay strict and see only the normalized value; 2 new
+  tests (suite now 177, all passing). Demo re-verified same
+  run (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.415s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, identical ignoring its timestamp
+  column; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a space-separated-tz
+  two-digit-year-compact 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+- Nov 11, 2026 build block (3:05 PM run):
+  space-separated timezone suffixes on ISO week-date
+  datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  an ISO week-date datetime carrying its zone after a space
+  ("2026-W11-1 10:30:00 +05:00", "2026-W11-1 10:30:00 -0400",
+  or "2026-W11-1 10:30:00 Z", the way API and EHR exports write
+  zoned week-date timestamps) now has the suffix and its
+  separating space stripped on read and normalizes to its date
+  part (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; weekday-prefixed, fractional-second,
+  T-separated, compact-form, and no-seconds forms normalize
+  the same way. Like the compact, underscore, and
+  numeric-hyphen families, the week-date guards are strict
+  fullmatches, so the fix widens the guard arm to accept an
+  optional space before the trailing zone, and adds the
+  trailing-space strip after the suffix strip that the
+  week-date branch was missing — the strip alone would never
+  have been reached. This closes a gap the Nov 11 3:05 PM
+  probe found: the space-separated form quarantined until now
+  while the attached form governed (verified by probe before
+  the fix; the same latent issue now stands only in the
+  ordinal-date family, and named zones such as GMT/EST are
+  still unhandled outside the month-name family, for later
+  runs). A malformed numeric suffix ("2026-W11-1 10:30:00
+  +99:99"), an out-of-range offset ("+25:00", "+05:60"), an
+  impossible week carrying a valid suffix ("2025-W53-1
+  10:30:00 +05:00"), or a bogus weekday label ("Funday,
+  2026-W11-1 10:30:00 +05:00") is left untouched so the
+  gates quarantine it normally; only the date part governs,
+  so no zone is ever converted; the quality gates stay
+  strict and see only the normalized value; 2 new tests
+  (suite now 179, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.660s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, audit counts match the pipeline
+  counts; zero raw member IDs in all outputs; CLI
+  smoke-tested on a space-separated-tz week-date 2-row CSV:
+  2 in, 1 governed, 1 quarantined).
+- Nov 11, 2026 build block (9:05 PM run):
+  space-separated timezone suffixes on ordinal-date
+  datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  an ordinal-date datetime carrying its zone after a space
+  ("2026074 10:30:00 +05:00", "2026-074 10:30:00 -0400",
+  or "2026074 10:30:00 Z", the way API and EHR exports write
+  zoned ordinal timestamps) now has the suffix and its
+  separating space stripped on read and normalizes to its date
+  part (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; weekday-prefixed, fractional-second,
+  T-separated, no-seconds, and AM/PM forms (suffix before the
+  marker, "2026074 10:30:00 +05:00 AM") normalize the same
+  way. Like the compact, underscore, numeric-hyphen, and
+  week-date families, the ordinal guards are strict
+  fullmatches, so the fix widens the guard arms to accept an
+  optional space before the trailing zone (the attached-tz,
+  fractional, and suffix-before-marker AM/PM arms), and adds
+  the trailing-space strip after the suffix strip that the
+  ordinal branch was missing — the strip alone would never
+  have been reached. This closes a gap the Nov 11 9:05 PM
+  probe found: the space-separated form quarantined until now
+  while the attached form governed (verified by probe before
+  the fix; the ordinal family was the last one standing with
+  this latent issue — month-name, slash, dot, compact,
+  underscore, numeric-hyphen, two-digit-year compact, and
+  week-date are all closed; named zones such as GMT/EST are
+  still unhandled outside the month-name family, for later
+  runs). A malformed numeric suffix ("2026074 10:30:00
+  +99:99"), an out-of-range offset ("+25:00", "+05:60"), an
+  impossible day carrying a valid suffix ("2026366 10:30:00
+  +05:00"), or a bogus weekday label ("Funday, 2026074
+  10:30:00 +05:00") is left untouched so the gates quarantine
+  it normally; only the date part governs, so no zone is ever
+  converted; the quality gates stay strict and see only the
+  normalized value; 2 new tests (suite now 181, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed,
+  8,411 quarantined, reasons unchanged; runtime 0.457s;
+  governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines,
+  audit counts match the pipeline counts; zero raw member IDs
+  in all outputs; CLI smoke-tested on a space-separated-tz
+  ordinal 2-row CSV: 2 in, 1 governed, 1 quarantined).
+- Nov 12, 2026 build block (3:05 AM run):
+  named RFC 2822 timezone zones on ISO datetimes
+  (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  an ISO datetime carrying a named zone ("2026-03-15 10:30:00
+  GMT", "2026-03-15T09:00:00 EST", or a weekday-prefixed
+  "Sunday, 2026-03-15 10:30:00 GMT", the way email headers
+  write zoned ISO timestamps) now has the zone stripped on
+  read and normalizes to its date part (YYYY-MM-DD) and governs
+  instead of quarantining as unparseable_date; fractional-second,
+  no-seconds, lowercase ("utc"), and AM/PM forms normalize the
+  same way, in both orders — suffix trailing the marker
+  ("2026-03-15 10:30:00 AM GMT") and suffix before the marker
+  ("2026-03-15 10:30:00 GMT AM"). The ISO branch strips zones
+  in two places (before the marker strip, and again after it),
+  so the fix adds the named-zone alternative to both: only the
+  RFC 2822 obsolete-zone list plus UTC is accepted — UT, GMT,
+  UTC, EST, EDT, CST, CDT, MST, MDT, PST, PDT — mirroring the
+  month-name family, which was the only family handling named
+  zones until now. This closes a gap the Nov 12 3:05 AM probe
+  found: the named-zone form quarantined until now while the
+  attached "Z" and numeric-offset forms governed (verified by
+  probe before the fix; named zones still stand in the slash,
+  dot, compact, underscore, numeric-hyphen, two-digit-year,
+  ordinal, and week-date families, for later runs). An unknown
+  zone ("2026-03-15 10:30:00 XYZ"), a zone-like tail that is
+  not a zone ("2026-03-15 10:30:00 WEST"), an impossible date
+  carrying a valid zone ("2026-02-30 10:00:00 GMT"), an unknown
+  zone trailing a marker ("2026-03-15 10:30:00 AM XYZ"), or a
+  bogus weekday label ("Funday, 2026-03-15 10:30:00 GMT") is
+  left untouched so the gates quarantine it normally; only the
+  date part governs, so no zone is ever converted; the quality
+  gates stay strict and see only the normalized value; 2 new
+  tests (suite now 183, all passing). Demo re-verified same
+  run (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.438s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines; zero raw member IDs, zero patient
+  names in all outputs; CLI smoke-tested on a named-zone ISO
+  2-row CSV: 2 in, 1 governed, 1 quarantined).
+- Nov 12, 2026 build block (9:05 AM run):
+  named RFC 2822 timezone zones on slash datetimes
+  (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  a slash datetime carrying a named zone ("03/15/2026 10:30:00
+  GMT", "03/15/2026T09:00:00 EST", or a weekday-prefixed
+  "Sunday, 03/15/2026 10:30:00 GMT", the way email headers
+  write zoned slash timestamps) now has the zone stripped on
+  read and normalizes to its date part (YYYY-MM-DD) and governs
+  instead of quarantining as unparseable_date; fractional-second,
+  no-seconds, lowercase ("utc"), day-first, year-first,
+  two-digit-year, and AM/PM forms normalize the same way, in
+  both orders — suffix trailing the marker ("03/15/2026
+  10:30:00 AM GMT") and suffix before the marker ("03/15/2026
+  10:30:00 GMT AM"). The slash branch strips zones in two
+  places (the AM/PM suffix step, and the timezone branch after
+  the marker strip), so the fix adds the named-zone alternative
+  to both: only the RFC 2822 obsolete-zone list plus UTC is
+  accepted — UT, GMT, UTC, EST, EDT, CST, CDT, MST, MDT, PST,
+  PDT — mirroring the ISO and month-name families. This closes
+  a gap the Nov 12 9:05 AM probe found: the named-zone form
+  quarantined until now while the attached "Z" and numeric-offset
+  forms governed (verified by probe before the fix; named zones
+  still stand in the dot, compact, underscore, numeric-hyphen,
+  two-digit-year compact, ordinal, and week-date families, for
+  later runs). An unknown zone ("03/15/2026 10:30:00 XYZ"), a
+  zone-like tail that is not a zone ("03/15/2026 10:30:00
+  WEST"), an impossible date carrying a valid zone
+  ("02/30/2026 10:00:00 GMT"), an unknown zone trailing a
+  marker ("03/15/2026 10:30:00 AM XYZ"), or a bogus weekday
+  label ("Funday, 03/15/2026 10:30:00 GMT") is left untouched
+  so the gates quarantine it normally; only the date part
+  governs, so no zone is ever converted; the quality gates stay
+  strict and see only the normalized value; 2 new tests (suite
+  now 185, all passing). Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged; runtime
+  0.623s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines,
+  audit counts match the pipeline counts; zero raw member IDs,
+  zero patient names in all outputs; CLI smoke-tested on a
+  named-zone slash 2-row CSV: 2 in, 1 governed, 1 quarantined).
+
+- Nov 12, 2026 build block (3:05 PM run):
+  named RFC 2822 timezone zones on dot datetimes
+  (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  a dot datetime carrying a named zone ("2026.03.15 10:30:00
+  GMT", "2026.03.15T09:00:00 EST", or a weekday-prefixed
+  "Sunday, 2026.03.15 10:30:00 GMT", the way email headers
+  write zoned dot timestamps) now has the zone stripped on
+  read and normalizes to its date part (YYYY-MM-DD) and governs
+  instead of quarantining as unparseable_date; fractional-second,
+  no-seconds, lowercase ("utc"), two-digit-year, day-first
+  two-digit-year, and AM/PM forms normalize the same way, in
+  both orders — suffix trailing the marker ("2026.03.15
+  10:30:00 AM GMT") and suffix before the marker ("2026.03.15
+  10:30:00 GMT AM"). The dot branch strips zones in two
+  places (the AM/PM suffix step, and the timezone branch after
+  the marker strip), so the fix adds the named-zone alternative
+  to both: only the RFC 2822 obsolete-zone list plus UTC is
+  accepted — UT, GMT, UTC, EST, EDT, CST, CDT, MST, MDT, PST,
+  PDT — mirroring the ISO, month-name, and slash families. This
+  closes a gap the Nov 12 3:05 PM probe found: the named-zone
+  form quarantined until now while the attached "Z" and
+  numeric-offset forms governed (verified by probe before the
+  fix; named zones still stand in the compact, underscore,
+  numeric-hyphen, two-digit-year compact, ordinal, and
+  week-date families, for later runs). An unknown zone
+  ("2026.03.15 10:30:00 XYZ"), a zone-like tail that is not a
+  zone ("2026.03.15 10:30:00 WEST"), an impossible date
+  carrying a valid zone ("2026.02.30 10:00:00 GMT"), an unknown
+  zone trailing a marker ("2026.03.15 10:30:00 AM XYZ"), or a
+  bogus weekday label ("Funday, 2026.03.15 10:30:00 GMT") is
+  left untouched so the gates quarantine it normally; only the
+  date part governs, so no zone is ever converted; the quality
+  gates stay strict and see only the normalized value; 2 new
+  tests (suite now 187, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.496s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, audit counts match the pipeline
+  counts; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a named-zone dot 11-row CSV:
+  11 in, 10 governed, 1 quarantined).
+
+- Nov 12, 2026 build block (9:05 PM run):
+  named RFC 2822 timezone zones on compact datetimes
+  (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  a compact datetime carrying a named zone ("20260315 10:30:00
+  GMT", "20260315T09:00:00 EST", or a weekday-prefixed
+  "Sunday, 20260315 10:30:00 GMT", the way email headers
+  write zoned compact timestamps) now has the zone stripped on
+  read and normalizes to its date part (YYYY-MM-DD) and governs
+  instead of quarantining as unparseable_date; fractional-second,
+  no-seconds, lowercase ("utc"), and AM/PM forms normalize the
+  same way, in both orders — suffix trailing the marker
+  ("20260315 10:30:00 AM GMT") and suffix before the marker
+  ("20260315 10:30:00 GMT AM"). The compact branch strips zones
+  in two places (the AM/PM suffix step, and the suffix strip
+  after the marker strip), so the fix adds the named-zone
+  alternative to both, and to the four timezone-carrying guard
+  arms: only the RFC 2822 obsolete-zone list plus UTC is
+  accepted — UT, GMT, UTC, EST, EDT, CST, CDT, MST, MDT, PST,
+  PDT — mirroring the ISO, month-name, slash, and dot families.
+  This closes a gap the Nov 12 9:05 PM probe found: the
+  named-zone form quarantined until now while the attached "Z"
+  and numeric-offset forms governed (verified by probe before
+  the fix; named zones still stand in the underscore,
+  numeric-hyphen, two-digit-year compact, ordinal, and
+  week-date families, for later runs). An unknown zone
+  ("20260315 10:30:00 XYZ"), a zone-like tail that is not a
+  zone ("20260315 10:30:00 WEST"), an impossible date carrying
+  a valid zone ("20260230 10:00:00 GMT"), an unknown zone
+  trailing a marker ("20260315 10:30:00 AM XYZ"), or a bogus
+  weekday label ("Funday, 20260315 10:30:00 GMT") is left
+  untouched so the gates quarantine it normally; only the date
+  part governs, so no zone is ever converted; the quality gates
+  stay strict and see only the normalized value; 2 new tests
+  (suite now 189, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.599s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, audit counts match the pipeline
+  counts; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a named-zone compact 11-row CSV:
+  11 in, 10 governed, 1 quarantined).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

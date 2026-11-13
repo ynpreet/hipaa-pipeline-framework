@@ -18,7 +18,8 @@ with the time part, only the date part governs), and
 AM/PM slash datetimes such as "03/15/2026 10:30:00 AM" (the
 marker is dropped, only the date part governs), and
 AM/PM timezone-suffixed slash datetimes such as
-"03/15/2026 10:30:00 AM Z" (the suffix trailing the marker is
+"03/15/2026 10:30:00 AM Z" or a named RFC 2822 zone such as
+"03/15/2026 10:30:00 AM GMT" (the suffix trailing the marker is
 dropped first, then the marker, only the date part governs), and
 two-digit-year slash dates such as "03/15/26" (a legacy export
 convention; the two-digit year follows Python's %y pivot,
@@ -275,7 +276,21 @@ def read_claims_csv(path):
     or a garbage time part is left untouched so the gates
     quarantine it normally, as is a fractional slash datetime
     with a malformed suffix ("03/15/2026
-    10:30:00.123+99:99").
+    10:30:00.123+99:99"). A slash datetime carrying a named
+    RFC 2822 zone ("03/15/2026 10:30:00 GMT",
+    "03/15/2026T09:00:00 EST", or a weekday-prefixed "Sunday,
+    03/15/2026 10:30:00 GMT", the way email headers write zoned
+    slash timestamps) has the zone stripped on read and
+    normalizes to its date part the same way, so it governs; the
+    same holds for a named zone trailing the AM/PM marker
+    ("03/15/2026 10:30:00 AM GMT") and for the
+    suffix-before-marker order ("03/15/2026 10:30:00 GMT AM").
+    Only the RFC 2822 obsolete-zone list plus UTC is accepted
+    (UT, GMT, UTC, EST, EDT, CST, CDT, MST, MDT, PST, PDT), so
+    an unknown zone (e.g. "03/15/2026 10:30:00 XYZ") is left in
+    place and the gates quarantine it normally, as does an
+    impossible date carrying a valid zone (e.g. "02/30/2026
+    10:00:00 GMT").
     A service_date carrying a time stamp
     (a space- or "T"-separated datetime such as "2026-03-15
     10:30:00" or "2026-03-15T09:00:00", the way spreadsheet
@@ -295,23 +310,32 @@ def read_claims_csv(path):
     ("2026-03-15 2:30pm") forms, since the marker is stripped
     before the ISO datetime formats run; a timezone suffix
     trailing the marker ("2026-03-15 10:30:00 AM Z" or
-    "2026-03-15T09:00:00 PM -04:00") is dropped first so the
-    marker strips normally; while an impossible
+    "2026-03-15T09:00:00 PM -04:00", or a named RFC 2822 zone
+    such as "2026-03-15 10:30:00 AM GMT") is dropped first so the
+    marker strips normally, as is a named zone in the
+    suffix-before-marker order ("2026-03-15 10:30:00 GMT AM");
+    while an impossible
     AM/PM ISO datetime ("2026-02-30 10:00:00 AM") or a
     malformed marker ("2026-03-15 10:30:00 XM") is left
     untouched so the gates quarantine it normally; the quality
     gates stay strict and see only the normalized value.
     A datetime-stamped date carrying a timezone suffix — a trailing
-    "Z" (UTC) or a numeric offset such as "+05:30" or "-0500", the
-    way API and EHR exports write timestamps — has that suffix
-    stripped before the datetime is parsed, so "2026-03-15T09:00:00Z"
-    and "2026-03-15 10:30:00+05:30" also govern as their date part;
+    "Z" (UTC), a numeric offset such as "+05:30" or "-0500", or a
+    named RFC 2822 zone such as "GMT" or "EST" (the way email headers
+    write zoned ISO timestamps), the way API and EHR exports write
+    timestamps — has that suffix stripped before the datetime is
+    parsed, so "2026-03-15T09:00:00Z", "2026-03-15 10:30:00+05:30",
+    and "2026-03-15 10:30:00 GMT" also govern as their date part;
     the offset itself is not converted (the gate needs the service
-    date as written, not a shifted one). A suffix that is not a
-    well-formed UTC designator or offset (e.g. "+99:99") is not
-    stripped, so the value stays unparseable and the gates
-    quarantine it normally, as does an impossible date carrying a
-    valid suffix (e.g. "2026-02-30T09:00:00Z").
+    date as written, not a shifted one). Only the RFC 2822
+    obsolete-zone list plus UTC is accepted (UT, GMT, UTC, EST,
+    EDT, CST, CDT, MST, MDT, PST, PDT), so an unknown zone
+    (e.g. "2026-03-15 10:30:00 XYZ") is left in place and the gates
+    quarantine it normally. A suffix that is not a well-formed UTC
+    designator or offset (e.g. "+99:99") is not stripped, so the
+    value stays unparseable and the gates quarantine it normally,
+    as does an impossible date carrying a valid suffix (e.g.
+    "2026-02-30T09:00:00Z" or "2026-02-30 10:00:00 GMT").
     A service_date in dot-separated form (YYYY.MM.DD, another
     export convention) normalizes to ISO form (YYYY-MM-DD) on
     read, so "2026.03.15" governs instead of quarantining as
@@ -343,7 +367,20 @@ def read_claims_csv(path):
     datetimes on a 12-hour clock) has its marker dropped on read
     and normalizes the same way; an impossible AM/PM dot datetime
     or a malformed marker is left untouched so the gates
-    quarantine it normally. A service_date in weekday-prefixed dot-separated
+    quarantine it normally. A named RFC 2822 zone on a dot
+    datetime ("2026.03.15 10:30:00 GMT",
+    "2026.03.15T09:00:00 EST", or a weekday-prefixed "Sunday,
+    2026.03.15 10:30:00 GMT", the way email headers write zoned
+    dot timestamps) has the zone stripped on read and normalizes
+    to its date part the same way, so it governs; the same holds
+    for a named zone trailing the AM/PM marker ("2026.03.15
+    10:30:00 AM GMT") and for the suffix-before-marker order
+    ("2026.03.15 10:30:00 GMT AM"). Only the RFC 2822
+    obsolete-zone list plus UTC is accepted (UT, GMT, UTC, EST,
+    EDT, CST, CDT, MST, MDT, PST, PDT), so an unknown zone
+    (e.g. "2026.03.15 10:30:00 XYZ") is left in place and the
+    gates quarantine it normally, as does an impossible date
+    carrying a valid zone (e.g. "2026.02.30 10:00:00 GMT"). A service_date in weekday-prefixed dot-separated
     form ("Sunday, 2026.03.15" or "Mon, 2026.03.16", the way
     email-style timestamps write dates) has its weekday label
     stripped on read and then normalizes the same way, so it
@@ -412,7 +449,20 @@ def read_claims_csv(path):
     timezone-suffixed compact datetime ("20260230 10:00:00
     AM Z") or a malformed suffix ("20260315 10:30:00 AM
     +99:99") is left untouched so the gates quarantine it
-    normally. A service_date in hyphenated month-name
+    normally. A named RFC 2822 zone on a compact datetime
+    ("20260315 10:30:00 GMT", "20260315T09:00:00 EST", or a
+    weekday-prefixed "Sunday, 20260315 10:30:00 GMT", the way
+    email headers write zoned compact timestamps) has the zone
+    stripped on read and normalizes to its date part the same
+    way, so it governs; the same holds for a named zone trailing
+    the AM/PM marker ("20260315 10:30:00 AM GMT") and for the
+    suffix-before-marker order ("20260315 10:30:00 GMT AM").
+    Only the RFC 2822 obsolete-zone list plus UTC is accepted
+    (UT, GMT, UTC, EST, EDT, CST, CDT, MST, MDT, PST, PDT), so
+    an unknown zone (e.g. "20260315 10:30:00 XYZ") is left in
+    place and the gates quarantine it normally, as does an
+    impossible date carrying a valid zone (e.g. "20260230
+    10:00:00 GMT"). A service_date in hyphenated month-name
     form ("15-Mar-2026"
     or "Mar-15-2026", abbreviated or full month name, the way
     some exports write dates without spaces) normalizes the same
@@ -704,19 +754,22 @@ def read_claims_csv(path):
                 # "03/15/2026 10:30:00 AM Z" or
                 # "03/15/2026T09:00:00 PM -04:00", the way
                 # exports write zoned 12-hour slash timestamps
-                # — the suffix trailing the marker (a "Z", or a
-                # well-formed numeric offset) is dropped first
-                # so the marker strips normally below; the
-                # suffix-before-marker order ("03/15/2026
-                # 10:30:00Z AM") already governed and still
-                # does, via the timezone branch further down. A
-                # malformed suffix ("10:30:00 AM +99:99") is not
-                # stripped, so the marker does not strip either
-                # and the gates quarantine it normally, as does
-                # an impossible date carrying a valid suffix
+                # — the suffix trailing the marker (a "Z", a
+                # well-formed numeric offset, or a named RFC 2822
+                # zone such as "03/15/2026 10:30:00 AM GMT")
+                # is dropped first so the marker strips normally
+                # below; the suffix-before-marker order
+                # ("03/15/2026 10:30:00Z AM") already governed
+                # and still does, via the timezone branch
+                # further down. A malformed suffix ("10:30:00 AM
+                # +99:99") or an unknown zone ("10:30:00 AM XYZ")
+                # is not stripped, so the marker does not strip
+                # either and the gates quarantine it normally, as
+                # does an impossible date carrying a valid suffix
                 # ("02/30/2026 10:00:00 AM Z").
                 slash_date = re.sub(
-                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                    r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)$",
                     r"\1", slash_date, flags=re.IGNORECASE)
                 # AM/PM slash datetime: "03/15/2026 10:30:00 AM"
                 # or "15/03/2026 02:30 PM", the way exports write
@@ -796,27 +849,40 @@ def read_claims_csv(path):
                         # "03/15/2026T09:00:00-04:00", the way
                         # API and EHR exports write slash
                         # datetimes with a zone — the suffix is
-                        # stripped (a trailing "Z", or a
+                        # stripped (a trailing "Z", a
                         # well-formed numeric offset, hours
-                        # 00-14, minutes 00-59, colon optional)
-                        # and the date part governs; the offset
-                        # itself is not converted. A
-                        # space-separated suffix ("03/15/2026
-                        # 10:30:00 +05:00" or "03/15/2026
-                        # 10:30:00 Z", the way API and EHR
-                        # exports write zoned slash timestamps
-                        # with a space before the zone) strips
-                        # the same way, and the separating space
-                        # goes with it — stripping the suffix
+                        # 00-14, minutes 00-59, colon optional,
+                        # or a named RFC 2822 zone such as
+                        # "03/15/2026 10:30:00 GMT", the way
+                        # email headers write zoned slash
+                        # timestamps) and the date part governs;
+                        # the offset itself is not converted.
+                        # Only the RFC 2822 obsolete-zone list
+                        # plus UTC is accepted (UT, GMT, UTC,
+                        # EST, EDT, CST, CDT, MST, MDT, PST,
+                        # PDT), so an unknown zone ("03/15/2026
+                        # 10:30:00 XYZ") is left in place and the
+                        # gates quarantine it normally. This step
+                        # is also what catches the
+                        # suffix-before-marker order ("03/15/2026
+                        # 10:30:00 GMT AM"), where the marker
+                        # strip above runs first and leaves the
+                        # zone at the end. A space-separated
+                        # suffix ("03/15/2026 10:30:00 +05:00"
+                        # or "03/15/2026 10:30:00 Z", the way
+                        # API and EHR exports write zoned slash
+                        # timestamps with a space before the zone)
+                        # strips the same way, and the separating
+                        # space goes with it — stripping the suffix
                         # alone leaves a trailing space that
                         # strptime rejects, so the space-separated
                         # form quarantined until now while the
                         # attached form governed. A malformed
-                        # suffix ("+99:99") is left in place so
-                        # parsing fails and the gates quarantine
-                        # it normally, as does an impossible date
-                        # carrying a valid suffix
-                        # ("02/30/2026 10:00:00Z").
+                        # suffix ("+99:99") or an unknown zone is
+                        # left in place so parsing fails and the
+                        # gates quarantine it normally, as does
+                        # an impossible date carrying a valid
+                        # suffix ("02/30/2026 10:00:00Z").
                         tz_stripped = slash_date
                         if tz_stripped.endswith("Z"):
                             tz_stripped = tz_stripped[:-1]
@@ -827,6 +893,15 @@ def read_claims_csv(path):
                             if suffix is not None:
                                 tz_stripped = tz_stripped[:-len(
                                     suffix.group(1))]
+                            else:
+                                named = re.search(
+                                    r"\s+(?:UT|GMT|UTC|EST|EDT|CST|"
+                                    r"CDT|MST|MDT|PST|PDT)$",
+                                    tz_stripped,
+                                    flags=re.IGNORECASE)
+                                if named is not None:
+                                    tz_stripped = tz_stripped[:-len(
+                                        named.group(0))]
                         tz_stripped = tz_stripped.rstrip()
                         if tz_stripped != slash_date:
                             for fmt in ("%m/%d/%Y %H:%M:%S",
@@ -912,19 +987,22 @@ def read_claims_csv(path):
                 # "2026.03.15 10:30:00 AM Z" or
                 # "2026.03.15T09:00:00 PM -04:00", the way
                 # exports write zoned 12-hour dot timestamps
-                # — the suffix trailing the marker (a "Z", or a
-                # well-formed numeric offset) is dropped first
-                # so the marker strips normally below; the
-                # suffix-before-marker order ("2026.03.15
-                # 10:30:00Z AM") already governed and still
-                # does, via the timezone branch further down. A
-                # malformed suffix ("10:30:00 AM +99:99") is not
-                # stripped, so the marker does not strip either
-                # and the gates quarantine it normally, as does
-                # an impossible date carrying a valid suffix
-                # ("2026.02.30 10:00:00 AM Z").
+                # — the suffix trailing the marker (a "Z", a
+                # well-formed numeric offset, or a named RFC
+                # 2822 zone such as "2026.03.15 10:30:00 AM
+                # GMT") is dropped first so the marker strips
+                # normally below; the suffix-before-marker order
+                # ("2026.03.15 10:30:00Z AM") already governed
+                # and still does, via the timezone branch
+                # further down. A malformed suffix ("10:30:00
+                # AM +99:99") or an unknown zone ("10:30:00 AM
+                # XYZ") is not stripped, so the marker does not
+                # strip either and the gates quarantine it
+                # normally, as does an impossible date carrying
+                # a valid suffix ("2026.02.30 10:00:00 AM Z").
                 dot_date = re.sub(
-                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                    r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)$",
                     r"\1", dot_date, flags=re.IGNORECASE)
                 # AM/PM dot datetime: "2026.03.15 10:30:00 AM"
                 # or "2026.03.15 10:30:00.123 AM", the way
@@ -1004,11 +1082,20 @@ def read_claims_csv(path):
                         # "2026.03.15T09:00:00-04:00", the way
                         # API and EHR exports write dot
                         # datetimes with a zone — the suffix is
-                        # stripped (a trailing "Z", or a
+                        # stripped (a trailing "Z", a
                         # well-formed numeric offset, hours
-                        # 00-14, minutes 00-59, colon optional)
-                        # and the date part governs; the offset
-                        # itself is not converted. A
+                        # 00-14, minutes 00-59, colon optional,
+                        # or a named RFC 2822 zone such as
+                        # "2026.03.15 10:30:00 GMT", the way
+                        # email headers write zoned dot
+                        # timestamps) and the date part governs;
+                        # the offset itself is not converted.
+                        # Only the RFC 2822 obsolete-zone list
+                        # plus UTC is accepted (UT, GMT, UTC,
+                        # EST, EDT, CST, CDT, MST, MDT, PST,
+                        # PDT), so an unknown zone ("2026.03.15
+                        # 10:30:00 XYZ") is left in place and the
+                        # gates quarantine it normally. A
                         # space-separated suffix ("2026.03.15
                         # 10:30:00 +05:00" or "2026.03.15
                         # 10:30:00 Z", the way API and EHR
@@ -1035,6 +1122,15 @@ def read_claims_csv(path):
                             if suffix is not None:
                                 tz_stripped = tz_stripped[:-len(
                                     suffix.group(1))]
+                            else:
+                                named = re.search(
+                                    r"\s+(?:UT|GMT|UTC|EST|EDT|CST|"
+                                    r"CDT|MST|MDT|PST|PDT)$",
+                                    tz_stripped,
+                                    flags=re.IGNORECASE)
+                                if named is not None:
+                                    tz_stripped = tz_stripped[:-len(
+                                        named.group(0))]
                         tz_stripped = tz_stripped.rstrip()
                         if tz_stripped != dot_date:
                             for fmt in ("%Y.%m.%d %H:%M:%S",
@@ -1869,14 +1965,16 @@ def read_claims_csv(path):
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{8}[ T]\d{2}:\d{2}(?::\d{2})?"
-                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{8}[ T]\d{2}:\d{2}:\d{2}\.\d+"
-                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))?",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -1891,14 +1989,16 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{8}[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?\s*(?:AM|PM)\s+"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{8}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))"
+                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Compact form: YYYYMMDD (basic ISO 8601, the way
@@ -1930,7 +2030,24 @@ def read_claims_csv(path):
                 # probe before the fix; the same latent issue
                 # in the two-digit-year compact family was
                 # closed by a later run, as were the
-                # underscore and numeric-hyphen families). A fractional-second
+                # underscore and numeric-hyphen families). A named
+                # RFC 2822 zone on a compact datetime ("20260315
+                # 10:30:00 GMT", "20260315T09:00:00 EST", or a
+                # weekday-prefixed "Sunday, 20260315 10:30:00 GMT",
+                # the way email headers write zoned compact
+                # timestamps) has the zone stripped the same way
+                # and normalizes to its date part; only the RFC
+                # 2822 obsolete-zone list plus UTC is accepted
+                # (UT, GMT, UTC, EST, EDT, CST, CDT, MST, MDT,
+                # PST, PDT), so an unknown zone ("20260315
+                # 10:30:00 XYZ") is left in place and the gates
+                # quarantine it normally, as does an impossible
+                # date carrying a valid zone ("20260230 10:00:00
+                # GMT"). The same holds for a named zone trailing
+                # the AM/PM marker ("20260315 10:30:00 AM GMT")
+                # and for the suffix-before-marker order
+                # ("20260315 10:30:00 GMT AM"), which governs via
+                # the suffix strip after the marker strip. A fractional-second
                 # compact datetime ("20260315 10:30:00.123Z",
                 # "20260315T09:00:00.5-04:00", or a
                 # weekday-prefixed "Sunday, 20260316
@@ -1957,19 +2074,23 @@ def read_claims_csv(path):
                 # "20260315 10:30:00 AM Z" or
                 # "20260315T09:00:00 PM -04:00", the way
                 # exports write zoned 12-hour compact timestamps
-                # — the suffix trailing the marker (a "Z", or a
-                # well-formed numeric offset) is dropped first
+                # — the suffix trailing the marker (a "Z", a
+                # well-formed numeric offset, or a named RFC 2822
+                # zone such as "20260315 10:30:00 AM GMT") is
+                # dropped first
                 # so the marker strips normally below; the
                 # suffix-before-marker order ("20260315
                 # 10:30:00Z AM") governs too, via the suffix
                 # strip after the marker strip further down. A
-                # malformed suffix ("10:30:00 AM +99:99") is not
+                # malformed suffix ("10:30:00 AM +99:99") or an
+                # unknown zone ("10:30:00 AM XYZ") is not
                 # stripped, so the marker does not strip either
                 # and the gates quarantine it normally, as does
                 # an impossible date carrying a valid suffix
                 # ("20260230 10:00:00 AM Z").
                 compact_date = re.sub(
-                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                    r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)$",
                     r"\1", compact_date, flags=re.IGNORECASE)
                 # AM/PM compact datetime: "20260315 10:30:00 AM"
                 # or "20260315 10:30:00.123 AM", the way
@@ -1995,6 +2116,15 @@ def read_claims_csv(path):
                     if suffix is not None:
                         compact_date = compact_date[:-len(
                             suffix.group(1))]
+                    else:
+                        named = re.search(
+                            r"\s+(?:UT|GMT|UTC|EST|EDT|CST|"
+                            r"CDT|MST|MDT|PST|PDT)$",
+                            compact_date,
+                            flags=re.IGNORECASE)
+                        if named is not None:
+                            compact_date = compact_date[:-len(
+                                named.group(0))]
                 # A space-separated suffix ("20260315 10:30:00
                 # +05:00") leaves a trailing space behind after
                 # the strip above, which strptime rejects, so the
@@ -2536,9 +2666,20 @@ def read_claims_csv(path):
                 # exports write a zoned 12-hour timestamp — the
                 # suffix is dropped first so the marker below
                 # is at the end again and strips normally; a
-                # malformed suffix ("AM +99:99") is not a
-                # well-formed designator or offset, so it stays
-                # and parsing fails and the gates quarantine
+                # named RFC 2822 zone ("2026-03-15 10:30:00
+                # AM GMT", the way email headers write zoned
+                # 12-hour timestamps) strips the same way, as
+                # does a plain named-zone suffix with no marker
+                # ("2026-03-15 10:30:00 GMT") — the step runs
+                # before the marker strip either way. Only the
+                # RFC 2822 obsolete-zone list plus UTC is
+                # accepted — UT, GMT, UTC, EST, EDT, CST, CDT,
+                # MST, MDT, PST, PDT — so an unknown zone
+                # ("AM XYZ") is left in place and the gates
+                # quarantine it normally; a malformed suffix
+                # ("AM +99:99") is not a well-formed
+                # designator or offset, so it stays and
+                # parsing fails and the gates quarantine
                 # the value normally.
                 if candidate.endswith("Z"):
                     candidate = candidate[:-1].rstrip()
@@ -2548,6 +2689,14 @@ def read_claims_csv(path):
                     if _ampm_suffix is not None:
                         candidate = candidate[
                             :-len(_ampm_suffix.group(1))].rstrip()
+                    else:
+                        _ampm_named = re.search(
+                            r"\s+(?:UT|GMT|UTC|EST|EDT|CST|CDT|"
+                            r"MST|MDT|PST|PDT)$", candidate,
+                            flags=re.IGNORECASE)
+                        if _ampm_named is not None:
+                            candidate = candidate[
+                                :-len(_ampm_named.group(0))].rstrip()
                 # AM/PM ISO datetime: "2026-03-15 10:30:00 AM" or
                 # "2026-03-15T09:00:00 PM", the way exports write
                 # ISO datetimes on a 12-hour clock — the marker
@@ -2564,9 +2713,20 @@ def read_claims_csv(path):
                     flags=re.IGNORECASE).rstrip()
                 # Strip a timezone suffix before parsing: a trailing
                 # "Z", or a well-formed numeric offset (hours 00-14,
-                # minutes 00-59, colon optional). Anything else is
-                # left in place so parsing fails and the gates
-                # quarantine the value normally.
+                # minutes 00-59, colon optional). A named RFC 2822
+                # zone ("2026-03-15 10:30:00 GMT", the way email
+                # headers write zoned ISO timestamps) strips the
+                # same way — this step is what catches the
+                # suffix-before-marker order ("2026-03-15
+                # 10:30:00 GMT AM"), where the marker strip above
+                # runs first and leaves the zone at the end. Only
+                # the RFC 2822 obsolete-zone list plus UTC is
+                # accepted, so an unknown zone ("2026-03-15
+                # 10:30:00 XYZ") is left in place so parsing
+                # fails and the gates quarantine the value
+                # normally. Anything else is left in place so
+                # parsing fails and the gates quarantine the
+                # value normally.
                 if candidate.endswith("Z"):
                     candidate = candidate[:-1]
                 else:
@@ -2574,6 +2734,14 @@ def read_claims_csv(path):
                         r"([+-](?:0\d|1[0-4]):?[0-5]\d)$", candidate)
                     if suffix is not None:
                         candidate = candidate[:-len(suffix.group(1))]
+                    else:
+                        named = re.search(
+                            r"\s+(?:UT|GMT|UTC|EST|EDT|CST|CDT|"
+                            r"MST|MDT|PST|PDT)$", candidate,
+                            flags=re.IGNORECASE)
+                        if named is not None:
+                            candidate = candidate[
+                                :-len(named.group(0))].rstrip()
                 parsed = None
                 for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
                             "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M",
