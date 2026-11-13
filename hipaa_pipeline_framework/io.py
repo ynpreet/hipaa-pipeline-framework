@@ -510,7 +510,21 @@ def read_claims_csv(path):
     impossible timezone-suffixed numeric
     hyphen datetime ("02-30-2026 10:00:00Z") or a malformed
     suffix ("03-15-2026 10:30:00+99:99") is left untouched
-    so the gates quarantine it normally.
+    so the gates quarantine it normally. A named RFC 2822 zone
+    on a numeric hyphen datetime ("03-15-2026 10:30:00 GMT",
+    "15-03-2026T09:00:00 EST", or a weekday-prefixed "Sunday,
+    03-16-2026 10:30:00 GMT", the way email headers write zoned
+    hyphen timestamps) has the zone stripped on read and
+    normalizes to its date part the same way, so it governs; the
+    same holds for a named zone trailing the AM/PM marker
+    ("03-15-2026 10:30:00 AM GMT") and for the
+    suffix-before-marker order ("03-15-2026 10:30:00 GMT AM").
+    Only the RFC 2822 obsolete-zone list plus UTC is accepted
+    (UT, GMT, UTC, EST, EDT, CST, CDT, MST, MDT, PST, PDT), so
+    an unknown zone (e.g. "03-15-2026 10:30:00 XYZ") is left in
+    place and the gates quarantine it normally, as does an
+    impossible date carrying a valid zone (e.g. "02-30-2026
+    10:00:00 GMT").
     A service_date in underscore-separated form (YYYY_MM_DD,
     the way some exports and file-naming conventions write
     dates) normalizes the same way, so "2026_03_15" governs;
@@ -1804,7 +1818,8 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?"
-                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))?",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -1819,14 +1834,16 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?\s*(?:AM|PM)\s+"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))"
+                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Numeric hyphen form: "03-15-2026" (US) or an
@@ -1908,7 +1925,28 @@ def read_claims_csv(path):
                 # normally. A malformed suffix ("03-15-2026
                 # 10:30:00+99:99") does not match the guard, so
                 # the value falls through to the generic
-                # datetime branch and quarantines.
+                # datetime branch and quarantines. A named
+                # RFC 2822 zone on a numeric hyphen datetime
+                # ("03-15-2026 10:30:00 GMT",
+                # "15-03-2026T09:00:00 EST", or a
+                # weekday-prefixed "Sunday, 03-16-2026
+                # 10:30:00 GMT", the way email headers write
+                # zoned hyphen timestamps) has the zone
+                # stripped on read and normalizes to its date
+                # part the same way, so it governs; the same
+                # holds for a named zone trailing the AM/PM
+                # marker ("03-15-2026 10:30:00 AM GMT") and
+                # for the suffix-before-marker order
+                # ("03-15-2026 10:30:00 GMT AM"), which
+                # governs via the suffix strip after the
+                # marker strip. Only the RFC 2822
+                # obsolete-zone list plus UTC is accepted (UT,
+                # GMT, UTC, EST, EDT, CST, CDT, MST, MDT,
+                # PST, PDT), so an unknown zone ("03-15-2026
+                # 10:30:00 XYZ") is left in place and the
+                # gates quarantine it normally, as does an
+                # impossible date carrying a valid zone
+                # ("02-30-2026 10:00:00 GMT").
                 # A two-digit-year numeric hyphen date
                 # ("03-15-26" or "15-03-26", the way legacy
                 # exports write dates) normalizes the same way:
@@ -1949,19 +1987,23 @@ def read_claims_csv(path):
                 # "03-15-2026T09:00:00 PM -04:00", the way
                 # exports write zoned 12-hour hyphen
                 # timestamps — the suffix trailing the marker
-                # (a "Z", or a well-formed numeric offset) is
+                # (a "Z", a well-formed numeric offset, or a
+                # named RFC 2822 zone such as "03-15-2026
+                # 10:30:00 AM GMT") is
                 # dropped first so the marker strips normally
                 # below; the suffix-before-marker order
                 # ("03-15-2026 10:30:00Z AM") governs too, via
                 # the suffix strip after the marker strip
                 # further down. A malformed suffix
-                # ("10:30:00 AM +99:99") is not stripped, so
+                # ("10:30:00 AM +99:99") or an unknown zone
+                # ("10:30:00 AM XYZ") is not stripped, so
                 # the marker does not strip either and the
                 # gates quarantine it normally, as does an
                 # impossible date carrying a valid suffix
                 # ("02-30-2026 10:00:00 AM Z").
                 hyphen_date = re.sub(
-                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                    r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)$",
                     r"\1", hyphen_date, flags=re.IGNORECASE)
                 hyphen_date = re.sub(
                     r"\s*(?:AM|PM)$", "", hyphen_date,
@@ -1975,6 +2017,15 @@ def read_claims_csv(path):
                     if suffix is not None:
                         hyphen_date = hyphen_date[:-len(
                             suffix.group(1))]
+                    else:
+                        named = re.search(
+                            r"\s+(?:UT|GMT|UTC|EST|EDT|CST|"
+                            r"CDT|MST|MDT|PST|PDT)$",
+                            hyphen_date,
+                            flags=re.IGNORECASE)
+                        if named is not None:
+                            hyphen_date = hyphen_date[:-len(
+                                named.group(0))]
                 # A space-separated suffix ("03-15-2026 10:30:00
                 # +05:00") leaves a trailing space behind after
                 # the strip above, which strptime rejects, so the

@@ -2273,6 +2273,50 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   outputs; CLI smoke-tested on a named-zone underscore 11-row
   CSV: 11 in, 10 governed, 1 quarantined).
 
+- Nov 13, 2026 build block (9:05 AM run):
+  named RFC 2822 timezone zones on numeric hyphen datetimes
+  (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  a numeric hyphen datetime carrying a named zone ("03-15-2026
+  10:30:00 GMT", "15-03-2026T09:00:00 EST", or a
+  weekday-prefixed "Sunday, 03-15-2026 10:30:00 GMT", the way
+  email headers write zoned hyphen timestamps) now has the
+  zone stripped on read and normalizes to its date part
+  (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; fractional-second, no-seconds, lowercase
+  ("utc"), two-digit-year, day-first two-digit-year, and AM/PM
+  forms normalize the same way, in both orders — suffix
+  trailing the marker ("03-15-2026 10:30:00 AM GMT") and suffix
+  before the marker ("03-15-2026 10:30:00 GMT AM"). The
+  hyphen branch strips zones in two places (the AM/PM
+  suffix step, and the suffix strip after the marker strip), so
+  the fix adds the named-zone alternative to both, and to the
+  three timezone-carrying guard arms: only the RFC 2822
+  obsolete-zone list plus UTC is accepted — UT, GMT, UTC, EST,
+  EDT, CST, CDT, MST, MDT, PST, PDT — mirroring the ISO,
+  month-name, slash, dot, compact, and underscore families.
+  This closes a gap the Nov 13 9:05 AM probe found: the
+  named-zone form quarantined until now while the attached "Z"
+  and numeric-offset forms governed (verified by probe before
+  the fix; named zones still stand in the two-digit-year
+  compact, ordinal, and week-date families, for later runs).
+  An unknown zone ("03-15-2026 10:30:00 XYZ"), a zone-like tail
+  that is not a zone ("03-15-2026 10:30:00 WEST"), an impossible
+  date carrying a valid zone ("02-30-2026 10:00:00 GMT"), an
+  unknown zone trailing a marker ("03-15-2026 10:30:00 AM XYZ"),
+  or a bogus weekday label ("Funday, 03-15-2026 10:30:00 GMT")
+  is left untouched so the gates quarantine it normally; only
+  the date part governs, so no zone is ever converted; the
+  quality gates stay strict and see only the normalized value;
+  2 new tests (suite now 193, all passing). Demo re-verified
+  same run (10,000 in → 1,589 governed, 8,411 quarantined,
+  reasons unchanged; runtime 0.435s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, audit counts match the pipeline
+  counts; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a named-zone hyphen 11-row CSV:
+  11 in, 10 governed, 1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
