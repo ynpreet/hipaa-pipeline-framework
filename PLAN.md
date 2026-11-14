@@ -2484,6 +2484,37 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   outputs; CLI smoke-tested on an AM/PM week-date 2-row CSV:
   2 in, 1 governed, 1 quarantined).
 
+- Nov 14, 2026 build block (3:05 PM run):
+  plain 24-hour compact datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  a compact datetime with no zone or marker ("20260315
+  10:30:00", "20260315T09:00:00", or a weekday-prefixed
+  "Sunday, 20260316 10:30:00", the way exports write compact
+  datetimes) now normalizes to its date part (YYYY-MM-DD)
+  and governs instead of quarantining as unparseable_date;
+  no-seconds forms ("20260315 10:30", "20260315T09:00")
+  normalize the same way. This closes the gap the probe
+  found: every suffixed and marked compact variant governed
+  while the plain form quarantined (verified by probe before
+  the fix). An impossible plain compact datetime ("20260230
+  10:00:00"), an unknown zone ("20260315 10:30:00 XYZ"), or
+  a bogus weekday label ("Funday, 20260315 10:30:00") is left
+  untouched so the gates quarantine it normally; only the
+  date part governs, so the hour needs no conversion; the
+  quality gates stay strict and see only the normalized value;
+  2 new tests (suite now 203, all passing). Demo re-verified
+  same run (10,000 in → 1,589 governed, 8,411 quarantined,
+  reasons unchanged; runtime 0.609s; governed, quarantine,
+  and summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, audit counts match the pipeline
+  counts; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a plain compact-datetime
+  2-row CSV: 2 in, 1 governed, 1 quarantined). Remaining
+  gaps noted: the plain 24-hour form in the two-digit-year
+  compact family ("260315 10:30:00" still quarantines) and
+  colon-less basic ISO times ("20260315T103000", with or
+  without a trailing "Z") — for later runs.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

@@ -429,7 +429,18 @@ def read_claims_csv(path):
     fractional-second compact datetime without a suffix
     ("20260315 10:30:00.999"); an impossible fractional
     compact datetime or a malformed suffix is left
-    untouched so the gates quarantine it normally. An AM/PM compact
+    untouched so the gates quarantine it normally. A plain
+    compact datetime ("20260315 10:30:00",
+    "20260315T09:00:00", or a weekday-prefixed "Sunday,
+    20260316 10:30:00", the way exports write compact
+    datetimes with no zone or marker) normalizes the same
+    way — the time part is dropped and only the date part
+    governs — as does a no-seconds form ("20260315 10:30");
+    every suffixed and marked variant governed until now
+    while the plain form quarantined (verified by probe
+    before the fix). An impossible plain compact datetime
+    ("20260230 10:00:00") is left untouched so the gates
+    quarantine it normally. An AM/PM compact
     datetime ("20260315 10:30:00 AM", "20260315T09:00:00 PM", or a
     fractional-second "20260315 10:30:00.123 AM", the way
     exports write compact datetimes with an AM/PM marker)
@@ -2090,6 +2101,12 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8}[ T]\d{2}:\d{2}(?::\d{2})?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{8}[ T]\d{2}:\d{2}:\d{2}\.\d+"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
                         r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
@@ -2175,9 +2192,20 @@ def read_claims_csv(path):
                 # seconds are dropped with the time part — as
                 # does a plain fractional-second compact
                 # datetime without a suffix ("20260315
-                # 10:30:00.999"). An impossible compact
-                # date fails parsing and is left untouched so the
-                # gates quarantine it normally, as does a bogus
+                # 10:30:00.999"). A plain compact datetime
+                # ("20260315 10:30:00", "20260315T09:00:00",
+                # or a weekday-prefixed "Sunday, 20260316
+                # 10:30:00", the way exports write compact
+                # datetimes with no zone or marker) normalizes
+                # the same way — the time part is dropped and
+                # only the date part governs — as does a
+                # no-seconds form ("20260315 10:30"); every
+                # suffixed and marked variant governed until
+                # now while the plain form quarantined (verified
+                # by probe before the fix). An impossible plain
+                # compact datetime ("20260230 10:00:00") fails
+                # parsing and is left untouched so the gates
+                # quarantine it normally, as does a bogus
                 # weekday label ("Funday, 20260315"), which the
                 # pattern does not strip, and a malformed suffix
                 # ("20260315 10:30:00+99:99"), which the guard
