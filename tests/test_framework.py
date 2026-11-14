@@ -2381,6 +2381,97 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.BAD_DATE: 5})
 
+    def test_read_claims_csv_normalizes_named_zone_week_datetimes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,2026-W11-1 10:30:00 GMT,120.50\n"
+                            "M-100002,2026-W11-1T09:00:00 EST,200.00\n"
+                            "M-100003,2026-W11-1 10:30:00.123 UTC,310.00\n"
+                            "M-100004,\"Sunday, 2026-W11-2 10:30:00 GMT\",410.00\n"
+                            "M-100005,2026W111 10:30:00 GMT,510.00\n"
+                            "M-100006,2026-W11-1 10:30 GMT,610.00\n"
+                            "M-100007,2026-W11-1 10:30:00 utc,710.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 7)
+            self.assertEqual(rows[0]["service_date"], "2026-03-09")
+            self.assertEqual(rows[1]["service_date"], "2026-03-09")
+            self.assertEqual(rows[2]["service_date"], "2026-03-09")
+            # Weekday label is a label, not the date: W11-2 is Tuesday.
+            self.assertEqual(rows[3]["service_date"], "2026-03-10")
+            self.assertEqual(rows[4]["service_date"], "2026-03-09")
+            self.assertEqual(rows[5]["service_date"], "2026-03-09")
+            self.assertEqual(rows[6]["service_date"], "2026-03-09")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 7)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_named_zone_week_datetimes_still_quarantine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,2026-W11-1 10:30:00 XYZ,120.50\n"
+                            "M-100002,2026-W11-1 10:30:00 WEST,200.00\n"
+                            "M-100003,2025-W53-1 10:00:00 GMT,310.00\n"
+                            "M-100004,2026-W11-8 10:30:00 GMT,410.00\n"
+                            "M-100005,\"Funday, 2026-W11-1 10:30:00 GMT\",510.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 5)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 5)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 5})
+
+    def test_read_claims_csv_normalizes_ampm_week_datetimes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,2026-W11-1 10:30:00 AM,120.50\n"
+                            "M-100002,2026-W11-1T09:00:00 PM,200.00\n"
+                            "M-100003,2026-W11-1 10:30:00.123 am,310.00\n"
+                            "M-100004,\"Sunday, 2026-W11-2 09:00:00 pm\",410.00\n"
+                            "M-100005,2026W111 10:30:00 AM,510.00\n"
+                            "M-100006,2026-W11-1 10:30 AM,610.00\n"
+                            "M-100007,2026-W11-1 10:30:00 PM GMT,710.00\n"
+                            "M-100008,2026-W11-1T09:00:00 AM EST,810.00\n"
+                            "M-100009,2026-W11-1 10:30:00Z AM,910.00\n"
+                            "M-100010,2026-W11-1 10:30:00+05:30 PM,1010.00\n"
+                            "M-100011,\"Sunday, 2026-W11-2 10:30:00 AM +05:30\",1110.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 11)
+            self.assertEqual(rows[0]["service_date"], "2026-03-09")
+            self.assertEqual(rows[1]["service_date"], "2026-03-09")
+            self.assertEqual(rows[2]["service_date"], "2026-03-09")
+            # Weekday label is a label, not the date: W11-2 is Tuesday.
+            self.assertEqual(rows[3]["service_date"], "2026-03-10")
+            self.assertEqual(rows[4]["service_date"], "2026-03-09")
+            self.assertEqual(rows[5]["service_date"], "2026-03-09")
+            self.assertEqual(rows[6]["service_date"], "2026-03-09")
+            self.assertEqual(rows[7]["service_date"], "2026-03-09")
+            self.assertEqual(rows[8]["service_date"], "2026-03-09")
+            self.assertEqual(rows[9]["service_date"], "2026-03-09")
+            self.assertEqual(rows[10]["service_date"], "2026-03-10")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 11)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_ampm_week_datetimes_still_quarantine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,2026-W11-1 10:30:00 XM,120.50\n"
+                            "M-100002,2026-W11-1 10:30:00 AM XYZ,200.00\n"
+                            "M-100003,2026-W11-1 10:30:00 AM +99:99,310.00\n"
+                            "M-100004,2025-W53-1 10:00:00 AM Z,410.00\n"
+                            "M-100005,2026-W11-8 10:30:00 AM,510.00\n"
+                            "M-100006,\"Funday, 2026-W11-1 10:30:00 AM\",610.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 6)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 6)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 6})
+
     def test_read_claims_csv_normalizes_space_separated_tz_month_name_datetimes(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"

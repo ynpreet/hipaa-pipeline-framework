@@ -117,10 +117,15 @@ exist in that year ("2025-W53-1", a 52-week year) or a weekday
 outside 1-7 ("2026-W11-8") is left untouched so the gates
 quarantine it normally, as is a weekday-prefixed week date with a
 bogus label ("Funday, 2026-W11-1"); week-date datetimes
-("2026-W11-1 10:30:00Z", fractional and timezone-suffixed forms)
-normalize to their date part the same way, as do
+("2026-W11-1 10:30:00Z", fractional, timezone-suffixed, and named
+RFC 2822 zone forms such as "2026-W11-1 10:30:00 GMT") normalize
+to their date part the same way, as do
 space-separated timezone-suffixed week-date datetimes
-("2026-W11-1 10:30:00 +05:00", "2026-W11-1 10:30:00 Z"); the quality gates stay
+("2026-W11-1 10:30:00 +05:00", "2026-W11-1 10:30:00 Z"), and
+AM/PM week-date datetimes ("2026-W11-1 10:30:00 AM", with or
+without a trailing named zone such as "2026-W11-1 10:30:00 PM
+GMT", and with the zone before the marker such as
+"2026-W11-1 10:30:00Z AM"); the quality gates stay
 strict and see only the normalized value, and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
@@ -2675,7 +2680,36 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
                         r"[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?"
-                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
+                        r"[ T]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
+                        r"[ T]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
+                        r"[ T]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # ISO week dates: "2026-W11-1" (the ISO 8601
                 # week-date form), "2026W111" (the compact form),
@@ -2693,7 +2727,14 @@ def read_claims_csv(path):
                 # the way API and EHR exports write week-date
                 # datetimes with a zone) has its suffix stripped
                 # and normalizes to its date part the same way; the
-                # offset itself is not converted. A space-separated
+                # offset itself is not converted. A named RFC 2822
+                # zone ("2026-W11-1 10:30:00 GMT", the way email
+                # headers write zoned week-date timestamps) strips
+                # the same way; only the RFC 2822 obsolete-zone
+                # list plus UTC is accepted (UT, GMT, UTC, EST,
+                # EDT, CST, CDT, MST, MDT, PST, PDT), so an unknown
+                # zone ("2026-W11-1 10:30:00 XYZ") is left in place
+                # and the gates quarantine it normally. A space-separated
                 # suffix ("2026-W11-1 10:30:00 +05:00" or
                 # "2026-W11-1 10:30:00 Z", the way API and EHR
                 # exports write zoned week-date timestamps with a
@@ -2702,7 +2743,19 @@ def read_claims_csv(path):
                 # suffix alone leaves a trailing space that
                 # strptime rejects, so the space-separated form
                 # quarantined until now while the attached form
-                # governed. A week that does not exist in that year
+                # governed. An AM/PM week-date datetime
+                # ("2026-W11-1 10:30:00 AM", the way exports
+                # write week-date datetimes on a 12-hour clock)
+                # has its marker dropped and normalizes the
+                # same way, as does an AM/PM form carrying a
+                # zone after the marker ("2026-W11-1 10:30:00
+                # PM GMT") or before it ("2026-W11-1
+                # 10:30:00Z AM"); only the date part governs,
+                # so the hour needs no conversion, and a
+                # malformed marker ("10:30:00 XM") or a
+                # malformed zone after the marker ("10:30:00
+                # AM +99:99") is left in place and the gates
+                # quarantine it normally. A week that does not exist in that year
                 # ("2025-W53-1", a 52-week year) or a weekday
                 # outside 1-7 ("2026-W11-8") is
                 # left untouched so the gates quarantine it
@@ -2720,6 +2773,43 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # AM/PM timezone-suffixed week-date datetime:
+                # "2026-W11-1 10:30:00 AM Z" or
+                # "2026-W11-1T09:00:00 PM -04:00", the way
+                # exports write zoned 12-hour week-date
+                # timestamps — the suffix trailing the marker
+                # (a "Z", a well-formed numeric offset, or a
+                # named RFC 2822 zone such as "2026-W11-1
+                # 10:30:00 AM GMT") is dropped first so the
+                # marker strips normally below; the
+                # suffix-before-marker order ("2026-W11-1
+                # 10:30:00Z AM") governs too, via the suffix
+                # strip after the marker strip further down. A
+                # malformed suffix ("10:30:00 AM +99:99") or
+                # an unknown zone ("10:30:00 AM XYZ") is not
+                # stripped, so the marker does not strip
+                # either and the gates quarantine it normally,
+                # as does an impossible date carrying a valid
+                # suffix ("2025-W53-1 10:00:00 AM Z").
+                week_date = re.sub(
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                    r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)$",
+                    r"\1", week_date, flags=re.IGNORECASE)
+                # AM/PM week-date datetime: "2026-W11-1
+                # 10:30:00 AM" or "2026-W11-1 10:30:00.123
+                # AM", the way exports write week-date
+                # datetimes on a 12-hour clock — the marker
+                # (spaced or attached, either case) is dropped
+                # and the remainder parses as a week-date
+                # datetime; only the date part governs, so the
+                # hour itself needs no conversion. A malformed
+                # marker ("10:30:00 XM") is not stripped, so
+                # parsing fails and the gates quarantine it
+                # normally, as does an impossible AM/PM
+                # datetime ("2025-W53-1 10:00:00 AM").
+                week_date = re.sub(
+                    r"\s*(?:AM|PM)$", "", week_date,
+                    flags=re.IGNORECASE).rstrip()
                 if week_date.endswith("Z"):
                     week_date = week_date[:-1]
                 else:
@@ -2728,6 +2818,14 @@ def read_claims_csv(path):
                         week_date)
                     if suffix is not None:
                         week_date = week_date[:-len(suffix.group(1))]
+                    else:
+                        named = re.search(
+                            r"\s+(?:UT|GMT|UTC|EST|EDT|CST|"
+                            r"CDT|MST|MDT|PST|PDT)$",
+                            week_date, flags=re.IGNORECASE)
+                        if named is not None:
+                            week_date = week_date[:-len(
+                                named.group(0))]
                 week_date = week_date.rstrip()
                 iso_year = int(week_date[:4])
                 iso_week = (int(week_date[6:8])

@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-197 stdlib-only tests (Nov 13, 2026, all passing): hash determinism and
+201 stdlib-only tests (Nov 14, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -2171,6 +2171,80 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   zero raw member IDs, zero patient names in all outputs;
   CLI smoke-tested on a named-zone ordinal 11-row CSV: 11
   in, 11 governed, 0 quarantined).
+
+- Nov 14, 2026 build block (3:05 AM run):
+  named RFC 2822 timezone zones on ISO week-date datetimes
+  (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  an ISO week-date datetime carrying a named zone ("2026-W11-1
+  10:30:00 GMT", "2026-W11-1T09:00:00 EST", or a
+  weekday-prefixed "Sunday, 2026-W11-2 10:30:00 GMT", the way
+  email headers write zoned week-date timestamps) now has the
+  zone stripped on read and normalizes to its date part
+  (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; fractional-second, no-seconds, lowercase
+  ("utc"), and compact ("2026W111") forms normalize the same
+  way. Only the RFC 2822 obsolete-zone list plus UTC is
+  accepted — UT, GMT, UTC, EST, EDT, CST, CDT, MST, MDT, PST,
+  PDT — mirroring the ordinal family. This closes the gap the
+  Nov 13 9:05 PM run left open: the named-zone form quarantined
+  until now while the attached "Z" and numeric-offset forms
+  governed (verified by probe before the fix). An unknown zone
+  ("2026-W11-1 10:30:00 XYZ"), a zone-like tail that is not a
+  zone ("2026-W11-1 10:30:00 WEST"), an impossible week
+  carrying a valid zone ("2025-W53-1 10:00:00 GMT"), a weekday
+  outside 1-7 carrying a valid zone ("2026-W11-8 10:30:00
+  GMT"), or a bogus weekday label ("Funday, 2026-W11-1
+  10:30:00 GMT") is left untouched so the gates quarantine it
+  normally; only the date part governs, so no zone is ever
+  converted; the quality gates stay strict and see only the
+  normalized value; 2 new tests (suite now 199, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed,
+  8,411 quarantined, reasons unchanged; runtime 0.534s;
+  governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines,
+  audit counts match the pipeline counts; zero raw member IDs,
+  zero patient names in all outputs; CLI smoke-tested on a
+  named-zone week-date 2-row CSV: 2 in, 1 governed,
+  1 quarantined). Remaining gap noted: AM/PM week-date
+  datetimes ("2026-W11-1 10:30:00 AM", with or without a
+  trailing named zone) still quarantine — the week-date branch
+  has no AM/PM handling yet — for a later run.
+- Nov 14, 2026 build block (9:05 AM run):
+  AM/PM ISO week-date datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  an ISO week-date datetime on a 12-hour clock ("2026-W11-1
+  10:30:00 AM", "2026-W11-1T09:00:00 PM", or a
+  weekday-prefixed "Sunday, 2026-W11-2 09:00:00 pm", the way
+  exports write week-date datetimes with a 12-hour clock) now
+  has its marker dropped on read and normalizes to its date
+  part (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; fractional-second, no-seconds, lowercase
+  ("am"), and compact ("2026W111") forms normalize the same
+  way, as does an AM/PM form carrying a zone after the marker
+  ("2026-W11-1 10:30:00 PM GMT") or before it ("2026-W11-1
+  10:30:00Z AM", "2026-W11-1 10:30:00+05:30 PM"). This closes
+  the gap the Nov 14 3:05 AM run left open: the AM/PM form
+  quarantined until now while the 24-hour forms governed
+  (verified by probe before the fix). A malformed marker
+  ("2026-W11-1 10:30:00 XM"), an unknown zone after the
+  marker ("2026-W11-1 10:30:00 AM XYZ"), a malformed offset
+  after the marker ("2026-W11-1 10:30:00 AM +99:99"), an
+  impossible week carrying a valid marker and zone
+  ("2025-W53-1 10:00:00 AM Z"), a weekday outside 1-7
+  carrying a valid marker ("2026-W11-8 10:30:00 AM"), or a
+  bogus weekday label ("Funday, 2026-W11-1 10:30:00 AM") is
+  left untouched so the gates quarantine it normally; only the
+  date part governs, so the hour needs no conversion; the
+  quality gates stay strict and see only the normalized value;
+  2 new tests (suite now 201, all passing). Demo re-verified
+  same run (10,000 in → 1,589 governed, 8,411 quarantined,
+  reasons unchanged; runtime 0.671s; governed, quarantine,
+  and summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, audit counts match the pipeline
+  counts; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on an AM/PM week-date 2-row CSV:
+  2 in, 1 governed, 1 quarantined).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
