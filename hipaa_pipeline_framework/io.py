@@ -101,7 +101,8 @@ year ("2026366" in 2026, which has 365 days, or "2026000") is
 left untouched so the gates quarantine it normally, as is a
 weekday-prefixed ordinal date with a bogus label ("Funday,
 2026074"); ordinal datetimes ("2026074 10:30:00Z", fractional and
-timezone-suffixed forms, and weekday-prefixed AM/PM forms such as
+timezone-suffixed forms, named RFC 2822 zone forms such as
+"2026074 10:30:00 GMT", and weekday-prefixed AM/PM forms such as
 "Sunday, 2026075 10:30:00 am +05:30") normalize to their date
 part the same way, as do space-separated timezone-suffixed
 ordinal datetimes ("2026074 10:30:00 +05:00", "2026-074
@@ -2429,14 +2430,16 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"(?:\d{7}|\d{4}-\d{3})[ T]\d{2}:\d{2}"
                         r"(?::\d{2})?"
-                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"(?:\d{7}|\d{4}-\d{3})[ T]\d{2}:\d{2}:\d{2}\.\d+"
-                        r"(?: ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d))?",
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2451,7 +2454,8 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"(?:\d{7}|\d{4}-\d{3})[ T]\d{1,2}:\d{2}"
                         r"(?::\d{2})?(?:\.\d+)?\s*(?:AM|PM)\s+"
-                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)",
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2459,7 +2463,8 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"(?:\d{7}|\d{4}-\d{3})[ T]\d{1,2}:\d{2}"
                         r"(?::\d{2})?(?:\.\d+)?"
-                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d)"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Ordinal (Julian) form: YYYYDDD ("2026074") or the
@@ -2521,7 +2526,26 @@ def read_claims_csv(path):
                 # datetime ("2026366 10:00:00 AM Z") or a
                 # malformed suffix ("2026074 10:30:00 AM
                 # +99:99") is left untouched so the gates
-                # quarantine it normally. A day-of-year that is
+                # quarantine it normally. A named RFC 2822
+                # zone on an ordinal datetime ("2026074
+                # 10:30:00 GMT", "2026-074T09:00:00 EST", or
+                # a weekday-prefixed "Sunday, 2026075
+                # 10:30:00 GMT", the way email headers write
+                # zoned ordinal timestamps) has the zone
+                # stripped on read and normalizes to its date
+                # part the same way, so it governs; the same
+                # holds for a named zone trailing the AM/PM
+                # marker ("2026074 10:30:00 AM GMT") and for
+                # the suffix-before-marker order ("2026074
+                # 10:30:00 GMT AM"). Only the RFC 2822
+                # obsolete-zone list plus UTC is accepted (UT,
+                # GMT, UTC, EST, EDT, CST, CDT, MST, MDT,
+                # PST, PDT), so an unknown zone (e.g.
+                # "2026074 10:30:00 XYZ") is left in place
+                # and the gates quarantine it normally, as
+                # does an impossible date carrying a valid
+                # zone (e.g. "2026366 10:00:00 GMT"). A
+                # day-of-year that is
                 # not a real day of that year ("2026366" in
                 # 2026, which has 365 days, or "2026000") is
                 # left untouched so the gates quarantine it
@@ -2545,18 +2569,22 @@ def read_claims_csv(path):
                 # "2026-074T09:00:00 PM -04:00", the way
                 # exports write zoned 12-hour ordinal
                 # timestamps — the suffix trailing the marker
-                # (a "Z", or a well-formed numeric offset) is
-                # dropped first so the marker strips normally
-                # below; the suffix-before-marker order
+                # (a "Z", a well-formed numeric offset, or a
+                # named RFC 2822 zone such as "2026074
+                # 10:30:00 AM GMT") is dropped first so the
+                # marker strips normally below; the
+                # suffix-before-marker order
                 # ("2026074 10:30:00Z AM") governs too, via the
                 # suffix strip after the marker strip further
                 # down. A malformed suffix ("10:30:00 AM
-                # +99:99") is not stripped, so the marker does
+                # +99:99") or an unknown zone ("10:30:00 AM
+                # XYZ") is not stripped, so the marker does
                 # not strip either and the gates quarantine it
                 # normally, as does an impossible date carrying
                 # a valid suffix ("2026366 10:00:00 AM Z").
                 ordinal_date = re.sub(
-                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                    r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)$",
                     r"\1", ordinal_date, flags=re.IGNORECASE)
                 # AM/PM ordinal datetime: "2026074 10:30:00 AM"
                 # or "2026074 10:30:00.123 AM", the way exports
@@ -2581,6 +2609,14 @@ def read_claims_csv(path):
                     if suffix is not None:
                         ordinal_date = ordinal_date[:-len(
                             suffix.group(1))]
+                    else:
+                        named = re.search(
+                            r"\s+(?:UT|GMT|UTC|EST|EDT|CST|"
+                            r"CDT|MST|MDT|PST|PDT)$",
+                            ordinal_date, flags=re.IGNORECASE)
+                        if named is not None:
+                            ordinal_date = ordinal_date[:-len(
+                                named.group(0))]
                 # A space-separated suffix ("2026074 10:30:00
                 # +05:00") leaves a trailing space behind after
                 # the strip above, which strptime rejects, so the
