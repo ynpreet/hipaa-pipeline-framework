@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-203 stdlib-only tests (Nov 14, 2026, all passing): hash determinism and
+211 stdlib-only tests (Nov 15, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -2276,6 +2276,115 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   compact family ("260315 10:30:00" still quarantines) and
   colon-less basic ISO times ("20260315T103000", with or
   without a trailing "Z") — for later runs.
+
+- Nov 14, 2026 build block (9:05 PM run):
+  plain 24-hour two-digit-year compact datetimes
+  (read_claims_csv in hipaa_pipeline_framework/io.py) — a
+  service_date written as a two-digit-year compact datetime
+  with no zone or marker ("031526 10:30:00", "031526T09:00:00",
+  or a weekday-prefixed "Sunday, 031626 10:30:00", the way
+  exports write compact datetimes) now normalizes to its date
+  part (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; no-seconds forms ("031526 10:30",
+  "031526T09:00") normalize the same way, and a leading
+  component above 12 reads day-first ("260315 10:30:00"
+  governs as 2015-03-26). This closes the gap the probe
+  found: every suffixed and marked two-digit-year compact
+  variant governed while the plain form quarantined (verified
+  by probe before the fix) — the guard had no plain
+  alternative, so the plain form never reached the parsers.
+  An impossible plain two-digit-year compact datetime
+  ("023026 10:00:00"), an unknown zone ("031526 10:30:00
+  XYZ"), or a bogus weekday label ("Funday, 031526 10:30:00")
+  is left untouched so the gates quarantine it normally; only
+  the date part governs, so the hour needs no conversion; the
+  quality gates stay strict and see only the normalized value;
+  2 new tests (suite now 205, all passing). Demo re-verified
+  same run (10,000 in → 1,589 governed, 8,411 quarantined,
+  reasons unchanged; runtime 0.421s; governed, quarantine,
+  and summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, audit counts match the pipeline
+  counts; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a plain two-digit-year
+  compact-datetime 2-row CSV: 2 in, 1 governed,
+  1 quarantined). Remaining gap noted: colon-less basic ISO
+  times ("20260315T103000", with or without a trailing "Z") —
+  for a later run.
+
+- Nov 15, 2026 build block (3:05 AM run):
+  colon-less basic ISO times (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as a
+  compact datetime with a colon-less basic ISO time
+  ("20260315T103000", with or without a trailing "Z", the way
+  some API exports write compact datetimes with no colons in the
+  time) now normalizes to its date part (YYYY-MM-DD) and governs
+  instead of quarantining as unparseable_date; a no-seconds form
+  ("20260315T1030"), a fractional-second form
+  ("20260315T103000.123"), a timezone-suffixed form
+  ("20260315T103000+05:30", a colon-less offset
+  "20260315T103000+0530", or a named RFC 2822 zone
+  "20260315T103000 GMT"), and a weekday-prefixed form ("Sunday,
+  20260315T103000") normalize the same way. This closes the gap
+  the Nov 14 9:05 PM run noted: every colon form governed while
+  the colon-less form quarantined (verified by probe before the
+  fix) — the guard had no colon-less alternative, so the value
+  never reached the parsers. An impossible basic ISO datetime
+  ("20260230T103000"), an out-of-range time ("20260315T256000"),
+  or a malformed suffix ("20260315T103000+99:99") is left
+  untouched so the gates quarantine it normally; only the date
+  part governs, so the hour needs no conversion; the quality
+  gates stay strict and see only the normalized value; 2 new
+  tests (suite now 207, all passing). This push also carries the
+  Nov 14 9:05 PM run's plain 24-hour two-digit-year compact
+  datetime block (suite 205), which had not been pushed before
+  — remote head before this push was still the 203-test commit
+  72a1f963. Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime
+  0.436s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines,
+  identical ignoring its timestamp column; zero raw member IDs,
+  zero patient names in all outputs; CLI smoke-tested on a
+  colon-less basic ISO-time 2-row CSV: 2 in, 1 governed,
+  1 quarantined). Remaining gaps noted: a space-separated
+  basic ISO time ("20260315 103000"), an AM/PM basic ISO time
+  ("20260315T103000 AM"), and a two-digit-year compact basic
+  ISO time ("031526T103000") — for later runs.
+
+- Nov 15, 2026 build block (9:05 AM run):
+  space-separated basic ISO times (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as a
+  compact datetime with a space-separated colon-less basic ISO
+  time ("20260315 103000", the way some exports write a compact
+  datetime with a space instead of the "T" separator) now
+  normalizes to its date part (YYYY-MM-DD) and governs instead
+  of quarantining as unparseable_date; a no-seconds form
+  ("20260315 1030"), a fractional-second form
+  ("20260315 103000.123"), a timezone-suffixed form
+  ("20260315 103000Z", "20260315 103000+05:30", a colon-less
+  offset "20260315 103000+0530", or a named RFC 2822 zone
+  "20260315 103000 GMT"), and a weekday-prefixed form ("Sunday,
+  20260316 103000") normalize the same way. This closes the gap
+  the Nov 15 3:05 AM run noted: every T-separated form governed
+  while the space-separated form quarantined (verified by probe
+  before the fix) — the guard had no space-separated
+  alternative, so the value never reached the parsers. An
+  impossible space-separated basic ISO datetime
+  ("20260230 103000"), an out-of-range time ("20260315 256000"),
+  or a malformed suffix ("20260315 103000+99:99") is left
+  untouched so the gates quarantine it normally; only the date
+  part governs, so the hour needs no conversion; the quality
+  gates stay strict and see only the normalized value; 2 new
+  tests (suite now 209, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.389s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines, audit counts match the pipeline
+  counts; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a space-separated basic ISO-time
+  2-row CSV: 2 in, 1 governed, 1 quarantined). Remaining gaps
+  noted: an AM/PM basic ISO time ("20260315T103000 AM") and a
+  two-digit-year compact basic ISO time ("031526T103000") — for
+  later runs.
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

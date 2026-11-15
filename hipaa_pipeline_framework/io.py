@@ -77,6 +77,9 @@ with the time part, only the date part governs), and
 AM/PM timezone-suffixed compact datetimes such as
 "20260315 10:30:00 AM Z" (the suffix trailing the marker is
 dropped first, then the marker, only the date part governs), and
+colon-less basic ISO datetimes such as
+"20260315T103000" or "20260315T103000Z" (the basic ISO 8601 form,
+the time part is dropped, only the date part governs), and
 two-digit-year compact dates such as "031526" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
 2000-2068 and 69-99 as 1969-1999, with the same US-first order), and
@@ -438,7 +441,24 @@ def read_claims_csv(path):
     governs — as does a no-seconds form ("20260315 10:30");
     every suffixed and marked variant governed until now
     while the plain form quarantined (verified by probe
-    before the fix). An impossible plain compact datetime
+    before the fix). A colon-less basic ISO time
+    ("20260315T103000", the basic ISO 8601 datetime form, the way
+    some API exports write compact datetimes with no colons in the
+    time) normalizes the same way — the time part is dropped and
+    only the date part governs — as does a no-seconds form
+    ("20260315T1030"), a fractional-second form
+    ("20260315T103000.123"), a timezone-suffixed form
+    ("20260315T103000Z", "20260315T103000+05:30", a colon-less
+    offset "20260315T103000+0530", or a named RFC 2822 zone
+    "20260315T103000 GMT"), and a weekday-prefixed form
+    ("Sunday, 20260315T103000"); every colon form governed until
+    now while the colon-less form quarantined (verified by probe
+    before the fix) — the guard had no colon-less alternative, so
+    the value never reached the parsers. An impossible basic ISO
+    datetime ("20260230T103000"), an out-of-range time
+    ("20260315T256000"), or a malformed suffix
+    ("20260315T103000+99:99") is left untouched so the gates
+    quarantine it normally. An impossible plain compact datetime
     ("20260230 10:00:00") is left untouched so the gates
     quarantine it normally. An AM/PM compact
     datetime ("20260315 10:30:00 AM", "20260315T09:00:00 PM", or a
@@ -677,6 +697,18 @@ def read_claims_csv(path):
     malformed suffix ("031526 10:30:00+99:99") is left
     untouched so the gates quarantine it normally; the
     quality gates stay strict and see only the normalized value.
+    A plain two-digit-year compact datetime ("031526 10:30:00",
+    "031526T09:00:00", or a weekday-prefixed "Sunday, 031626
+    10:30:00", the way exports write compact datetimes with no
+    zone or marker) normalizes the same way — the time part is
+    dropped and only the date part governs — as does a
+    no-seconds form ("031526 10:30"); every suffixed and marked
+    variant governed until now while the plain form quarantined
+    (verified by probe before the fix). An impossible plain
+    two-digit-year compact datetime ("023026 10:00:00") fails
+    parsing and is left untouched so the gates quarantine it
+    normally, as does a bogus weekday label ("Funday, 031526
+    10:30:00"), which the pattern does not strip.
     A service_date written as a Unix epoch timestamp —
     UTC ("1710460800"), a twelve- or thirteen-digit count of
     milliseconds ("1710460800000"), a fifteen- or
@@ -2135,6 +2167,63 @@ def read_claims_csv(path):
                         r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
                         r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8}T\d{6}(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8}T\d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8} \d{6}(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8} \d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8}[T ](?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8}[T ](?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{8}[T ](?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Compact form: YYYYMMDD (basic ISO 8601, the way
                 # some EHR and API exports write dates), or the
@@ -2202,7 +2291,79 @@ def read_claims_csv(path):
                 # no-seconds form ("20260315 10:30"); every
                 # suffixed and marked variant governed until
                 # now while the plain form quarantined (verified
-                # by probe before the fix). An impossible plain
+                # by probe before the fix). A colon-less basic ISO
+                # time ("20260315T103000", the basic ISO 8601
+                # datetime form, the way some API exports write
+                # compact datetimes with no colons in the time)
+                # normalizes the same way — the time part is
+                # dropped and only the date part governs — as does
+                # a no-seconds form ("20260315T1030"), a
+                # fractional-second form ("20260315T103000.123"),
+                # a timezone-suffixed form ("20260315T103000Z",
+                # "20260315T103000+05:30", a colon-less offset
+                # "20260315T103000+0530", or a named RFC 2822
+                # zone "20260315T103000 GMT"), and a
+                # weekday-prefixed form ("Sunday,
+                # 20260315T103000"); every colon form governed
+                # until now while the colon-less form quarantined
+                # (verified by probe before the fix) — the guard
+                # above had no colon-less alternative, so the
+                # value never reached the parsers. An impossible
+                # basic ISO datetime ("20260230T103000"), an
+                # out-of-range time ("20260315T256000"), or a
+                # malformed suffix ("20260315T103000+99:99") is
+                # left untouched so the gates quarantine it
+                # normally. A space-separated basic ISO time
+                # ("20260315 103000", the way some exports write
+                # a compact datetime with a space instead of
+                # the "T" separator) normalizes the same way —
+                # the time part is dropped and only the date
+                # part governs — as does a no-seconds form
+                # ("20260315 1030"), a fractional-second form
+                # ("20260315 103000.123"), a timezone-suffixed
+                # form ("20260315 103000Z", "20260315
+                # 103000+05:30", a colon-less offset "20260315
+                # 103000+0530", or a named RFC 2822 zone
+                # "20260315 103000 GMT"), and a weekday-prefixed
+                # form ("Sunday, 20260316 103000"); every
+                # T-separated form governed until now while the
+                # space-separated form quarantined (verified by
+                # probe before the fix) — the guard above had no
+                # space-separated alternative, so the value never
+                # reached the parsers. An impossible
+                # space-separated basic ISO datetime
+                # ("20260230 103000"), an out-of-range time
+                # ("20260315 256000"), or a malformed suffix
+                # ("20260315 103000+99:99") is left untouched so
+                # the gates quarantine it normally. An AM/PM basic
+                # ISO time ("20260315T103000 AM", the way some
+                # exports write a compact datetime on a 12-hour
+                # clock with no colons in the time) normalizes
+                # the same way — the marker is dropped and only
+                # the date part governs, so the hour itself needs
+                # no conversion — as does a no-seconds form
+                # ("20260315T1030 AM"), a fractional-second form
+                # ("20260315T103000.123 AM"), a timezone-suffixed
+                # form ("20260315T103000 AM Z", "20260315T103000
+                # AM +05:30", a named RFC 2822 zone
+                # "20260315T103000 AM GMT", or the
+                # suffix-before-marker order "20260315T103000Z
+                # AM"), a space-separated form ("20260315 103000
+                # AM", "20260315 1030 PM"), an attached-marker
+                # form ("20260315T103000am"), and a
+                # weekday-prefixed form ("Sunday, 20260315T103000
+                # AM"); every 24-hour basic ISO form governed
+                # until now while the AM/PM form quarantined
+                # (verified by probe before the fix) — the guard
+                # above had no AM/PM alternative for a colon-less
+                # time, so the value never reached the parsers.
+                # An impossible AM/PM basic ISO datetime
+                # ("20260230T103000 AM"), an out-of-range time
+                # ("20260315T256000 AM"), a malformed suffix
+                # ("20260315T103000 AM +99:99"), an unknown zone
+                # ("20260315T103000 AM XYZ"), or a malformed
+                # marker ("20260315T103000 XM") is left untouched
+                # so the gates quarantine it normally. An impossible plain
                 # compact datetime ("20260230 10:00:00") fails
                 # parsing and is left untouched so the gates
                 # quarantine it normally, as does a bogus
@@ -2283,7 +2444,11 @@ def read_claims_csv(path):
                     for fmt in ("%Y%m%d %H:%M:%S.%f",
                                 "%Y%m%dT%H:%M:%S.%f",
                                 "%Y%m%d %H:%M:%S", "%Y%m%d %H:%M",
-                                "%Y%m%dT%H:%M:%S", "%Y%m%dT%H:%M"):
+                                "%Y%m%dT%H:%M:%S", "%Y%m%dT%H:%M",
+                                "%Y%m%dT%H%M%S.%f",
+                                "%Y%m%dT%H%M%S", "%Y%m%dT%H%M",
+                                "%Y%m%d %H%M%S.%f",
+                                "%Y%m%d %H%M%S", "%Y%m%d %H%M"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 compact_date, fmt).strftime("%Y-%m-%d")
@@ -2304,6 +2469,12 @@ def read_claims_csv(path):
                         r"\d{6}[ T]\d{2}:\d{2}(?::\d{2})?"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
                         r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6}[ T]\d{2}:\d{2}(?::\d{2})?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2363,7 +2534,19 @@ def read_claims_csv(path):
                 # latent trailing-space gap: the month-name,
                 # slash, dot, compact, underscore, and
                 # numeric-hyphen families were all closed by
-                # earlier runs. An impossible date ("023026") or
+                # earlier runs. A plain two-digit-year compact
+                # datetime ("031526 10:30:00", "031526T09:00:00",
+                # or a weekday-prefixed "Sunday, 031626
+                # 10:30:00", the way exports write compact
+                # datetimes with no zone or marker) normalizes
+                # the same way — the time part is dropped and
+                # only the date part governs — as does a
+                # no-seconds form ("031526 10:30"); every
+                # suffixed and marked variant governed until
+                # now while the plain form quarantined (verified
+                # by probe before the fix), because the guard
+                # above had no plain alternative. An impossible
+                # date ("023026") or
                 # a malformed suffix ("031526 10:30:00+99:99")
                 # fails parsing and is left untouched so the
                 # gates quarantine it normally.
