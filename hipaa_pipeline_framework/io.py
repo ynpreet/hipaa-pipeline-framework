@@ -112,7 +112,12 @@ timezone-suffixed forms, named RFC 2822 zone forms such as
 "Sunday, 2026075 10:30:00 am +05:30") normalize to their date
 part the same way, as do space-separated timezone-suffixed
 ordinal datetimes ("2026074 10:30:00 +05:00", "2026-074
-10:30:00 Z"); the quality gates stay strict and see only the
+10:30:00 Z"), and colon-less basic ISO ordinal datetimes such as
+"2026074T103000" (the basic ISO 8601 form on an ordinal date,
+the time part is dropped, only the date part governs), including
+no-seconds, fractional-second, timezone-suffixed, space-separated,
+AM/PM (in both orders), attached-marker, and weekday-prefixed
+forms; the quality gates stay strict and see only the
 normalized value, and
 ISO week dates such as "2026-W11-1" (the ISO 8601 week-date form,
 the way scheduling exports write dates) or "2026W111" (the compact
@@ -131,7 +136,26 @@ space-separated timezone-suffixed week-date datetimes
 AM/PM week-date datetimes ("2026-W11-1 10:30:00 AM", with or
 without a trailing named zone such as "2026-W11-1 10:30:00 PM
 GMT", and with the zone before the marker such as
-"2026-W11-1 10:30:00Z AM"); the quality gates stay
+"2026-W11-1 10:30:00Z AM"); a colon-less basic ISO week-date
+datetime ("2026-W11-1T103000", the basic ISO 8601 form on a week
+date, the way some API exports write week-date datetimes with no
+colons in the time) normalizes the same way — the time part is
+dropped and only the date part governs — as does a no-seconds form
+("2026-W11-1T1030"), a fractional-second form
+("2026-W11-1T103000.123"), a timezone-suffixed form
+("2026-W11-1T103000Z", "2026-W11-1T103000+05:30", a colon-less
+offset "2026-W11-1T103000+0530", or a named RFC 2822 zone
+"2026-W11-1T103000 GMT"), a space-separated form ("2026-W11-1
+103000"), an AM/PM form ("2026-W11-1T103000 AM", including
+suffix-before-marker "2026-W11-1T103000Z AM" and
+marker-before-suffix "2026-W11-1T103000 AM Z"), an attached-marker
+form ("2026-W11-1T103000am"), and a weekday-prefixed form
+("Sunday, 2026-W11-1T103000"), in both week-date spellings; an
+impossible basic ISO week-date datetime ("2025-W53-1T103000"), an
+out-of-range time ("2026-W11-1T256000"), a malformed suffix
+("2026-W11-1T103000+99:99"), an unknown zone ("2026-W11-1T103000
+XYZ"), or a malformed marker ("2026-W11-1T103000 XM") is left
+untouched so the gates quarantine it normally; the quality gates stay
 strict and see only the normalized value, and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
@@ -793,7 +817,28 @@ def read_claims_csv(path):
     while an impossible AM/PM timezone-suffixed ordinal datetime
     ("2026366 10:00:00 AM Z") or a malformed suffix ("2026074
     10:30:00 AM +99:99") is left untouched so the gates quarantine
-    it normally. A service_date
+    it normally. A colon-less basic ISO time on an ordinal date
+    ("2026074T103000", the basic ISO 8601 datetime form on an
+    ordinal date, the way some API exports write ordinal datetimes
+    with no colons in the time) normalizes the same way — the time
+    part is dropped and only the date part governs — as does a
+    no-seconds form ("2026074T1030"), a fractional-second form
+    ("2026074T103000.123"), a timezone-suffixed form
+    ("2026074T103000Z", "2026074T103000+05:30", a colon-less offset
+    "2026074T103000+0530", or a named RFC 2822 zone
+    "2026074T103000 GMT"), a space-separated form ("2026074
+    103000"), an AM/PM form ("2026074T103000 AM", including
+    suffix-before-marker "2026074T103000Z AM" and
+    marker-before-suffix "2026074T103000 AM Z"), an attached-marker
+    form ("2026074T103000am"), and a weekday-prefixed form
+    ("Sunday, 2026074T103000"); every colon form governed until now
+    while the colon-less form quarantined (verified by probe before
+    the fix) — the guard had no colon-less alternative, so the value
+    never reached the parsers. An impossible basic ISO ordinal
+    datetime ("2026366T103000"), an out-of-range time
+    ("2026074T256000"), or a malformed suffix
+    ("2026074T103000+99:99") is left untouched so the gates
+    quarantine it normally. A service_date
     in weekday-prefixed ISO form ("Sunday, 2026-03-15" or
     "Mon, 2026-03-16 10:30:00", the way email-style
     timestamps write dates) has its weekday label stripped
@@ -2781,6 +2826,66 @@ def read_claims_csv(path):
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
                         r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3})T\d{6}(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3})T\d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3}) \d{6}(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3}) \d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3})[T ]"
+                        r"(?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3})[T ]"
+                        r"(?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{7}|\d{4}-\d{3})[T ]"
+                        r"(?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Ordinal (Julian) form: YYYYDDD ("2026074") or the
                 # ISO 8601 ordinal form ("2026-074"), the way
@@ -2939,6 +3044,22 @@ def read_claims_csv(path):
                 ordinal_date = ordinal_date.rstrip()
                 ordinal_year = int(ordinal_date[:4])
                 parsed = None
+                # A colon-less basic ISO time ("2026074T103000",
+                # the basic ISO 8601 datetime form on an ordinal
+                # date) normalizes the same way — the time part
+                # is dropped and only the date part governs — as
+                # do no-seconds, fractional-second,
+                # timezone-suffixed (already stripped above),
+                # space-separated, and AM/PM (already stripped
+                # above) forms, in both ordinal spellings; every
+                # colon form governed until now while the
+                # colon-less form quarantined (verified by probe
+                # before the fix) — the guard had no colon-less
+                # alternative, so the value never reached the
+                # parsers. The year check below rejects a
+                # day-of-year that rolls into the next year
+                # ("2026366" in 2026) the same way it does for
+                # the colon forms.
                 for fmt in ("%Y%j", "%Y-%j"):
                     try:
                         candidate_parsed = datetime.strptime(
@@ -2956,7 +3077,15 @@ def read_claims_csv(path):
                                 "%Y%j %H:%M:%S", "%Y%j %H:%M",
                                 "%Y%jT%H:%M:%S", "%Y%jT%H:%M",
                                 "%Y-%j %H:%M:%S", "%Y-%j %H:%M",
-                                "%Y-%jT%H:%M:%S", "%Y-%jT%H:%M"):
+                                "%Y-%jT%H:%M:%S", "%Y-%jT%H:%M",
+                                "%Y%jT%H%M%S.%f",
+                                "%Y%j %H%M%S.%f",
+                                "%Y-%jT%H%M%S.%f",
+                                "%Y-%j %H%M%S.%f",
+                                "%Y%jT%H%M%S", "%Y%j %H%M%S",
+                                "%Y%jT%H%M", "%Y%j %H%M",
+                                "%Y-%jT%H%M%S", "%Y-%j %H%M%S",
+                                "%Y-%jT%H%M", "%Y-%j %H%M"):
                         try:
                             candidate_parsed = datetime.strptime(
                                 ordinal_date, fmt)
@@ -3017,6 +3146,50 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
                         r"[ T]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
+                        r"[ T]\d{4,6}(?:\.\d+)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
+                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{4}-W\d{2}-[1-7]|\d{4}W\d{2}[1-7])"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
                         r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
@@ -3148,6 +3321,22 @@ def read_claims_csv(path):
                             iso_year, iso_week, 1)
                     except ValueError:
                         parsed = None
+                # A colon-less basic ISO time ("2026-W11-1T103000",
+                # the basic ISO 8601 datetime form on a week date)
+                # normalizes the same way — the time part is
+                # dropped and only the date part governs — as
+                # do no-seconds, fractional-second,
+                # timezone-suffixed (already stripped above),
+                # space-separated, and AM/PM (already stripped
+                # above) forms, in both week-date spellings;
+                # every colon form governed until now while the
+                # colon-less form quarantined (verified by probe
+                # before the fix) — the guard had no colon-less
+                # alternative, so the value never reached the
+                # parsers. The ISO year/week check below rejects
+                # a week that does not exist in that year
+                # ("2025-W53-1") the same way it does for the
+                # colon forms.
                 if parsed is None:
                     for fmt in ("%G-W%V-%u", "%GW%V%u",
                                 "%G-W%V-%u %H:%M:%S.%f",
@@ -3161,7 +3350,19 @@ def read_claims_csv(path):
                                 "%GW%V%u %H:%M:%S",
                                 "%GW%V%u %H:%M",
                                 "%GW%V%uT%H:%M:%S",
-                                "%GW%V%uT%H:%M"):
+                                "%GW%V%uT%H:%M",
+                                "%G-W%V-%uT%H%M%S.%f",
+                                "%G-W%V-%u %H%M%S.%f",
+                                "%GW%V%uT%H%M%S.%f",
+                                "%GW%V%u %H%M%S.%f",
+                                "%G-W%V-%uT%H%M%S",
+                                "%G-W%V-%u %H%M%S",
+                                "%G-W%V-%uT%H%M",
+                                "%G-W%V-%u %H%M",
+                                "%GW%V%uT%H%M%S",
+                                "%GW%V%u %H%M%S",
+                                "%GW%V%uT%H%M",
+                                "%GW%V%u %H%M"):
                         try:
                             candidate_parsed = datetime.strptime(
                                 week_date, fmt)

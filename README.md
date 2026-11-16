@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-213 stdlib-only tests (Nov 15, 2026, all passing): hash determinism and
+217 stdlib-only tests (Nov 16, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -2470,6 +2470,101 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   basic ISO-time 2-row CSV: 2 in, 1 governed, 1 quarantined).
   Remaining gap noted: ordinal basic ISO times ("2026074T103000")
   are unprobed — for a later run.
+
+- Nov 16, 2026 build block (3:05 AM run):
+  ordinal basic ISO datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as an
+  ordinal datetime with a colon-less basic ISO time
+  ("2026074T103000", the basic ISO 8601 form on an ordinal date,
+  the way some API exports write ordinal datetimes with no colons
+  in the time) now normalizes to its date part (YYYY-MM-DD) and
+  governs instead of quarantining as unparseable_date; a
+  no-seconds form ("2026074T1030"), a fractional-second form
+  ("2026074T103000.123"), a timezone-suffixed form
+  ("2026074T103000Z", "2026074T103000+05:30", a colon-less offset
+  "2026074T103000+0530", or a named RFC 2822 zone
+  "2026074T103000 GMT"), a space-separated form ("2026074
+  103000"), an AM/PM form ("2026074T103000 AM", including
+  suffix-before-marker "2026074T103000Z AM" and
+  marker-before-suffix "2026074T103000 AM Z"), an attached-marker
+  form ("2026074T103000am"), and a weekday-prefixed form
+  ("Sunday, 2026074T103000") normalize the same way, as does the
+  ISO ordinal spelling ("2026-074T103000"); only the date part
+  governs, so the hour needs no conversion. This closes the gap
+  the Nov 15 9:05 PM run noted: every colon form governed while
+  the colon-less form quarantined (verified by probe before the
+  fix — 20 valid forms quarantined) — the guard had no colon-less
+  alternative, so the value never reached the parsers; the
+  existing marker/suffix strips and strptime formats already
+  handled the form once the guard let it in, with 12 new basic
+  ISO formats added to the parse list. An impossible basic ISO
+  ordinal datetime ("2026366T103000"), an out-of-range time
+  ("2026074T256000"), a malformed suffix
+  ("2026074T103000+99:99"), an unknown zone
+  ("2026074T103000 XYZ"), or a malformed marker
+  ("2026074T103000 XM") is left untouched so the gates quarantine
+  it normally; the quality gates stay strict and see only the
+  normalized value; 2 new tests (suite now 215, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.455s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines, differing only in its
+  timestamp column; zero raw member IDs, zero patient names in
+  all outputs; CLI smoke-tested on an ordinal basic ISO-time
+  2-row CSV: 2 in, 1 governed, 1 quarantined).
+  Remaining gap noted: week-date basic ISO times
+  ("2026-W11-1T103000") are unprobed — for a later run.
+
+- Nov 16, 2026 build block (9:05 AM run):
+  week-date basic ISO datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as a
+  week-date datetime with a colon-less basic ISO time
+  ("2026-W11-1T103000", the basic ISO 8601 form on a week date,
+  the way some API exports write week-date datetimes with no
+  colons in the time) now normalizes to its date part
+  (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; a no-seconds form ("2026-W11-1T1030"), a
+  fractional-second form ("2026-W11-1T103000.123"), a
+  timezone-suffixed form ("2026-W11-1T103000Z",
+  "2026-W11-1T103000+05:30", a colon-less offset
+  "2026-W11-1T103000+0530", or a named RFC 2822 zone
+  "2026-W11-1T103000 GMT"), a space-separated form
+  ("2026-W11-1 103000"), an AM/PM form
+  ("2026-W11-1T103000 AM", including suffix-before-marker
+  "2026-W11-1T103000Z AM" and marker-before-suffix
+  "2026-W11-1T103000 AM Z"), an attached-marker form
+  ("2026-W11-1T103000am"), and a weekday-prefixed form
+  ("Sunday, 2026-W11-1T103000") normalize the same way, as does
+  the compact week-date spelling ("2026W111T103000"); only the
+  date part governs, so the hour needs no conversion. This
+  closes the gap the Nov 16 3:05 AM run noted: every colon form
+  governed while the colon-less form quarantined (verified by
+  probe before the fix — 19 valid forms quarantined) — the guard
+  had no colon-less alternative, so the value never reached the
+  parsers; the existing marker/suffix strips and strptime formats
+  already handled the form once the guard let it in, with 12 new
+  basic ISO formats added to the parse list. An impossible basic
+  ISO week-date datetime ("2025-W53-1T103000"), an out-of-range
+  time ("2026-W11-1T256000"), a malformed suffix
+  ("2026-W11-1T103000+99:99"), an unknown zone
+  ("2026-W11-1T103000 XYZ"), or a malformed marker
+  ("2026-W11-1T103000 XM") is left untouched so the gates
+  quarantine it normally, as is a week-only form carrying a
+  basic ISO time ("2026-W11T103000", no weekday — the same as
+  the colon form); the quality gates stay strict and see only
+  the normalized value; 2 new tests (suite now 217, all
+  passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime
+  0.501s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines,
+  differing only in its timestamp column; zero raw member IDs,
+  zero patient names in all outputs; CLI smoke-tested on a
+  week-date basic ISO-time 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+  Remaining gap noted: a week-only date carrying a time
+  ("2026-W11 10:30:00" or "2026W11T103000") is unprobed — the
+  bare week-only date governs, but with a time it quarantines —
+  for a later run.
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
