@@ -2665,6 +2665,50 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   1 quarantined). Remaining gap noted: a two-digit-year compact
   basic ISO time ("031526T103000") — for a later run.
 
+- Nov 15, 2026 build block (9:05 PM run):
+  two-digit-year compact basic ISO datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as a
+  two-digit-year compact datetime with a colon-less basic ISO time
+  ("031526T103000", the basic ISO 8601 form on a two-digit-year
+  date, the way some API exports write legacy compact datetimes
+  with no colons in the time) now normalizes to its date part
+  (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date; a no-seconds form ("031526T1030"), a
+  fractional-second form ("031526T103000.123"), a
+  timezone-suffixed form ("031526T103000Z",
+  "031526T103000+05:30", a colon-less offset "031526T103000+0530",
+  or a named RFC 2822 zone "031526T103000 GMT"), a
+  space-separated form ("031526 103000"), an AM/PM form
+  ("031526T103000 AM", including suffix-before-marker
+  "031526T103000Z AM" and marker-before-suffix "031526T103000 AM
+  Z"), a day-first form ("150326T103000" governs as 2026-03-15),
+  and a weekday-prefixed form ("Sunday, 031626T103000") normalize
+  the same way; the two-digit year follows Python's %y pivot, so
+  "031599T103000" governs as 1999-03-15; only the date part
+  governs, so the hour needs no conversion. This closes the gap
+  the Nov 15 3:05 PM run noted: every colon form governed while
+  the colon-less form quarantined (verified by probe before the
+  fix — 23 valid forms quarantined) — the guard had no colon-less
+  alternative, so the value never reached the parsers; the
+  existing marker/suffix strips and strptime formats already
+  handled the form once the guard let it in, with 12 new basic
+  ISO formats added to the parse list. An impossible basic ISO
+  datetime ("023026T103000"), an out-of-range time
+  ("031526T256000"), a malformed suffix ("031526T103000+99:99"),
+  an unknown zone ("031526T103000 XYZ"), or a malformed marker
+  ("031526T103000 XM") is left untouched so the gates quarantine
+  it normally; the quality gates stay strict and see only the
+  normalized value; 2 new tests (suite now 213, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.594s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines, differing only in its
+  timestamp column; zero raw member IDs, zero patient names in
+  all outputs; CLI smoke-tested on a two-digit-year compact
+  basic ISO-time 2-row CSV: 2 in, 1 governed, 1 quarantined).
+  Remaining gap noted: ordinal basic ISO times ("2026074T103000")
+  are unprobed — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

@@ -83,6 +83,9 @@ the time part is dropped, only the date part governs), and
 two-digit-year compact dates such as "031526" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
 2000-2068 and 69-99 as 1969-1999, with the same US-first order), and
+two-digit-year compact basic ISO datetimes such as "031526T103000"
+(the basic ISO 8601 form on a two-digit-year date, the time part is
+dropped, only the date part governs), and
 Unix epoch timestamps such as "1710460800" (seconds, nine or ten
 digits), "1710460800000" (milliseconds, twelve or thirteen
 digits), "1710460800000000" (microseconds, fifteen or sixteen
@@ -708,7 +711,16 @@ def read_claims_csv(path):
     two-digit-year compact datetime ("023026 10:00:00") fails
     parsing and is left untouched so the gates quarantine it
     normally, as does a bogus weekday label ("Funday, 031526
-    10:30:00"), which the pattern does not strip.
+    10:30:00"), which the pattern does not strip. A colon-less
+    basic ISO time on a two-digit-year date ("031526T103000",
+    "031526 103000", no-seconds, fractional-second, and
+    timezone-suffixed forms, AM/PM forms in both orders, and
+    weekday-prefixed forms) normalizes the same way — the time
+    part is dropped and only the date part governs — while an
+    impossible basic ISO datetime ("023026T103000"), an
+    out-of-range time ("031526T256000"), or a malformed suffix
+    ("031526T103000+99:99") is left untouched so the gates
+    quarantine it normally.
     A service_date written as a Unix epoch timestamp —
     UTC ("1710460800"), a twelve- or thirteen-digit count of
     milliseconds ("1710460800000"), a fifteen- or
@@ -2508,6 +2520,63 @@ def read_claims_csv(path):
                         r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
                         r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6}T\d{6}(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6}T\d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6} \d{6}(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6} \d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6}[T ](?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6}[T ](?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{6}[T ](?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Two-digit-year compact form: MMDDYY or DDMMYY
                 # ("031526" or "150326", the way legacy mainframe
@@ -2549,7 +2618,29 @@ def read_claims_csv(path):
                 # date ("023026") or
                 # a malformed suffix ("031526 10:30:00+99:99")
                 # fails parsing and is left untouched so the
-                # gates quarantine it normally.
+                # gates quarantine it normally. A colon-less basic ISO time
+                # ("031526T103000", the basic ISO 8601 datetime form on a
+                # two-digit-year date, the way some API exports write
+                # compact datetimes with no colons in the time) normalizes
+                # the same way — the time part is dropped and only the date
+                # part governs — as does a no-seconds form ("031526T1030"),
+                # a fractional-second form ("031526T103000.123"), a
+                # timezone-suffixed form ("031526T103000Z",
+                # "031526T103000+05:30", a colon-less offset
+                # "031526T103000+0530", or a named RFC 2822 zone
+                # "031526T103000 GMT"), a space-separated form ("031526
+                # 103000"), an AM/PM form ("031526T103000 AM", including
+                # suffix-before-marker "031526T103000Z AM" and
+                # marker-before-suffix "031526T103000 AM Z"), a day-first
+                # form ("150326T103000" governs as 2026-03-15), and a
+                # weekday-prefixed form ("Sunday, 031626T103000"); every
+                # colon form governed until now while the colon-less form
+                # quarantined (verified by probe before the fix) — the guard
+                # above had no colon-less alternative, so the value never
+                # reached the parsers. An impossible basic ISO datetime
+                # ("023026T103000"), an out-of-range time ("031526T256000"),
+                # or a malformed suffix ("031526T103000+99:99") is left
+                # untouched so the gates quarantine it normally.
                 short_compact_date = re.sub(
                     r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
@@ -2625,7 +2716,15 @@ def read_claims_csv(path):
                                 "%m%d%y %H:%M:%S", "%m%d%y %H:%M",
                                 "%m%d%yT%H:%M:%S", "%m%d%yT%H:%M",
                                 "%d%m%y %H:%M:%S", "%d%m%y %H:%M",
-                                "%d%m%yT%H:%M:%S", "%d%m%yT%H:%M"):
+                                "%d%m%yT%H:%M:%S", "%d%m%yT%H:%M",
+                                "%m%d%yT%H%M%S.%f",
+                                "%m%d%y %H%M%S.%f",
+                                "%d%m%yT%H%M%S.%f",
+                                "%d%m%y %H%M%S.%f",
+                                "%m%d%yT%H%M%S", "%m%d%y %H%M%S",
+                                "%m%d%yT%H%M", "%m%d%y %H%M",
+                                "%d%m%yT%H%M%S", "%d%m%y %H%M%S",
+                                "%d%m%yT%H%M", "%d%m%y %H%M"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 short_compact_date, fmt).strftime("%Y-%m-%d")
