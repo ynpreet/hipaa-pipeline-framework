@@ -2847,6 +2847,39 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   ("2026W11", no hyphen, no time) still quarantines while the
   hyphenated form ("2026-W11") governs — for a later run.
 
+- Nov 17, 2026 build block (3:05 AM run):
+  compact week-only dates (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as a
+  bare compact week alone ("2026W11", the way some scheduling
+  exports write a week with no hyphen and no time) now normalizes
+  to the Monday of that week (YYYY-MM-DD) and governs instead of
+  quarantining as unparseable_date, as does a weekday-prefixed
+  compact week-only date ("Sunday, 2026W11"); a 53-week year
+  ("2020W53") governs as 2020-12-28 and a week 1 that starts in
+  the prior year ("2026W01") governs as 2025-12-29. This closes
+  the gap the Nov 16 9:05 PM run noted: the bare compact week-only
+  date quarantined while the hyphenated form ("2026-W11") governed
+  (verified by probe before the fix — 5 valid forms quarantined)
+  — the guard had no compact week-only alternative and the parser
+  only took the hyphenated form, so the value never reached
+  fromisocalendar. An impossible compact week-only date
+  ("2025W53", a 52-week year), a week outside 1-53 ("2026W00",
+  "2026W54"), a weekday-prefixed compact week-only date with a
+  bogus label ("Funday, 2026W11"), or a short week ("2026W1") is
+  left untouched so the gates quarantine it normally; the quality
+  gates stay strict and see only the normalized value; 2 new tests
+  (suite now 222, all passing). Demo re-verified same run (10,000
+  in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+  runtime 0.484s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines and
+  audit.jsonl 10,000 lines, each identical ignoring the timestamp
+  column across repeat runs; zero raw member IDs, zero patient
+  names in all outputs; CLI smoke-tested on a compact week-only
+  2-row CSV: 2 in, 1 governed, 1 quarantined).
+  Remaining gap noted: two-digit-year week dates ("26W111",
+  "26-W11-1", "26W11", "26-W11") still quarantine — probed this
+  run, 0 of 6 two-digit-year week forms govern — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

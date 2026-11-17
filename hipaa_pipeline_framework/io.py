@@ -121,7 +121,8 @@ forms; the quality gates stay strict and see only the
 normalized value, and
 ISO week dates such as "2026-W11-1" (the ISO 8601 week-date form,
 the way scheduling exports write dates) or "2026W111" (the compact
-form) or "2026-W11" (the week alone, its Monday) — the ISO week
+form) or "2026-W11" (the week alone, its Monday) or "2026W11" (the compact
+week-only form, the way some scheduling exports write a bare week) — the ISO week
 and weekday convert to their calendar date (YYYY-MM-DD) and govern
 instead of quarantining as unparseable_date; a week that does not
 exist in that year ("2025-W53-1", a 52-week year) or a weekday
@@ -3114,11 +3115,12 @@ def read_claims_csv(path):
                     re.fullmatch(r"\d{4}-W\d{2}-[1-7]", date)
                     or re.fullmatch(r"\d{4}W\d{2}[1-7]", date)
                     or re.fullmatch(r"\d{4}-W\d{2}", date)
+                    or re.fullmatch(r"\d{4}W\d{2}", date)
                     or re.fullmatch(
                         r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                         r"Thu|Fri|Sat|Sun)[,\s]+(?:\d{4}-W\d{2}-[1-7]|"
-                        r"\d{4}W\d{2}[1-7]|\d{4}-W\d{2})",
+                        r"\d{4}W\d{2}[1-7]|\d{4}-W\d{2}|\d{4}W\d{2})",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3417,7 +3419,14 @@ def read_claims_csv(path):
                             if week_date[4] == "-"
                             else int(week_date[5:7]))
                 parsed = None
-                if re.fullmatch(r"\d{4}-W\d{2}", week_date):
+                # A week alone, in either spelling ("2026-W11" or
+                # "2026W11"), is its Monday — the compact bare week
+                # quarantined until now while the hyphenated form
+                # governed (verified by probe before the fix): the
+                # guard had no compact week-only alternative and
+                # the parser below only took the hyphenated form.
+                if (re.fullmatch(r"\d{4}-W\d{2}", week_date)
+                        or re.fullmatch(r"\d{4}W\d{2}", week_date)):
                     try:
                         parsed = datetime.fromisocalendar(
                             iso_year, iso_week, 1)
