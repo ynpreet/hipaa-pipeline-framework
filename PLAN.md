@@ -2799,10 +2799,53 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   zero patient names in all outputs; CLI smoke-tested on a
   week-date basic ISO-time 2-row CSV: 2 in, 1 governed,
   1 quarantined).
-  Remaining gap noted: a week-only date carrying a time
-  ("2026-W11 10:30:00" or "2026W11T103000") is unprobed — the
-  bare week-only date governs, but with a time it quarantines —
-  for a later run.
+
+- Nov 16, 2026 build block (9:05 PM run):
+  week-only datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as a
+  week alone carrying a time ("2026-W11 10:30:00", the way
+  scheduling exports write a week with a timestamp) now
+  normalizes to the Monday of that week (YYYY-MM-DD) and governs
+  instead of quarantining as unparseable_date; a no-seconds form
+  ("2026-W11 10:30"), a fractional-second form
+  ("2026-W11 10:30:00.123"), a timezone-suffixed form
+  ("2026-W11 10:30:00Z", "2026-W11 10:30:00 +05:30", or a named
+  RFC 2822 zone "2026-W11 10:30:00 GMT"), an AM/PM form
+  ("2026-W11 10:30:00 AM", including suffix-before-marker
+  "2026-W11 10:30:00Z AM" and marker-before-suffix
+  "2026-W11 10:30:00 PM GMT"), a weekday-prefixed form
+  ("Sunday, 2026-W11 10:30:00"), and the compact week-only
+  spelling ("2026W11 10:30:00", "2026W11T10:30:00") normalize
+  the same way, as does the colon-less basic ISO form
+  ("2026-W11T103000", including no-seconds, fractional-second,
+  timezone-suffixed, space-separated, AM/PM in both orders, and
+  attached-marker "2026-W11T103000am" variants); only the date
+  part governs, so the hour needs no conversion. This closes the
+  gap the Nov 16 9:05 AM run noted: the bare week-only date
+  governed while a week carrying a time quarantined (verified by
+  probe before the fix — 32 valid forms quarantined) — the guard
+  had no week-only datetime alternative, so the value never
+  reached the parsers; the time part is now parsed only to
+  validate it, and the Monday comes from fromisocalendar. An
+  impossible week-only datetime ("2025-W53 10:30:00"), an
+  out-of-range time ("2026-W11 25:60:00"), a malformed suffix
+  ("2026-W11 10:30:00+99:99"), an unknown zone
+  ("2026-W11 10:30:00 XYZ"), or a malformed marker
+  ("2026-W11 10:30:00 XM") is left untouched so the gates
+  quarantine it normally; the quality gates stay strict and see
+  only the normalized value; 3 new tests (suite now 220, all
+  passing), and the earlier negative test no longer lists
+  "2026-W11T103000" as quarantining — it now governs. Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.580s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  each differing only in its timestamp column; zero raw member
+  IDs, zero patient names in all outputs; CLI smoke-tested on a
+  week-only datetime 2-row CSV: 2 in, 1 governed, 1 quarantined).
+  Remaining gap noted: the bare compact week-only date
+  ("2026W11", no hyphen, no time) still quarantines while the
+  hyphenated form ("2026-W11") governs — for a later run.
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
