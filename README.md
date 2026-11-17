@@ -2676,6 +2676,55 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   quarantine — probed this run, 0 of 6 forms govern — for a later
   run.
 
+- Nov 17, 2026 build block (3:05 PM run):
+  two-digit-year week-date datetimes (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as a
+  week-date datetime with a two-digit year ("26-W11-1 10:30:00",
+  the colon form, or the colon-less basic form "26W111T103000",
+  the way legacy exports write week-date datetimes) now
+  normalizes to its date part (YYYY-MM-DD) and governs instead of
+  quarantining as unparseable_date, as do fractional-second,
+  timezone-suffixed, space-separated, and AM/PM forms (including
+  suffix-before-marker "26-W11-1 10:30:00Z AM" and
+  marker-before-suffix "26-W11-1 10:30:00 PM GMT"), attached-marker
+  forms ("26W111T103000am"), and weekday-prefixed forms
+  ("Sunday, 26-W11-1 10:30:00"), in both week-date spellings; a
+  week-only datetime ("26-W11 10:30:00" or "26W11 10:30:00")
+  governs as its Monday the same way. The two-digit year follows
+  Python's %y pivot (00-68 read as 2000-2068, 69-99 as
+  1969-1999), taken from strptime itself so it cannot drift from
+  the other two-digit-year forms, and the date part parses via
+  fromisocalendar, so no %y/%G strptime mix is needed. This closes
+  the gap the Nov 17 9:05 AM run noted: two-digit-year week-date
+  datetimes quarantined while the four-digit forms governed
+  (verified by probe before the fix — 0 of 6 forms governed) —
+  the guard had no two-digit-year datetime alternatives, so the
+  values never reached the parser. An impossible two-digit-year
+  week-date datetime ("25-W53-1 10:00:00", a 52-week year), an
+  out-of-range time ("26-W11-1 25:60:00", "26W111T256000"), a
+  malformed suffix ("26-W11-1 10:30:00+99:99"), an unknown zone
+  ("26-W11-1 10:30:00 XYZ"), a malformed marker ("26-W11-1
+  10:30:00 XM"), or a weekday-prefixed week-date datetime with a
+  bogus label ("Funday, 26-W11-1 10:30:00") is left untouched so
+  the gates quarantine it normally; the date-only fallback is
+  gated on the value still being a bare date after stripping, so
+  a datetime whose time failed validation cannot fall through
+  and govern as a bare date; the quality gates stay strict and see
+  only the normalized value; 2 new tests (suite now 226, all
+  passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.488s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  each identical ignoring the timestamp column across repeat runs;
+  zero raw member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a two-digit-year week-date datetime 2-row CSV:
+  2 in, 1 governed, 1 quarantined).
+  Remaining gap noted: two-digit-year ordinal dates ("26-074",
+  "26074") and their datetimes ("26-074 10:30:00") still
+  quarantine — probed this run, 0 of 3 forms govern — for a later
+  run.
+
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
 - Records in: 10,000

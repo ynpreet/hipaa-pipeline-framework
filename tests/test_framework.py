@@ -3272,6 +3272,70 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.BAD_DATE: 6})
 
+    def test_read_claims_csv_normalizes_two_digit_year_week_datetimes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,26-W11-1 10:30:00,120.50\n"
+                            "M-100002,26W111T103000,200.00\n"
+                            "M-100003,26-W11 10:30:00,310.00\n"
+                            "M-100004,26W11 10:30:00,410.00\n"
+                            "M-100005,26-W11-1T10:30:00,510.00\n"
+                            "M-100006,26-W11-1 10:30:00.123,610.00\n"
+                            "M-100007,26-W11-1 10:30:00Z,710.00\n"
+                            "M-100008,26-W11-1 10:30:00 +05:00,810.00\n"
+                            "M-100009,26-W11-1 10:30:00 GMT,910.00\n"
+                            "M-100010,26-W11-1 10:30:00 AM,1010.00\n"
+                            "M-100011,26-W11-1 10:30:00 PM GMT,1110.00\n"
+                            "M-100012,26-W11-1 10:30:00Z AM,1210.00\n"
+                            "M-100013,26W111T103000am,1310.00\n"
+                            "M-100014,\"Sunday, 26-W11-1 10:30:00\",1410.00\n"
+                            "M-100015,26-W11T103000,1510.00\n"
+                            "M-100016,26-W11 10:30,1610.00\n"
+                            "M-100017,99-W01-1 10:30:00,1710.00\n"
+                            "M-100018,69W111T103000,1810.00\n"
+                            "M-100019,26-W11-1T1030,1910.00\n"
+                            "M-100020,26-W11 10:30:00.123 +05:30,2010.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 20)
+            # A two-digit-year week-date datetime governs as its
+            # calendar date; a week-only datetime governs as its
+            # Monday; the time part is dropped, only the date part
+            # governs.
+            self.assertEqual(
+                [row["service_date"] for row in rows],
+                ["2026-03-09", "2026-03-09", "2026-03-09",
+                 "2026-03-09", "2026-03-09", "2026-03-09",
+                 "2026-03-09", "2026-03-09", "2026-03-09",
+                 "2026-03-09", "2026-03-09", "2026-03-09",
+                 "2026-03-09", "2026-03-09", "2026-03-09",
+                 "2026-03-09", "1999-01-04", "1969-03-10",
+                 "2026-03-09", "2026-03-09"])
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 20)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_two_digit_year_week_datetimes_still_quarantine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,25-W53-1 10:00:00,120.50\n"
+                            "M-100002,26-W11-1 25:60:00,200.00\n"
+                            "M-100003,26W111T256000,310.00\n"
+                            "M-100004,26-W11-1 10:30:00+99:99,410.00\n"
+                            "M-100005,26-W11-1 10:30:00 XYZ,510.00\n"
+                            "M-100006,26-W11-1 10:30:00 XM,610.00\n"
+                            "M-100007,25-W53 10:30:00,710.00\n"
+                            "M-100008,26-W11 25:60:00,810.00\n"
+                            "M-100009,\"Funday, 26-W11-1 10:30:00\",910.00\n"
+                            "M-100010,26-W11-1 10:30:00 AM +99:99,1010.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 10)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 10)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 10})
+
     def test_read_claims_csv_normalizes_ampm_basic_iso_datetimes(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"

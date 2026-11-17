@@ -182,7 +182,18 @@ governs as 1999-01-04 and "69W111" as 1969-03-10, while a week that does not
 exist in that year ("25-W53-1", a 52-week year), a weekday outside 1-7
 ("26-W11-8"), a week outside 1-53 ("26-W00", "26-W54"), a short week ("26-W1"),
 or a weekday-prefixed week date with a bogus label ("Funday, 26-W11-1") is left
-untouched so the gates quarantine it normally; the quality gates stay strict and
+untouched so the gates quarantine it normally; two-digit-year week-date
+datetimes ("26-W11-1 10:30:00", the colon form, or the colon-less basic form
+"26W111T103000", the way legacy exports write week-date datetimes with a
+two-digit year) normalize the same way — the time part is dropped and only the
+date part governs — as do fractional-second, timezone-suffixed, space-separated,
+and AM/PM forms, in both week-date spellings, and week-only datetimes
+("26-W11 10:30:00", its Monday, the way legacy exports write a week with a
+timestamp); an impossible two-digit-year week-date datetime ("25-W53-1
+10:00:00"), an out-of-range time ("26-W11-1 25:60:00"), a malformed suffix
+("26-W11-1 10:30:00+99:99"), an unknown zone ("26-W11-1 10:30:00 XYZ"), or a
+malformed marker ("26-W11-1 10:30:00 XM") is left untouched so the gates
+quarantine it normally; the quality gates stay strict and
 see only the normalized value, and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
@@ -3550,6 +3561,182 @@ def read_claims_csv(path):
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                         r"Thu|Fri|Sat|Sun)[,\s]+(?:\d{2}-W\d{2}-[1-7]|"
                         r"\d{2}W\d{2}[1-7]|\d{2}-W\d{2}|\d{2}W\d{2})",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}-[1-7]|\d{2}W\d{2}[1-7])"
+                        r"[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}-[1-7]|\d{2}W\d{2}[1-7])"
+                        r"[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}-[1-7]|\d{2}W\d{2}[1-7])"
+                        r"[ T]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}-[1-7]|\d{2}W\d{2}[1-7])"
+                        r"[ T]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}-[1-7]|\d{2}W\d{2}[1-7])"
+                        r"[ T]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PDT))"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}-[1-7]|\d{2}W\d{2}[1-7])"
+                        r"[ T]\d{4,6}(?:\.\d+)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}-[1-7]|\d{2}W\d{2}[1-7])"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
+                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}-[1-7]|\d{2}W\d{2}[1-7])"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}-[1-7]|\d{2}W\d{2}[1-7])"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}-[1-7]|\d{2}W\d{2}[1-7])"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}|\d{2}W\d{2})"
+                        r"[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}|\d{2}W\d{2})"
+                        r"[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}|\d{2}W\d{2})"
+                        r"[ T]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}|\d{2}W\d{2})"
+                        r"[ T]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}|\d{2}W\d{2})"
+                        r"[ T]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}|\d{2}W\d{2})"
+                        r"[ T]\d{4,6}(?:\.\d+)?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}|\d{2}W\d{2})"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
+                        r" ?(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}|\d{2}W\d{2})"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}|\d{2}W\d{2})"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{2}-W\d{2}|\d{2}W\d{2})"
+                        r"[ T]\d{4,6}(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Two-digit-year ISO week dates: "26-W11-1" (the
                 # hyphenated week-date form), "26W111" (the compact
@@ -3584,20 +3771,152 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
-                iso_year = datetime.strptime(week_date[:2], "%y").year
-                if week_date[2] == "-":
-                    iso_week = int(week_date[4:6])
-                    iso_weekday = (int(week_date[7])
-                                   if len(week_date) == 8 else 1)
+                # A two-digit-year week-date datetime ("26-W11-1
+                # 10:30:00", the colon form, or the colon-less basic
+                # form "26W111T103000", the way legacy exports write
+                # week-date datetimes with a two-digit year) has its
+                # suffix and marker stripped the same way as the
+                # four-digit forms above — an AM/PM form carrying a
+                # zone after the marker ("26-W11-1 10:30:00 PM GMT")
+                # or before it ("26-W11-1 10:30:00Z AM"), a
+                # space-separated suffix ("26-W11-1 10:30:00
+                # +05:00"), a named RFC 2822 zone ("26-W11-1
+                # 10:30:00 GMT"), and an attached marker
+                # ("26W111T103000am") all strip to the bare
+                # datetime; only the date part governs, so the hour
+                # needs no conversion. The time part is parsed only
+                # to validate it: an out-of-range time ("26-W11-1
+                # 25:60:00") or a week that does not exist in that
+                # year ("25-W53-1 10:00:00") leaves parsed unset so
+                # the gates quarantine it normally, as does a
+                # malformed marker ("26-W11-1 10:30:00 XM"), a
+                # malformed suffix ("26-W11-1 10:30:00+99:99"), or
+                # an unknown zone ("26-W11-1 10:30:00 XYZ"), which
+                # the guard does not match. The two-digit year is
+                # taken from strptime's %y pivot, the same pivot
+                # the date-only forms use, and the date part parses
+                # via fromisocalendar, so no %y/%G strptime mix is
+                # needed. A week-only date carrying a time
+                # ("26-W11 10:30:00") normalizes the same way — the
+                # time part is dropped and only the Monday of that
+                # week governs.
+                week_date = re.sub(
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                    r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)$",
+                    r"\1", week_date, flags=re.IGNORECASE)
+                week_date = re.sub(
+                    r"\s*(?:AM|PM)$", "", week_date,
+                    flags=re.IGNORECASE).rstrip()
+                if week_date.endswith("Z"):
+                    week_date = week_date[:-1]
                 else:
-                    iso_week = int(week_date[3:5])
-                    iso_weekday = (int(week_date[5])
-                                   if len(week_date) == 6 else 1)
-                try:
-                    parsed = datetime.fromisocalendar(
-                        iso_year, iso_week, iso_weekday)
-                except ValueError:
-                    parsed = None
+                    suffix = re.search(
+                        r"([+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                        week_date)
+                    if suffix is not None:
+                        week_date = week_date[:-len(suffix.group(1))]
+                    else:
+                        named = re.search(
+                            r"\s+(?:UT|GMT|UTC|EST|EDT|CST|"
+                            r"CDT|MST|MDT|PST|PDT)$",
+                            week_date, flags=re.IGNORECASE)
+                        if named is not None:
+                            week_date = week_date[:-len(
+                                named.group(0))]
+                week_date = week_date.rstrip()
+                iso_year = datetime.strptime(week_date[:2], "%y").year
+                parsed = None
+                week_datetime = re.fullmatch(
+                    r"\d{2}-W\d{2}-[1-7][ T]"
+                    r"(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|"
+                    r"\d{4,6}(?:\.\d+)?)",
+                    week_date)
+                if week_datetime is None:
+                    week_datetime = re.fullmatch(
+                        r"\d{2}W\d{2}[1-7][ T]"
+                        r"(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|"
+                        r"\d{4,6}(?:\.\d+)?)",
+                        week_date)
+                if week_datetime is not None:
+                    time_valid = None
+                    for time_fmt in ("%H:%M:%S.%f", "%H:%M:%S",
+                                    "%H:%M", "%H%M%S.%f",
+                                    "%H%M%S", "%H%M"):
+                        try:
+                            time_valid = datetime.strptime(
+                                week_datetime.group(1), time_fmt)
+                            break
+                        except ValueError:
+                            continue
+                    if time_valid is not None:
+                        iso_week = (int(week_date[4:6])
+                                    if week_date[2] == "-"
+                                    else int(week_date[3:5]))
+                        iso_weekday = (int(week_date[7])
+                                       if week_date[2] == "-"
+                                       else int(week_date[5]))
+                        try:
+                            parsed = datetime.fromisocalendar(
+                                iso_year, iso_week, iso_weekday)
+                        except ValueError:
+                            parsed = None
+                if parsed is None:
+                    week_only_datetime = re.fullmatch(
+                        r"\d{2}-W\d{2}[ T]"
+                        r"(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|"
+                        r"\d{4,6}(?:\.\d+)?)",
+                        week_date)
+                    if week_only_datetime is None:
+                        week_only_datetime = re.fullmatch(
+                            r"\d{2}W\d{2}[ T]"
+                            r"(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|"
+                            r"\d{4,6}(?:\.\d+)?)",
+                            week_date)
+                    if week_only_datetime is not None:
+                        time_valid = None
+                        for time_fmt in ("%H:%M:%S.%f", "%H:%M:%S",
+                                        "%H:%M", "%H%M%S.%f",
+                                        "%H%M%S", "%H%M"):
+                            try:
+                                time_valid = datetime.strptime(
+                                    week_only_datetime.group(1),
+                                    time_fmt)
+                                break
+                            except ValueError:
+                                continue
+                        if time_valid is not None:
+                            iso_week = (int(week_date[4:6])
+                                        if week_date[2] == "-"
+                                        else int(week_date[3:5]))
+                            try:
+                                parsed = datetime.fromisocalendar(
+                                    iso_year, iso_week, 1)
+                            except ValueError:
+                                parsed = None
+                if parsed is None and (
+                        re.fullmatch(r"\d{2}-W\d{2}-[1-7]", week_date)
+                        or re.fullmatch(r"\d{2}W\d{2}[1-7]", week_date)
+                        or re.fullmatch(r"\d{2}-W\d{2}", week_date)
+                        or re.fullmatch(r"\d{2}W\d{2}", week_date)):
+                    # Date-only forms only: a datetime whose time
+                    # failed validation above ("26-W11-1 25:60:00")
+                    # must not fall through here — the position-based
+                    # parse below would read its week and govern it
+                    # as a bare date, so the fallback is gated on the
+                    # value still being a bare date after stripping.
+                    if week_date[2] == "-":
+                        iso_week = int(week_date[4:6])
+                        iso_weekday = (int(week_date[7])
+                                       if len(week_date) == 8 else 1)
+                    else:
+                        iso_week = int(week_date[3:5])
+                        iso_weekday = (int(week_date[5])
+                                       if len(week_date) == 6 else 1)
+                    try:
+                        parsed = datetime.fromisocalendar(
+                            iso_year, iso_week, iso_weekday)
+                    except ValueError:
+                        parsed = None
                 if parsed is not None:
                     cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
             elif isinstance(date, str) and date.isdigit() and (
