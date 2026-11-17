@@ -171,7 +171,19 @@ week-only datetime ("2025-W53 10:30:00"), an out-of-range time
 ("2026-W11 25:60:00"), a malformed suffix ("2026-W11 10:30:00+99:99"), an
 unknown zone ("2026-W11 10:30:00 XYZ"), or a malformed marker
 ("2026-W11 10:30:00 XM") is left untouched so the gates quarantine it normally;
-the quality gates stay strict and see only the normalized value, and
+two-digit-year ISO week dates such as "26-W11-1" (the hyphenated week-date form),
+"26W111" (the compact form), "26-W11" (the week alone, its Monday), or "26W11"
+(the compact week-only form, the way legacy exports write week dates with a
+two-digit year) normalize the same way — the ISO week and weekday convert to
+their calendar date and govern instead of quarantining as unparseable_date — as
+does a weekday-prefixed form ("Sunday, 26-W11-1"); the two-digit year follows
+Python's %y pivot (00-68 read as 2000-2068, 69-99 as 1969-1999), so "99-W01-1"
+governs as 1999-01-04 and "69W111" as 1969-03-10, while a week that does not
+exist in that year ("25-W53-1", a 52-week year), a weekday outside 1-7
+("26-W11-8"), a week outside 1-53 ("26-W00", "26-W54"), a short week ("26-W1"),
+or a weekday-prefixed week date with a bogus label ("Funday, 26-W11-1") is left
+untouched so the gates quarantine it normally; the quality gates stay strict and
+see only the normalized value, and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
 weekday-prefixed ISO dates such as "Sunday, 2026-03-15" (the
@@ -3526,6 +3538,66 @@ def read_claims_csv(path):
                             break
                         except ValueError:
                             continue
+                if parsed is not None:
+                    cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
+            elif isinstance(date, str) and (
+                    re.fullmatch(r"\d{2}-W\d{2}-[1-7]", date)
+                    or re.fullmatch(r"\d{2}W\d{2}[1-7]", date)
+                    or re.fullmatch(r"\d{2}-W\d{2}", date)
+                    or re.fullmatch(r"\d{2}W\d{2}", date)
+                    or re.fullmatch(
+                        r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+(?:\d{2}-W\d{2}-[1-7]|"
+                        r"\d{2}W\d{2}[1-7]|\d{2}-W\d{2}|\d{2}W\d{2})",
+                        date, flags=re.IGNORECASE)):
+                # Two-digit-year ISO week dates: "26-W11-1" (the
+                # hyphenated week-date form), "26W111" (the compact
+                # form), "26-W11" (the week alone, its Monday), or
+                # "26W11" (the compact week-only form), the way
+                # legacy exports write week dates with a two-digit
+                # year — the ISO week and weekday convert to their
+                # calendar date (YYYY-MM-DD) and govern instead of
+                # quarantining as unparseable_date. A weekday-prefixed
+                # two-digit-year week date ("Sunday, 26-W11-1", the
+                # way email-style timestamps write dates) has its
+                # weekday label dropped (it is not validated against
+                # the date) and the remainder parses the same way.
+                # The two-digit year follows Python's %y pivot
+                # (00-68 read as 2000-2068, 69-99 as 1969-1999),
+                # so "99-W01-1" governs as 1999-01-04 and "69W111"
+                # as 1969-03-10; the pivot is taken from strptime
+                # itself so it cannot drift from the other
+                # two-digit-year forms. A week that does not exist
+                # in that year ("25-W53-1", a 52-week year) or a
+                # weekday outside 1-7 ("26-W11-8") is left untouched
+                # so the gates quarantine it normally, as is a
+                # weekday-prefixed week date with a bogus label
+                # ("Funday, 26-W11-1"), a week outside 1-53
+                # ("26-W00", "26-W54"), or a short week ("26-W1"),
+                # which the guard does not match. fromisocalendar
+                # raises on a week that does not exist, and the
+                # week-only form has no weekday, so it parses as
+                # the Monday of that week.
+                week_date = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
+                    flags=re.IGNORECASE)
+                iso_year = datetime.strptime(week_date[:2], "%y").year
+                if week_date[2] == "-":
+                    iso_week = int(week_date[4:6])
+                    iso_weekday = (int(week_date[7])
+                                   if len(week_date) == 8 else 1)
+                else:
+                    iso_week = int(week_date[3:5])
+                    iso_weekday = (int(week_date[5])
+                                   if len(week_date) == 6 else 1)
+                try:
+                    parsed = datetime.fromisocalendar(
+                        iso_year, iso_week, iso_weekday)
+                except ValueError:
+                    parsed = None
                 if parsed is not None:
                     cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
             elif isinstance(date, str) and date.isdigit() and (
