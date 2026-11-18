@@ -244,6 +244,13 @@ day) normalize the same way — the date governs, and a no-comma
 month-name datetime ("March 15 2026 10:30:00", fractional,
 timezone-suffixed, AM/PM, and weekday-prefixed forms included)
 normalizes to its date part — and
+day-of-month-name dates such as "15th of March 2026" (the way
+human-written exports spell the day, with or without the ordinal
+suffix and with an optional leading "the") normalize the same
+way — the date governs, and a day-of month-name datetime
+("15th of March 2026 10:30:00", fractional, timezone-suffixed,
+AM/PM, and weekday-prefixed forms included) normalizes to its
+date part — and
 fractional-second month-name datetimes such as
 "Mar 15, 2026 10:30:00.123Z" (the fractional seconds are dropped
 with the time part, only the date part governs), and
@@ -496,6 +503,14 @@ def read_claims_csv(path):
     month-first dates with no comma after the day) normalizes the
     same way too, so it governs, as does a no-comma month-name
     datetime ("March 15 2026 10:30:00", fractional,
+    timezone-suffixed, AM/PM, and weekday-prefixed forms
+    included, which normalize to their date part); a
+    day-of-month-name date ("15th of March 2026" or "15 of
+    Mar 2026", the way human-written exports spell the day,
+    with or without the ordinal suffix and with an optional
+    leading "the") normalizes the same way too, so it
+    governs, as does a day-of month-name datetime
+    ("15th of March 2026 10:30:00", fractional,
     timezone-suffixed, AM/PM, and weekday-prefixed forms
     included, which normalize to their date part); an impossible
     month-name date (e.g.
@@ -1728,13 +1743,14 @@ def read_claims_csv(path):
                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")):
                 # Month-name form: "Mar 15, 2026" or "15 Mar 2026",
                 # abbreviated or full month name, including the
-                # hyphenated forms "15-Mar-2026" and "Mar-15-2026"
-                # and the no-comma month-first form "March 15 2026"
-                # (the day-first forms governed until now while the
-                # no-comma month-first form quarantined, verified
-                # by probe before the fix — the format list had no
-                # no-comma month-first alternative, so the value
-                # never reached the parsers).
+                # hyphenated forms "15-Mar-2026" and "Mar-15-2026",
+                # the no-comma month-first form "March 15 2026",
+                # and the day-of form "15th of March 2026" (the
+                # day-first forms governed until now while the
+                # day-of form quarantined, verified by probe
+                # before the fix — no candidate rewrote "15 of
+                # March" into a day-first month-name date, so
+                # the value never reached the parsers).
                 # A name that is not a real month, or an impossible
                 # day, fails every format and is left untouched so
                 # the gates quarantine it normally. Ordinal day
@@ -1891,6 +1907,36 @@ def read_claims_csv(path):
                     stripped = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", base)
                     if stripped != base and stripped not in candidates:
                         candidates.append(stripped)
+                # Day-of-month-name form: "15th of March 2026"
+                # or "15 of Mar 2026", the way human-written
+                # exports spell a date — the ordinal step above
+                # already drops the suffix, so "15th of March
+                # 2026" reaches here as "15 of March 2026";
+                # the "of" is then dropped so the remainder
+                # parses as a day-first month-name date, and a
+                # leading "the" ("the 15th of March 2026") is
+                # dropped the same way. Only a real month name
+                # after "of" is rewritten, so "15 of Foo 2026"
+                # is left untouched and the gates quarantine it
+                # normally, as is an impossible day-of date
+                # ("30th of February 2026"). Added after the
+                # ordinal step and before the timezone step so
+                # the timezone and AM/PM handling also applies
+                # to the rewritten candidates.
+                for base in list(candidates):
+                    the_stripped = re.sub(
+                        r"^the\s+", "", base, flags=re.IGNORECASE)
+                    if (the_stripped != base
+                            and the_stripped not in candidates):
+                        candidates.append(the_stripped)
+                for base in list(candidates):
+                    of_stripped = re.sub(
+                        r"(\d{1,2})\s+of\s+(Jan|Feb|Mar|Apr|"
+                        r"May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)",
+                        r"\1 \2", base, flags=re.IGNORECASE)
+                    if (of_stripped != base
+                            and of_stripped not in candidates):
+                        candidates.append(of_stripped)
                 # Space-separated timezone suffix on a month-name
                 # datetime ("Mar 15, 2026 10:30:00 +05:00" or
                 # "15 Mar 2026 10:30:00 -0400", the way API and

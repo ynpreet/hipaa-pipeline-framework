@@ -3044,6 +3044,30 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   README changelogs updated. Remaining gap noted: "15th of
   March 2026" still quarantines — for a later run.
 
+  Nov 18, 2026 build block (9:05 AM run): day-of-month-name
+  dates ("15th of March 2026", "15 of Mar 2026") now normalize
+  on read in `read_claims_csv` (io.py) — the day-of form with
+  or without the ordinal suffix, and with an optional leading
+  "the", governs as its calendar date, as do weekday-prefixed
+  ("Sunday, 15th of March 2026") and two-digit-year ("15th of
+  March 26", "15th of Mar 99" → 1999-03-15) forms, and
+  day-of month-name datetimes (space- or T-separated,
+  no-seconds, fractional, timezone-suffixed, named zone, AM/PM
+  in both orders, weekday-prefixed) normalize to their date
+  part. Probe verified before the fix (0 of 18 valid forms
+  governed) and after (18 govern as 2026-03-15, 6 invalid
+  quarantine). 2 new tests, suite now 232, all passing. Demo
+  re-verified: 10,000 in → 1,589 governed, 8,411 quarantined,
+  reasons unchanged; governed/quarantine/summary.json
+  byte-identical; audit.csv 10,001 lines and audit.jsonl
+  10,000 lines, identical ignoring the timestamp column across
+  repeat runs; zero raw member IDs / patient names in outputs;
+  runtime 0.459s. CLI smoke test on day-of-month-name 2-row
+  CSV: 2 in, 1 governed, 1 quarantined. README test count
+  updated 230 → 232; PLAN.md + README changelogs updated.
+  Remaining gap noted: space-separated ISO dates ("2026 03 15")
+  still quarantine — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

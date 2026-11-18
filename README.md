@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-230 stdlib-only tests (Nov 18, 2026, all passing): hash determinism and
+232 stdlib-only tests (Nov 18, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -2839,6 +2839,47 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   period ("Sun., 2026-03-15"), and month-name colon-less
   basic datetimes ("Mar 15, 26T103000")); the "15th of March
   2026" form is the nearest next gap for a later run.
+
+- Nov 18, 2026 build block (9:05 AM run):
+  day-of-month-name dates (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  a day-of-month-name date ("15th of March 2026" or "15 of
+  Mar 2026", the way human-written exports spell the day,
+  with or without the ordinal suffix and with an optional
+  leading "the") now normalizes to its calendar date
+  (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date, as do weekday-prefixed forms ("Sunday,
+  15th of March 2026") and two-digit-year forms ("15th of
+  March 26", "15th of Mar 99" → 1999-03-15). Day-of
+  month-name datetimes ("15th of March 2026 10:30:00", the
+  space- or T-separated form, or a no-seconds form "15th of
+  March 2026 10:30") normalize the same way — the time part
+  is dropped and only the date part governs — as do
+  fractional-second, timezone-suffixed (attached and
+  space-separated), named RFC 2822 zone, and AM/PM forms (in
+  both orders), and weekday-prefixed forms. This closes the
+  gap the Nov 18 3:05 AM run left open: no-comma month-first
+  dates ("March 15 2026") governed while the day-of form
+  quarantined (verified by probe before the fix — 0 of 18
+  valid forms governed). An impossible day-of date ("30th of
+  February 2026", "32nd of March 2026"), an unknown month
+  name ("15th of Foo 2026"), an out-of-range time ("15th of
+  March 2026 25:60:00"), an unknown zone ("15th of March
+  2026 10:30:00 XYZ"), or a weekday-prefixed date with a
+  bogus label ("Funday, 15th of March 2026") is left
+  untouched so the gates quarantine it normally; the quality
+  gates stay strict and see only the normalized value; 2 new
+  tests (suite now 232, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.459s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  each identical ignoring the timestamp column across repeat runs;
+  zero raw member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a day-of-month-name-date 2-row CSV:
+  2 in, 1 governed, 1 quarantined).
+  Remaining gap noted: space-separated ISO dates ("2026 03 15")
+  still quarantine — for a later run.
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
