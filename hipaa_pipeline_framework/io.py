@@ -238,6 +238,12 @@ AM/PM numeric hyphen datetimes such as "03-15-2026 10:30:00 AM"
 (the marker is dropped, only the date part governs), and
 month-name datetimes such as "Mar 15, 2026 10:30:00" (the date part
 governs, the time part is dropped), and
+month-name dates without the comma such as "March 15 2026" (the
+way some exports write month-first dates with no comma after the
+day) normalize the same way — the date governs, and a no-comma
+month-name datetime ("March 15 2026 10:30:00", fractional,
+timezone-suffixed, AM/PM, and weekday-prefixed forms included)
+normalizes to its date part — and
 fractional-second month-name datetimes such as
 "Mar 15, 2026 10:30:00.123Z" (the fractional seconds are dropped
 with the time part, only the date part governs), and
@@ -485,7 +491,14 @@ def read_claims_csv(path):
     quarantine it normally. A service_date written with a month name ("Mar 15,
     2026" or "15 Mar 2026", abbreviated or full month name, the
     way human-readable exports write dates) normalizes the same
-    way, so it governs; an impossible month-name date (e.g.
+    way, so it governs; a month-name date without the comma
+    ("March 15 2026" or "Mar 15 2026", the way some exports write
+    month-first dates with no comma after the day) normalizes the
+    same way too, so it governs, as does a no-comma month-name
+    datetime ("March 15 2026 10:30:00", fractional,
+    timezone-suffixed, AM/PM, and weekday-prefixed forms
+    included, which normalize to their date part); an impossible
+    month-name date (e.g.
     "Feb 30, 2026") or an unknown month name is left untouched
     so the gates quarantine it normally. A service_date in
     compact form (YYYYMMDD, the basic ISO 8601 form, another
@@ -1715,7 +1728,13 @@ def read_claims_csv(path):
                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")):
                 # Month-name form: "Mar 15, 2026" or "15 Mar 2026",
                 # abbreviated or full month name, including the
-                # hyphenated forms "15-Mar-2026" and "Mar-15-2026".
+                # hyphenated forms "15-Mar-2026" and "Mar-15-2026"
+                # and the no-comma month-first form "March 15 2026"
+                # (the day-first forms governed until now while the
+                # no-comma month-first form quarantined, verified
+                # by probe before the fix — the format list had no
+                # no-comma month-first alternative, so the value
+                # never reached the parsers).
                 # A name that is not a real month, or an impossible
                 # day, fails every format and is left untouched so
                 # the gates quarantine it normally. Ordinal day
@@ -1925,15 +1944,22 @@ def read_claims_csv(path):
                         candidates.append(tz_stripped)
                 for candidate in candidates:
                     for fmt in ("%b %d, %Y", "%B %d, %Y",
+                                "%b %d %Y", "%B %d %Y",
                                 "%d %b %Y", "%d %B %Y",
                                 "%d-%b-%Y", "%b-%d-%Y",
                                 "%d-%B-%Y", "%B-%d-%Y",
                                 "%b %d, %Y %H:%M:%S",
                                 "%B %d, %Y %H:%M:%S",
+                                "%b %d %Y %H:%M:%S",
+                                "%B %d %Y %H:%M:%S",
                                 "%b %d, %Y %H:%M",
                                 "%B %d, %Y %H:%M",
+                                "%b %d %Y %H:%M",
+                                "%B %d %Y %H:%M",
                                 "%b %d, %YT%H:%M:%S",
                                 "%B %d, %YT%H:%M:%S",
+                                "%b %d %YT%H:%M:%S",
+                                "%B %d %YT%H:%M:%S",
                                 "%d %b %Y %H:%M:%S",
                                 "%d %B %Y %H:%M:%S",
                                 "%d %b %Y %H:%M",
@@ -1950,8 +1976,12 @@ def read_claims_csv(path):
                                 "%B-%d-%YT%H:%M:%S",
                                 "%b %d, %Y %H:%M:%S.%f",
                                 "%B %d, %Y %H:%M:%S.%f",
+                                "%b %d %Y %H:%M:%S.%f",
+                                "%B %d %Y %H:%M:%S.%f",
                                 "%b %d, %YT%H:%M:%S.%f",
                                 "%B %d, %YT%H:%M:%S.%f",
+                                "%b %d %YT%H:%M:%S.%f",
+                                "%B %d %YT%H:%M:%S.%f",
                                 "%d %b %Y %H:%M:%S.%f",
                                 "%d %B %Y %H:%M:%S.%f",
                                 "%d %b %YT%H:%M:%S.%f",
@@ -1965,15 +1995,22 @@ def read_claims_csv(path):
                                 "%d-%B-%YT%H:%M:%S.%f",
                                 "%B-%d-%YT%H:%M:%S.%f",
                                 "%b %d, %y", "%B %d, %y",
+                                "%b %d %y", "%B %d %y",
                                 "%d %b %y", "%d %B %y",
                                 "%d-%b-%y", "%b-%d-%y",
                                 "%d-%B-%y", "%B-%d-%y",
                                 "%b %d, %y %H:%M:%S",
                                 "%B %d, %y %H:%M:%S",
+                                "%b %d %y %H:%M:%S",
+                                "%B %d %y %H:%M:%S",
                                 "%b %d, %y %H:%M",
                                 "%B %d, %y %H:%M",
+                                "%b %d %y %H:%M",
+                                "%B %d %y %H:%M",
                                 "%b %d, %yT%H:%M:%S",
                                 "%B %d, %yT%H:%M:%S",
+                                "%b %d %yT%H:%M:%S",
+                                "%B %d %yT%H:%M:%S",
                                 "%d %b %y %H:%M:%S",
                                 "%d %B %y %H:%M:%S",
                                 "%d %b %y %H:%M",
@@ -1990,8 +2027,12 @@ def read_claims_csv(path):
                                 "%B-%d-%yT%H:%M:%S",
                                 "%b %d, %y %H:%M:%S.%f",
                                 "%B %d, %y %H:%M:%S.%f",
+                                "%b %d %y %H:%M:%S.%f",
+                                "%B %d %y %H:%M:%S.%f",
                                 "%b %d, %yT%H:%M:%S.%f",
                                 "%B %d, %yT%H:%M:%S.%f",
+                                "%b %d %yT%H:%M:%S.%f",
+                                "%B %d %yT%H:%M:%S.%f",
                                 "%d %b %y %H:%M:%S.%f",
                                 "%d %B %y %H:%M:%S.%f",
                                 "%d %b %yT%H:%M:%S.%f",

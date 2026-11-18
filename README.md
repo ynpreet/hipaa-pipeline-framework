@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-224 stdlib-only tests (Nov 17, 2026, all passing): hash determinism and
+230 stdlib-only tests (Nov 18, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -129,6 +129,9 @@ and dot-separated datetimes ("2026.03.15 10:30:00" or
 "2026.02.30 10:00:00" still quarantines as unparseable_date),
 and month-name dates ("Mar 15, 2026" or "15 Mar 2026" read as
 2026-03-15 and govern; "Feb 30, 2026" still quarantines as
+unparseable_date), and no-comma month-name dates
+("March 15 2026" or "Mar 15 2026" read as 2026-03-15 and
+govern; "Feb 30 2026" still quarantines as
 unparseable_date), and day-first slash dates ("15/03/2026"
 reads as 2026-03-15 and governs; "03/04/2026" still reads as
 the US form; "32/03/2026" still quarantines as
@@ -2779,6 +2782,63 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   named zone on colon-less, space-separated colon-less — all govern
   as 2026-03-15); no new gap noted in the ordinal family — both
   year widths now complete.
+
+- Nov 18, 2026 build block (3:05 AM run):
+  no-comma month-name dates (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as a
+  month-first month-name date with no comma ("March 15 2026" or
+  "Mar 15 2026", the way some exports write month-first dates
+  with no comma after the day) now normalizes to its calendar
+  date (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date, as do ordinal-suffix forms ("March 15th
+  2026", "Mar 15th 2026") and weekday-prefixed forms
+  ("Sunday, March 15 2026"). No-comma month-name datetimes
+  ("March 15 2026 10:30:00", the space- or T-separated form,
+  or a no-seconds form "March 15 2026 10:30") normalize the
+  same way — the time part is dropped and only the date part
+  governs — as do fractional-second, timezone-suffixed
+  (attached and space-separated), named RFC 2822 zone, and
+  AM/PM forms (in both orders, attached markers included),
+  and weekday-prefixed forms. Two-digit-year no-comma
+  month-name dates ("March 15 26", "Mar 15 26") normalize the
+  same way; the two-digit year follows Python's %y pivot
+  (00-68 read as 2000-2068, 69-99 as 1969-1999), so
+  "Mar 15 99" governs as 1999-03-15. This closes the gap the
+  Nov 17 9:05 PM run left open: day-first month-name dates
+  ("15 March 2026") governed while the no-comma month-first
+  form quarantined (verified by probe before the fix — 0 of 18
+  valid forms governed) — the format list had no no-comma
+  month-first alternative, so the value never reached the
+  parsers. An impossible no-comma month-name date
+  ("Feb 30 2026", "March 32 2026"), an unknown month name
+  ("Foo 15 2026"), an out-of-range time ("March 15 2026
+  25:00:00"), a malformed suffix ("March 15 2026
+  10:30:00+99:99", "March 15 2026 10:30:00 AM +99:99"), an
+  unknown zone ("March 15 2026 10:30:00 XYZ"), a malformed
+  marker ("March 15 2026 10:30:00 XM"), or a weekday-prefixed
+  date with a bogus label ("Funday, March 15 2026") is left
+  untouched so the gates quarantine it normally; the quality
+  gates stay strict and see only the normalized value; 2 new
+  tests (suite now 230, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.642s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  each identical ignoring the timestamp column across repeat runs;
+  zero raw member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a no-comma month-name-date 2-row CSV:
+  2 in, 1 governed, 1 quarantined).
+  Adjacent forms probed same run (10 forms — "15th of March
+  2026" still quarantines, as do space-separated ISO dates
+  ("2026 03 15"), lowercase-"t" ISO datetimes
+  ("2026-03-15t10:30:00"), lowercase-"w" week dates
+  ("2026-w11-1"), US dot dates ("3.15.2026"), fractional
+  epochs ("1710460800.0"), 9-digit fractional seconds
+  ("2026-03-15 10:30:00.123456789"), dot-separated times
+  ("03/15/2026 10.30.00"), weekday labels with a trailing
+  period ("Sun., 2026-03-15"), and month-name colon-less
+  basic datetimes ("Mar 15, 26T103000")); the "15th of March
+  2026" form is the nearest next gap for a later run.
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

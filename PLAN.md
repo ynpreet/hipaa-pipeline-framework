@@ -3021,6 +3021,29 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   as 2026-03-15); no new gap noted in the ordinal family — both
   year widths now complete.
 
+  Nov 18, 2026 build block (3:05 AM run): no-comma month-name
+  dates ("March 15 2026", "Mar 15 2026") now normalize on read
+  in `read_claims_csv` (io.py) — the month-first form with no
+  comma after the day governs as its calendar date, as do
+  ordinal-suffix ("March 15th 2026"), weekday-prefixed
+  ("Sunday, March 15 2026"), and two-digit-year ("March 15 26",
+  "Mar 15 99" → 1999-03-15) forms, and no-comma month-name
+  datetimes (space- or T-separated, no-seconds, fractional,
+  timezone-suffixed, named zone, AM/PM in both orders,
+  weekday-prefixed) normalize to their date part. Probe verified
+  before the fix (0 of 18 valid forms governed) and after (18
+  govern as 2026-03-15, 6 invalid quarantine). 2 new tests,
+  suite now 230, all passing. Demo re-verified: 10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged;
+  governed/quarantine/summary.json byte-identical; audit.csv
+  10,001 lines and audit.jsonl 10,000 lines, identical ignoring
+  the timestamp column across repeat runs; zero raw member IDs /
+  patient names in outputs; runtime 0.642s. CLI smoke test on
+  no-comma month-name 2-row CSV: 2 in, 1 governed,
+  1 quarantined. README test count updated 224 → 230; PLAN.md +
+  README changelogs updated. Remaining gap noted: "15th of
+  March 2026" still quarantines — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
