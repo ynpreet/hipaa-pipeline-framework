@@ -2966,6 +2966,61 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   quarantine — probed this run, 0 of 3 forms govern — for a later
   run.
 
+- Nov 17, 2026 build block (9:05 PM run):
+  two-digit-year ordinal (Julian) dates (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as a
+  YYDDD ordinal date ("26074") or the ISO 8601 ordinal form with
+  a two-digit year ("26-074"), the way legacy mainframe exports
+  write dates, now normalizes to its calendar date (YYYY-MM-DD)
+  and governs instead of quarantining as unparseable_date, as do
+  weekday-prefixed forms ("Sunday, 26074", "Mon, 26-074") and
+  pivot examples ("99074" governs as 1999-03-15, "69074" as
+  1969-03-15, "68074" as 2068-03-14). Two-digit-year ordinal
+  datetimes ("26-074 10:30:00", the colon form, or the colon-less
+  basic form "26074T103000", the way legacy exports write ordinal
+  datetimes with a two-digit year) normalize the same way — the
+  time part is dropped and only the date part governs — as do
+  fractional-second, timezone-suffixed (attached and
+  space-separated), named RFC 2822 zone, and AM/PM forms (in both
+  orders, attached markers included), and weekday-prefixed forms,
+  in both ordinal spellings. The two-digit year follows Python's
+  %y pivot (00-68 read as 2000-2068, 69-99 as 1969-1999), taken
+  from strptime itself so it cannot drift from the other
+  two-digit-year forms. This closes the gap the Nov 17 3:05 PM run
+  noted: two-digit-year ordinal dates quarantined while the
+  four-digit forms governed (verified by probe before the fix — 0
+  of 18 forms governed) — the guard had no two-digit-year ordinal
+  alternatives, so the values never reached the parsers. Collision
+  resolved and documented: a bare five-digit number now reads as a
+  YYDDD ordinal date, so "12345" governs as 2012-12-10 rather than
+  quarantining as a bad epoch timestamp — the bad-epoch test now
+  uses an eleven-digit ambiguous number ("12345678901") instead,
+  and the epoch docstrings note the five-digit exception. An
+  impossible two-digit-year ordinal date ("26366" in 2026, which
+  has 365 days, or "26000"), an impossible datetime ("26366
+  10:00:00 AM"), an out-of-range time ("26-074 25:60:00",
+  "26074T256000"), a malformed suffix ("26074 10:30:00+99:99",
+  "26-074 10:30:00 AM +99:99"), an unknown zone ("26074 10:30:00
+  XYZ"), a malformed marker ("26074 10:30:00 XM"), or a
+  weekday-prefixed date with a bogus label ("Funday, 26074") is
+  left untouched so the gates quarantine it normally; the quality
+  gates stay strict and see only the normalized value; 2 new tests
+  (suite now 228, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.531s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  each identical ignoring the timestamp column across repeat runs;
+  zero raw member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a two-digit-year ordinal-date 2-row CSV:
+  2 in, 1 governed, 1 quarantined).
+  Adjacent forms probed same run (12 forms — attached
+  single-digit-hour marker, fractional-plus-offset colon-less,
+  short weekday prefix, suffix-before-marker, marker-before-suffix,
+  named zone on colon-less, space-separated colon-less — all govern
+  as 2026-03-15); no new gap noted in the ordinal family — both
+  year widths now complete.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

@@ -2598,7 +2598,7 @@ class TestCsvIO(unittest.TestCase):
             path.write_text("member_id,service_date,claim_amount\n"
                             "M-100001,9999999999,120.50\n"
                             "M-100002,0000000000,200.00\n"
-                            "M-100003,12345,310.00\n"
+                            "M-100003,12345678901,310.00\n"
                             "M-100004,17104608000,410.00\n")
             rows = read_claims_csv(path)
             self.assertEqual(len(rows), 4)
@@ -3329,6 +3329,72 @@ class TestCsvIO(unittest.TestCase):
                             "M-100008,26-W11 25:60:00,810.00\n"
                             "M-100009,\"Funday, 26-W11-1 10:30:00\",910.00\n"
                             "M-100010,26-W11-1 10:30:00 AM +99:99,1010.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 10)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 10)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 10})
+
+    def test_read_claims_csv_normalizes_two_digit_year_ordinal_dates_and_datetimes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,26074,120.50\n"
+                            "M-100002,26-074,200.00\n"
+                            "M-100003,\"Sunday, 26074\",310.00\n"
+                            "M-100004,\"Sunday, 26-074\",410.00\n"
+                            "M-100005,99074,510.00\n"
+                            "M-100006,69074,610.00\n"
+                            "M-100007,68074,710.00\n"
+                            "M-100008,12345,810.00\n"
+                            "M-100009,26-074 10:30:00,910.00\n"
+                            "M-100010,26074T103000,1010.00\n"
+                            "M-100011,26-074T10:30:00Z,1110.00\n"
+                            "M-100012,26074 10:30:00 AM,1210.00\n"
+                            "M-100013,26074 10:30:00.123Z,1310.00\n"
+                            "M-100014,26074 10:30:00 GMT,1410.00\n"
+                            "M-100015,26-074 10:30:00 PM GMT,1510.00\n"
+                            "M-100016,26074T103000am,1610.00\n"
+                            "M-100017,\"Sunday, 26-074 10:30:00\",1710.00\n"
+                            "M-100018,26074 10:30,1810.00\n"
+                            "M-100019,26-074T1030,1910.00\n"
+                            "M-100020,26074 10:30:00 +05:00,2010.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 20)
+            # A two-digit-year ordinal date governs as its calendar
+            # date; a bare five-digit number reads as YYDDD, so
+            # "12345" governs as 2012-12-10 rather than quarantining
+            # as a bad epoch timestamp. A two-digit-year ordinal
+            # datetime governs as its date part; the time part is
+            # dropped, only the date part governs.
+            self.assertEqual(
+                [row["service_date"] for row in rows],
+                ["2026-03-15", "2026-03-15", "2026-03-15",
+                 "2026-03-15", "1999-03-15", "1969-03-15",
+                 "2068-03-14", "2012-12-10", "2026-03-15",
+                 "2026-03-15", "2026-03-15", "2026-03-15",
+                 "2026-03-15", "2026-03-15", "2026-03-15",
+                 "2026-03-15", "2026-03-15", "2026-03-15",
+                 "2026-03-15", "2026-03-15"])
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 20)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_two_digit_year_ordinal_dates_and_datetimes_still_quarantine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,26366,120.50\n"
+                            "M-100002,26000,200.00\n"
+                            "M-100003,\"Funday, 26074\",310.00\n"
+                            "M-100004,26-074 25:60:00,410.00\n"
+                            "M-100005,26074T256000,510.00\n"
+                            "M-100006,26074 10:30:00+99:99,610.00\n"
+                            "M-100007,26074 10:30:00 XYZ,710.00\n"
+                            "M-100008,26074 10:30:00 XM,810.00\n"
+                            "M-100009,26366 10:00:00 AM,910.00\n"
+                            "M-100010,26-074 10:30:00 AM +99:99,1010.00\n")
             rows = read_claims_csv(path)
             self.assertEqual(len(rows), 10)
             result = run_pipeline(rows)

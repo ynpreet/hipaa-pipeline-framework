@@ -119,6 +119,26 @@ no-seconds, fractional-second, timezone-suffixed, space-separated,
 AM/PM (in both orders), attached-marker, and weekday-prefixed
 forms; the quality gates stay strict and see only the
 normalized value, and
+two-digit-year ordinal (Julian) dates such as "26074" (YYDDD,
+the day-of-year form the way legacy mainframe exports write
+dates) or "26-074" (the ISO 8601 ordinal form with a two-digit
+year) — the day of the year converts to its calendar date
+(YYYY-MM-DD) and governs instead of quarantining as
+unparseable_date; the two-digit year follows Python's %y pivot
+(00-68 read as 2000-2068 and 69-99 as 1969-1999), so "99074"
+governs as 1999-03-15 and "69074" as 1969-03-15, and a bare
+five-digit number is read as a YYDDD ordinal date (so "12345"
+governs as 2012-12-10, not as a bad epoch timestamp); a
+day-of-year that is not a real day of that year ("26366" in
+2026, which has 365 days, or "26000") is left untouched so the
+gates quarantine it normally, as is a weekday-prefixed ordinal
+date with a bogus label ("Funday, 26074"); two-digit-year
+ordinal datetimes ("26-074 10:30:00", "26074T103000",
+fractional-second, timezone-suffixed, named RFC 2822 zone, and
+AM/PM forms in both orders, attached markers and
+weekday-prefixed forms included) normalize to their date part
+the same way; the quality gates stay strict and see only the
+normalized value, and
 ISO week dates such as "2026-W11-1" (the ISO 8601 week-date form,
 the way scheduling exports write dates) or "2026W111" (the compact
 form) or "2026-W11" (the week alone, its Monday) or "2026W11" (the compact
@@ -795,8 +815,11 @@ def read_claims_csv(path):
     whose UTC date falls in 2000-01-01..2100-01-01 are accepted,
     so an epoch outside that window ("9999999999999999999" reads
     as 2286, "0000000000000000000" as 1970) or a bare number of any
-    other length ("12345") is left untouched so the gates
-    quarantine it normally, as is an eleven-digit bare number,
+    other length ("1234") is left untouched so the gates
+    quarantine it normally — a five-digit bare number is not one
+    of them: it is claimed by the two-digit-year ordinal form
+    below, so "12345" governs as 2012-12-10 — as is an
+    eleven-digit bare number,
     which is ambiguous between seconds and milliseconds, and a
     fourteen-digit bare number, which can only be microseconds
     before 2000, and a seventeen-digit bare number, which can
@@ -876,7 +899,37 @@ def read_claims_csv(path):
     datetime ("2026366T103000"), an out-of-range time
     ("2026074T256000"), or a malformed suffix
     ("2026074T103000+99:99") is left untouched so the gates
-    quarantine it normally. A service_date
+    quarantine it normally. A service_date written as a
+    two-digit-year ordinal (Julian) date — a five-digit YYDDD
+    day-of-year form ("26074", the way legacy mainframe exports
+    write dates) or the ISO 8601 ordinal form with a two-digit
+    year ("26-074") — converts to its calendar date (YYYY-MM-DD)
+    on read and governs instead of quarantining as
+    unparseable_date; the two-digit year follows Python's %y pivot
+    (00-68 read as 2000-2068, 69-99 as 1969-1999), so "99074"
+    governs as 1999-03-15 and "69074" as 1969-03-15, and a bare
+    five-digit number is read as a YYDDD ordinal date, so "12345"
+    governs as 2012-12-10 rather than quarantining as a bad epoch
+    timestamp; a day-of-year that is not a real day of that year
+    ("26366" in 2026, which has 365 days, or "26000") is left
+    untouched so the gates quarantine it normally, as is a
+    weekday-prefixed ordinal date with a bogus label ("Funday,
+    26074"). A weekday-prefixed two-digit-year ordinal date
+    ("Sunday, 26074" or "Mon, 26-074") has its weekday label
+    stripped on read and then normalizes the same way, so it
+    governs; the weekday itself is not validated against the
+    calendar date. A two-digit-year ordinal datetime ("26-074
+    10:30:00", "26074T103000", fractional-second,
+    timezone-suffixed, named RFC 2822 zone, and AM/PM forms in
+    both orders, attached markers and weekday-prefixed forms
+    included) normalizes to its date part the same way, so it
+    governs; an impossible two-digit-year ordinal datetime
+    ("26366 10:00:00 AM"), an out-of-range time ("26-074
+    25:60:00"), a malformed suffix ("26074 10:30:00+99:99"), an
+    unknown zone ("26074 10:30:00 XYZ"), or a malformed marker
+    ("26074 10:30:00 XM") is left untouched so the gates
+    quarantine it normally; the quality gates stay strict and see
+    only the normalized value. A service_date
     in weekday-prefixed ISO form ("Sunday, 2026-03-15" or
     "Mon, 2026-03-16 10:30:00", the way email-style
     timestamps write dates) has its weekday label stripped
@@ -3919,6 +3972,274 @@ def read_claims_csv(path):
                         parsed = None
                 if parsed is not None:
                     cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
+            elif isinstance(date, str) and (
+                    (date.isdigit() and len(date) == 5)
+                    or re.fullmatch(r"\d{2}-\d{3}", date)
+                    or re.fullmatch(
+                        r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+(?:\d{5}|\d{2}-\d{3})",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3})[ T]\d{2}:\d{2}"
+                        r"(?::\d{2})?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3})[ T]\d{2}:\d{2}:\d{2}\.\d+"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3})[ T]\d{1,2}:\d{2}"
+                        r"(?::\d{2})?(?:\.\d+)?\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3})[ T]\d{1,2}:\d{2}"
+                        r"(?::\d{2})?(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3})[ T]\d{1,2}:\d{2}"
+                        r"(?::\d{2})?(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3})T\d{6}(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3})T\d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3}) \d{6}(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3}) \d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3})[T ]"
+                        r"(?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3})[T ]"
+                        r"(?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"(?:\d{5}|\d{2}-\d{3})[T ]"
+                        r"(?:\d{6}(?:\.\d+)?|\d{4})"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)):
+                # Two-digit-year ordinal (Julian) dates: "26074"
+                # (YYDDD) or "26-074" (the ISO 8601 ordinal form
+                # with a two-digit year), the way legacy mainframe
+                # exports write dates — the day of the year converts
+                # to its calendar date (YYYY-MM-DD) and governs
+                # instead of quarantining as unparseable_date. A
+                # weekday-prefixed two-digit-year ordinal date
+                # ("Sunday, 26074" or "Mon, 26-074") has its weekday
+                # label dropped (it is not validated against the
+                # date) and the remainder parses as an ordinal date.
+                # The two-digit year follows Python's %y pivot
+                # (00-68 read as 2000-2068, 69-99 as 1969-1999),
+                # so "99074" governs as 1999-03-15 and "69074" as
+                # 1969-03-15; the pivot is taken from strptime
+                # itself so it cannot drift from the other
+                # two-digit-year forms. A day-of-year that is not a
+                # real day of that year ("26366" in 2026, which has
+                # 365 days, or "26000") is left untouched so the
+                # gates quarantine it normally: strptime's %j rolls
+                # a too-large day into the next year instead of
+                # failing, so the parsed year is checked against the
+                # pivot year and a mismatch rejects the value. A
+                # bogus weekday label ("Funday, 26074") is not
+                # stripped by the pattern, so the value falls
+                # through to the generic datetime branch and
+                # quarantines. Two-digit-year ordinal datetimes
+                # ("26-074 10:30:00", the colon form, or the
+                # colon-less basic form "26074T103000", the way
+                # legacy exports write ordinal datetimes with a
+                # two-digit year) normalize the same way — the time
+                # part is dropped and only the date part governs —
+                # as do fractional-second, timezone-suffixed
+                # (attached and space-separated), named RFC 2822
+                # zone, and AM/PM forms (in both orders, attached
+                # markers included), and weekday-prefixed forms, in
+                # both ordinal spellings; an impossible
+                # two-digit-year ordinal datetime ("26366 10:00:00
+                # AM"), an out-of-range time ("26-074 25:60:00"),
+                # a malformed suffix ("26074 10:30:00+99:99"), an
+                # unknown zone ("26074 10:30:00 XYZ"), or a
+                # malformed marker ("26074 10:30:00 XM") is left
+                # untouched so the gates quarantine it normally;
+                # the quality gates stay strict and see only the
+                # normalized value. This closes the gap the Nov 17
+                # 3:05 PM run noted: two-digit-year ordinal dates
+                # quarantined while the four-digit forms governed
+                # (verified by probe before the fix — 0 of 18 forms
+                # governed) — the guard had no two-digit-year
+                # ordinal alternatives, so the values never reached
+                # the parsers.
+                ordinal_date = re.sub(
+                    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                    r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                    r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
+                    flags=re.IGNORECASE)
+                # AM/PM timezone-suffixed two-digit-year ordinal
+                # datetime: "26074 10:30:00 AM Z" or
+                # "26-074T09:00:00 PM -04:00" — the suffix trailing
+                # the marker is dropped first so the marker strips
+                # normally below; the suffix-before-marker order
+                # ("26074 10:30:00Z AM") governs too, via the
+                # suffix strip after the marker strip further down.
+                # A malformed suffix ("10:30:00 AM +99:99") or an
+                # unknown zone ("10:30:00 AM XYZ") is not stripped,
+                # so the marker does not strip either and the gates
+                # quarantine it normally.
+                ordinal_date = re.sub(
+                    r"((?:AM|PM))\s+(Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                    r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT)$",
+                    r"\1", ordinal_date, flags=re.IGNORECASE)
+                # AM/PM two-digit-year ordinal datetime: "26074
+                # 10:30:00 AM" — the marker (spaced or attached,
+                # either case) is dropped and the remainder parses
+                # as an ordinal datetime; only the date part governs,
+                # so the hour itself needs no conversion. A malformed
+                # marker ("10:30:00 XM") is not stripped, so parsing
+                # fails and the gates quarantine it normally.
+                ordinal_date = re.sub(
+                    r"\s*(?:AM|PM)$", "", ordinal_date,
+                    flags=re.IGNORECASE).rstrip()
+                if ordinal_date.endswith("Z"):
+                    ordinal_date = ordinal_date[:-1]
+                else:
+                    suffix = re.search(
+                        r"([+-](?:0\d|1[0-4]):?[0-5]\d)$",
+                        ordinal_date)
+                    if suffix is not None:
+                        ordinal_date = ordinal_date[:-len(
+                            suffix.group(1))]
+                    else:
+                        named = re.search(
+                            r"\s+(?:UT|GMT|UTC|EST|EDT|CST|"
+                            r"CDT|MST|MDT|PST|PDT)$",
+                            ordinal_date, flags=re.IGNORECASE)
+                        if named is not None:
+                            ordinal_date = ordinal_date[:-len(
+                                named.group(0))]
+                # A space-separated suffix ("26074 10:30:00
+                # +05:00") leaves a trailing space behind after
+                # the strip above, which strptime rejects, so the
+                # space goes with the suffix.
+                ordinal_date = ordinal_date.rstrip()
+                ordinal_year = datetime.strptime(
+                    ordinal_date[:2], "%y").year
+                parsed = None
+                # A colon-less basic ISO time ("26074T103000",
+                # the basic ISO 8601 datetime form on a
+                # two-digit-year ordinal date) normalizes the same
+                # way — the time part is dropped and only the date
+                # part governs — as do no-seconds,
+                # fractional-second, timezone-suffixed (already
+                # stripped above), space-separated, and AM/PM
+                # (already stripped above) forms, in both ordinal
+                # spellings; every colon form governed until now
+                # while the colon-less form quarantined (verified
+                # by probe before the fix) — the guard had no
+                # colon-less alternative, so the value never reached
+                # the parsers. The year check below rejects a
+                # day-of-year that rolls into the next year
+                # ("26366" in 2026) the same way it does for the
+                # colon forms.
+                for fmt in ("%y%j", "%y-%j"):
+                    try:
+                        candidate_parsed = datetime.strptime(
+                            ordinal_date, fmt)
+                        if candidate_parsed.year == ordinal_year:
+                            parsed = candidate_parsed
+                        break
+                    except ValueError:
+                        continue
+                if parsed is None:
+                    for fmt in ("%y%j %H:%M:%S.%f",
+                                "%y%jT%H:%M:%S.%f",
+                                "%y-%j %H:%M:%S.%f",
+                                "%y-%jT%H:%M:%S.%f",
+                                "%y%j %H:%M:%S", "%y%j %H:%M",
+                                "%y%jT%H:%M:%S", "%y%jT%H:%M",
+                                "%y-%j %H:%M:%S", "%y-%j %H:%M",
+                                "%y-%jT%H:%M:%S", "%y-%jT%H:%M",
+                                "%y%jT%H%M%S.%f",
+                                "%y%j %H%M%S.%f",
+                                "%y-%jT%H%M%S.%f",
+                                "%y-%j %H%M%S.%f",
+                                "%y%jT%H%M%S", "%y%j %H%M%S",
+                                "%y%jT%H%M", "%y%j %H%M",
+                                "%y-%jT%H%M%S", "%y-%j %H%M%S",
+                                "%y-%jT%H%M", "%y-%j %H%M"):
+                        try:
+                            candidate_parsed = datetime.strptime(
+                                ordinal_date, fmt)
+                            if candidate_parsed.year == ordinal_year:
+                                parsed = candidate_parsed
+                            break
+                        except ValueError:
+                            continue
+                if parsed is not None:
+                    cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
             elif isinstance(date, str) and date.isdigit() and (
                     len(date) in (9, 10, 12, 13, 15, 16, 18, 19)):
                 # Unix epoch timestamps: a bare nine- or
@@ -3937,8 +4258,12 @@ def read_claims_csv(path):
                 # ("9999999999999999999" reads as 2286,
                 # "0000000000000000000" as 1970) is left untouched
                 # so the gates quarantine it normally, as is a
-                # bare number of any other length ("12345"), which
-                # no branch claims. An eleven-digit bare number is
+                # bare number of any other length ("1234"), which
+                # no branch claims — a five-digit bare number is
+                # not one of them: the two-digit-year ordinal
+                # branch above claims it as a YYDDD date, so
+                # "12345" governs as 2012-12-10 and never reaches
+                # this branch. An eleven-digit bare number is
                 # ambiguous — seconds past 2100 or milliseconds
                 # before 2001 — so it is left untouched too, as is
                 # a fourteen-digit bare number, which can only be
