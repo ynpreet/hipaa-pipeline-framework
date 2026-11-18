@@ -443,6 +443,17 @@ def read_claims_csv(path):
     value stays unparseable and the gates quarantine it normally,
     as does an impossible date carrying a valid suffix (e.g.
     "2026-02-30T09:00:00Z" or "2026-02-30 10:00:00 GMT").
+    A service_date in space-separated ISO form ("2026 03 15",
+    the way some exports write a year-first date with spaces
+    instead of hyphens) normalizes to ISO form (YYYY-MM-DD) on
+    read, so it governs instead of quarantining as
+    unparseable_date, as does a space-separated ISO datetime
+    ("2026 03 15 10:30:00", the space- or T-separated form, or
+    a no-seconds form "2026 03 15 10:30", fractional,
+    timezone-suffixed, named-zone, AM/PM, and weekday-prefixed
+    forms included, which normalize to their date part); an
+    impossible space-separated ISO date (e.g. "2026 02 30") is
+    left untouched so the gates quarantine it normally.
     A service_date in dot-separated form (YYYY.MM.DD, another
     export convention) normalizes to ISO form (YYYY-MM-DD) on
     read, so "2026.03.15" governs instead of quarantining as
@@ -4391,6 +4402,29 @@ def read_claims_csv(path):
                     flags=re.IGNORECASE)
                 if weekday_stripped != candidate:
                     candidate = weekday_stripped
+                # Space-separated ISO date: "2026 03 15", the
+                # way some exports write a year-first date
+                # with spaces instead of hyphens — the two
+                # spaces between the components are rewritten
+                # to hyphens so the remainder parses as an ISO
+                # date or datetime below; the rewrite runs
+                # before the timezone and AM/PM steps so a
+                # space-separated ISO datetime ("2026 03 15
+                # 10:30:00", fractional, timezone-suffixed,
+                # named-zone, AM/PM, and weekday-prefixed
+                # forms included) normalizes to its date part
+                # the same way. Only a four-digit year-first
+                # form is rewritten, and only when the day is
+                # followed by the end of the value, a space, or
+                # a "T", so "2026 03 15abc" is left untouched;
+                # an impossible space-separated date ("2026
+                # 02 30") still fails every format and the
+                # gates quarantine it normally. Single-digit
+                # month and day ("2026 3 5") rewrite the same
+                # way, since strptime accepts them unpadded.
+                candidate = re.sub(
+                    r"^(\d{4}) (\d{1,2}) (\d{1,2})(?=[\sT]|$)",
+                    r"\1-\2-\3", candidate)
                 # A timezone suffix trailing the AM/PM marker:
                 # "2026-03-15 10:30:00 AM Z" or
                 # "2026-03-15T09:00:00 PM -04:00", the way

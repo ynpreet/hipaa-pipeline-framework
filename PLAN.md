@@ -3068,6 +3068,48 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   Remaining gap noted: space-separated ISO dates ("2026 03 15")
   still quarantine — for a later run.
 
+- Nov 18, 2026 build block (3:05 PM run):
+  space-separated ISO dates (read_claims_csv in
+  hipaa_pipeline_framework/io.py) — a service_date written as
+  a year-first date with spaces instead of hyphens ("2026 03
+  15", the way some exports write dates) now normalizes to its
+  calendar date (YYYY-MM-DD) and governs instead of
+  quarantining as unparseable_date, as do single-digit month
+  and day forms ("2026 3 15", "2026 03 5" → 2026-03-05) and
+  weekday-prefixed forms ("Sunday, 2026 03 15"). Space-separated
+  ISO datetimes ("2026 03 15 10:30:00", the space- or
+  T-separated form, or a no-seconds form "2026 03 15 10:30")
+  normalize the same way — the time part is dropped and only
+  the date part governs — as do fractional-second,
+  timezone-suffixed (attached and space-separated), named RFC
+  2822 zone, and AM/PM forms (in both orders), and
+  weekday-prefixed forms. This closes the gap the Nov 18 9:05
+  AM run left open: day-of month-name dates ("15th of March
+  2026") governed while the space-separated ISO form
+  quarantined (verified by probe before the fix — 0 of 18
+  valid forms governed). An impossible space-separated ISO
+  date ("2026 02 30", "2026 13 15", "2026 03 32"), an
+  out-of-range time ("2026 03 15 25:60:00"), an unknown zone
+  ("2026 03 15 10:30:00 XYZ"), a malformed marker ("2026 03
+  15 10:30:00 XM"), a malformed suffix ("2026 03 15
+  10:30:00+99:99"), or a weekday-prefixed date with a bogus
+  label ("Funday, 2026 03 15") is left untouched so the gates
+  quarantine it normally; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 234,
+  all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.537s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  each identical ignoring the timestamp column across repeat runs;
+  zero raw member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a space-separated-ISO-date 2-row CSV:
+  2 in, 1 governed, 1 quarantined).
+  Remaining gap noted: two-digit-year and non-year-first
+  space-separated forms ("26 03 15", "03 15 26", "15 03 26",
+  "03 15 2026", "15 03 2026") still quarantine — probed this
+  run, 0 of 5 forms govern — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
