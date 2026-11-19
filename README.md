@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-240 stdlib-only tests (Nov 19, 2026, all passing): hash determinism and
+242 stdlib-only tests (Nov 19, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -3014,6 +3014,103 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   10,000 lines; zero raw member IDs, zero patient names in all
   outputs; CLI smoke-tested on a four-digit-year dot-date 2-row
   CSV: 2 in, 1 governed, 1 quarantined).
+
+- Nov 19, 2026 build block (9:05 AM run):
+  four-digit-year non-year-first underscore dates
+  (read_claims_csv in io.py) — "03_15_2026" and "15_03_2026"
+  now normalize on read and govern as their calendar date, as
+  do single-digit month and day forms ("3_5_2026" →
+  2026-03-05) and weekday-prefixed forms ("Sunday,
+  03_16_2026"). Four-digit-year non-year-first underscore
+  datetimes ("03_15_2026 10:30:00", the space- or T-separated
+  form, or a no-seconds form) normalize the same way — the
+  time part is dropped and only the date part governs — as do
+  fractional-second, timezone-suffixed (attached and
+  space-separated), named RFC 2822 zone, and AM/PM forms (in
+  both orders), and weekday-prefixed forms. The US form is
+  tried first, so only an unambiguous day-first date reads
+  day-first ("03_04_2026" governs as 2026-03-04, "15_03_2026"
+  as 2026-03-15) and a leading component above 12 reads
+  day-first ("26_03_2015" governs as 2015-03-26) — the same
+  convention as the four-digit-year dot forms. This closes
+  the gap the Nov 19 3:05 AM run left open: four-digit-year
+  non-year-first dot dates ("03.15.2026") governed while the
+  underscore forms quarantined (verified by probe before the
+  fix — 0 of 6 valid forms governed). An impossible four-digit-year underscore
+  date ("02_30_2026"), a day-first read giving an impossible
+  month ("13_15_2026"), an out-of-range time ("03_15_2026
+  25:60:00"), an unknown zone ("03_15_2026 10:30:00 XYZ"),
+  a malformed suffix ("03_15_2026 10:30:00+99:99"), or a
+  weekday-prefixed date with a bogus label ("Funday,
+  03_15_2026") is left untouched so the gates quarantine it
+  normally; the quality gates stay strict and see only the
+  normalized value; 2 new tests (suite now 240, all
+  passing). The year-month-only form ("2026_03") carries no
+  day, so there is no calendar date to govern — mapping it to
+  the 1st of the month would fabricate a service date, which
+  a fail-closed governance framework must not do — so it
+  stays quarantined as unparseable_date (verified this run:
+  0 governed, 1 quarantined), the same decision as the
+  "2026 03" form. Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged;
+  runtime 0.450s; governed, quarantine, and summary.json
+  outputs byte-identical to a pre-run run this run; audit.csv
+  10,001 lines and audit.jsonl 10,000 lines; zero raw member
+  IDs, zero patient names in all outputs; CLI smoke-tested
+  on a four-digit-year underscore-date 2-row CSV: 2 in, 1
+  governed, 1 quarantined).
+
+- Nov 19, 2026 build block (3:05 PM run):
+  four-digit-year non-year-first compact dates
+  (read_claims_csv in io.py) — "03152026" and "15032026"
+  now normalize on read and govern as their calendar date, as
+  do weekday-prefixed forms ("Sunday, 03152026").
+  Four-digit-year non-year-first compact datetimes
+  ("03152026 10:30:00", the space- or T-separated form, or a
+  no-seconds form) normalize the same way — the time part is
+  dropped and only the date part governs — as do
+  fractional-second, timezone-suffixed (attached and
+  space-separated), named RFC 2822 zone, and AM/PM forms (in
+  both orders, attached-marker included), colon-less basic ISO
+  forms ("03152026T103000", "03152026 103000"), and
+  weekday-prefixed forms. The US form is tried first, so only
+  an unambiguous day-first date reads day-first ("03042026"
+  governs as 2026-03-04, "15032026" as 2026-03-15) and a
+  leading component above 12 reads day-first ("26032015"
+  governs as 2015-03-26) — the same convention as the
+  four-digit-year underscore forms; the year-first compact
+  form keeps priority, so a value valid both ways ("01120315")
+  still takes its year-first reading. This closes the gap the
+  Nov 19 9:05 AM run left open (verified by probe before the
+  fix — 0 of 8 valid forms governed). An impossible
+  four-digit-year compact date ("02302026"), a day-first read
+  giving an impossible month ("13152026"), an out-of-range
+  time ("03152026 25:60:00"), an unknown zone ("03152026
+  10:30:00 XYZ"), a malformed suffix ("03152026
+  10:30:00+99:99"), a malformed marker ("03152026 10:30:00
+  XM"), or a weekday-prefixed date with a bogus label
+  ("Funday, 03152026") is left untouched so the gates
+  quarantine it normally; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 242,
+  all passing). The full probe matrix this run: 22 of 23 valid
+  forms govern end-to-end; the 23rd ("01120315") normalizes to
+  "112-03-15" on read but the gates then quarantine it, since
+  strftime does not zero-pad years below 1000 and the gate's
+  %Y expects exactly four digits — pre-existing year-first
+  behavior, not a regression from this block. Demo re-verified
+  same run (10,000 in → 1,589 governed, 8,411 quarantined,
+  reasons unchanged; runtime 0.447s; governed, quarantine,
+  and summary.json outputs stable across two runs this run;
+  audit.csv 10,001 lines and audit.jsonl 10,000 lines; zero
+  raw member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a four-digit-year compact-date 2-row CSV: 2
+  in, 1 governed, 1 quarantined).
+  Remaining gap noted: a year-first compact date whose year
+  is below 1000 ("01120315") normalizes on read as
+  "112-03-15" but the gates quarantine it, since the gate's
+  %Y expects exactly four digits — a later run must decide
+  whether to zero-pad the normalized year or leave the
+  fail-closed quarantine in place.
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

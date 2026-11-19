@@ -3250,6 +3250,58 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   ("03152026", "15032026") still quarantine — probed this
   run, 0 of 2 forms govern — for a later run.
 
+- Nov 19, 2026 build block (3:05 PM run):
+  four-digit-year non-year-first compact dates
+  (read_claims_csv in io.py) — "03152026" and "15032026"
+  now normalize on read and govern as their calendar date, as
+  do weekday-prefixed forms ("Sunday, 03152026").
+  Four-digit-year non-year-first compact datetimes
+  ("03152026 10:30:00", the space- or T-separated form, or a
+  no-seconds form) normalize the same way — the time part is
+  dropped and only the date part governs — as do
+  fractional-second, timezone-suffixed (attached and
+  space-separated), named RFC 2822 zone, and AM/PM forms (in
+  both orders, attached-marker included), colon-less basic ISO
+  forms ("03152026T103000", "03152026 103000"), and
+  weekday-prefixed forms. The US form is tried first, so only
+  an unambiguous day-first date reads day-first ("03042026"
+  governs as 2026-03-04, "15032026" as 2026-03-15) and a
+  leading component above 12 reads day-first ("26032015"
+  governs as 2015-03-26) — the same convention as the
+  four-digit-year underscore forms; the year-first compact
+  form keeps priority, so a value valid both ways ("01120315")
+  still takes its year-first reading. This closes the gap the
+  Nov 19 9:05 AM run left open (verified by probe before the
+  fix — 0 of 8 valid forms governed). An impossible
+  four-digit-year compact date ("02302026"), a day-first read
+  giving an impossible month ("13152026"), an out-of-range
+  time ("03152026 25:60:00"), an unknown zone ("03152026
+  10:30:00 XYZ"), a malformed suffix ("03152026
+  10:30:00+99:99"), a malformed marker ("03152026 10:30:00
+  XM"), or a weekday-prefixed date with a bogus label
+  ("Funday, 03152026") is left untouched so the gates
+  quarantine it normally; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 242,
+  all passing). The full probe matrix this run: 22 of 23 valid
+  forms govern end-to-end; the 23rd ("01120315") normalizes to
+  "112-03-15" on read but the gates then quarantine it, since
+  strftime does not zero-pad years below 1000 and the gate's
+  %Y expects exactly four digits — pre-existing year-first
+  behavior, not a regression from this block. Demo re-verified
+  same run (10,000 in → 1,589 governed, 8,411 quarantined,
+  reasons unchanged; runtime 0.447s; governed, quarantine,
+  and summary.json outputs stable across two runs this run;
+  audit.csv 10,001 lines and audit.jsonl 10,000 lines; zero
+  raw member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a four-digit-year compact-date 2-row CSV: 2
+  in, 1 governed, 1 quarantined).
+  Remaining gap noted: a year-first compact date whose year
+  is below 1000 ("01120315") normalizes on read as
+  "112-03-15" but the gates quarantine it, since the gate's
+  %Y expects exactly four digits — a later run must decide
+  whether to zero-pad the normalized year or leave the
+  fail-closed quarantine in place.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

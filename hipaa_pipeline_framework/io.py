@@ -35,7 +35,9 @@ timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
 follows Python's %y pivot, 00-68 read as 2000-2068 and 69-99
 as 1969-1999, with the same US-first order), compact dates such as "20260315", weekday-prefixed
 compact dates such as "Sunday, 20260315" (the weekday label is
-dropped, only the compact date governs), and
+dropped, only the compact date governs), four-digit-year non-year-first compact dates such as
+"03152026" or "15032026" (the year last, with the same US-first order, so only an
+unambiguous day-first date reads day-first), and
 hyphenated month-name dates such as "15-Mar-2026", and
 numeric hyphen dates such as "03-15-2026", and
 two-digit-year numeric hyphen dates such as "03-15-26" (a legacy
@@ -618,7 +620,19 @@ def read_claims_csv(path):
     ("20260315T103000+99:99") is left untouched so the gates
     quarantine it normally. An impossible plain compact datetime
     ("20260230 10:00:00") is left untouched so the gates
-    quarantine it normally. An AM/PM compact
+    quarantine it normally. A service_date in four-digit-year
+    non-year-first compact form ("03152026" or "15032026", the
+    way some exports write compact dates with the year last)
+    normalizes the same way, so it governs; the same US-first
+    order holds ("03042026" reads as 2026-03-04, while an
+    unambiguous day-first "15032026" governs as 2026-03-15),
+    and a leading component above 12 reads day-first
+    ("26032015" governs as 2015-03-26). Four-digit-year
+    non-year-first compact datetimes ("03152026 10:30:00",
+    fractional and timezone-suffixed forms included) normalize
+    to their date part the same way; an impossible four-digit
+    date ("02302026") or a malformed suffix is left untouched
+    so the gates quarantine it normally. An AM/PM compact
     datetime ("20260315 10:30:00 AM", "20260315T09:00:00 PM", or a
     fractional-second "20260315 10:30:00.123 AM", the way
     exports write compact datetimes with an AM/PM marker)
@@ -2872,6 +2886,47 @@ def read_claims_csv(path):
                             break
                         except ValueError:
                             continue
+                    if cleaned["service_date"] == date:
+                        # Four-digit-year non-year-first compact
+                        # form: "03152026" or "15032026", the way
+                        # some exports write compact dates with the
+                        # year last — the same US-first order holds,
+                        # so only an unambiguous day-first date
+                        # reaches the DDMMYYYY attempt; a leading
+                        # component above 12 therefore reads
+                        # day-first ("26032015" governs as
+                        # 2015-03-26). Four-digit-year non-year-first
+                        # compact datetimes (fractional and
+                        # timezone-suffixed forms included) normalize
+                        # to their date part the same way; an
+                        # impossible four-digit date ("02302026") or
+                        # a malformed suffix is left untouched so the
+                        # gates quarantine it normally.
+                        for fmt in ("%m%d%Y %H:%M:%S.%f",
+                                    "%m%d%YT%H:%M:%S.%f",
+                                    "%d%m%Y %H:%M:%S.%f",
+                                    "%d%m%YT%H:%M:%S.%f",
+                                    "%m%d%Y %H:%M:%S", "%m%d%Y %H:%M",
+                                    "%m%d%YT%H:%M:%S", "%m%d%YT%H:%M",
+                                    "%d%m%Y %H:%M:%S", "%d%m%Y %H:%M",
+                                    "%d%m%YT%H:%M:%S", "%d%m%YT%H:%M",
+                                    "%m%d%YT%H%M%S.%f",
+                                    "%d%m%YT%H%M%S.%f",
+                                    "%m%d%YT%H%M%S", "%m%d%YT%H%M",
+                                    "%d%m%YT%H%M%S", "%d%m%YT%H%M",
+                                    "%m%d%Y %H%M%S.%f",
+                                    "%d%m%Y %H%M%S.%f",
+                                    "%m%d%Y %H%M%S", "%m%d%Y %H%M",
+                                    "%d%m%Y %H%M%S", "%d%m%Y %H%M",
+                                    "%m%d%Y", "%d%m%Y"):
+                            try:
+                                cleaned["service_date"] = (
+                                    datetime.strptime(
+                                        compact_date,
+                                        fmt).strftime("%Y-%m-%d"))
+                                break
+                            except ValueError:
+                                continue
             elif isinstance(date, str) and (
                     (date.isdigit() and len(date) == 6)
                     or re.fullmatch(
