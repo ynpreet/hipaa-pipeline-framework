@@ -3588,6 +3588,74 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.BAD_DATE: 8})
 
+    def test_read_claims_csv_normalizes_two_digit_year_and_non_year_first_space_separated_dates_and_datetimes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,26 03 15,120.50\n"
+                            "M-100002,03 15 26,200.00\n"
+                            "M-100003,15 03 26,310.00\n"
+                            "M-100004,03 15 2026,410.00\n"
+                            "M-100005,15 03 2026,510.00\n"
+                            "M-100006,03 15 99,610.00\n"
+                            "M-100007,03 15 69,710.00\n"
+                            "M-100008,03 15 68,810.00\n"
+                            "M-100009,3 5 26,910.00\n"
+                            "M-100010,03 15 26 10:30:00,1010.00\n"
+                            "M-100011,15 03 26T10:30:00,1110.00\n"
+                            "M-100012,03 15 26 10:30,1210.00\n"
+                            "M-100013,03 15 26 10:30:00.123,1310.00\n"
+                            "M-100014,03 15 26 10:30:00Z,1410.00\n"
+                            "M-100015,03 15 26 10:30:00+05:30,1510.00\n"
+                            "M-100016,03 15 26 10:30:00 GMT,1610.00\n"
+                            "M-100017,03 15 26 10:30:00 AM,1710.00\n"
+                            "M-100018,\"Sunday, 03 15 26 10:30:00 am +05:30\",1810.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 18)
+            # A two-digit-year or non-year-first space-separated
+            # date governs as its calendar date; a datetime
+            # governs as its date part; the time part is
+            # dropped, only the date part governs. The US form
+            # is tried first, so only an unambiguous day-first
+            # date reads day-first ("26 03 15" governs as
+            # 2015-03-26, not 2026-03-15, and "15 03 26" as
+            # 2026-03-15); there is no separate year-first
+            # two-digit form. The two-digit year follows the
+            # %y pivot ("03 15 99" governs as 1999-03-15,
+            # "03 15 68" as 2068-03-15). Single-digit month and
+            # day govern too, as their calendar date ("3 5 26"
+            # governs as 2026-03-05).
+            self.assertEqual(
+                [row["service_date"] for row in rows],
+                ["2015-03-26", "2026-03-15", "2026-03-15",
+                 "2026-03-15", "2026-03-15", "1999-03-15",
+                 "1969-03-15", "2068-03-15", "2026-03-05",
+                 "2026-03-15", "2026-03-15", "2026-03-15",
+                 "2026-03-15", "2026-03-15", "2026-03-15",
+                 "2026-03-15", "2026-03-15", "2026-03-15"])
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 18)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_two_digit_year_and_non_year_first_space_separated_dates_and_datetimes_still_quarantine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,02 30 26,120.50\n"
+                            "M-100002,13 15 26,200.00\n"
+                            "M-100003,03 32 26,310.00\n"
+                            "M-100004,\"Funday, 03 15 26\",410.00\n"
+                            "M-100005,03 15 26 25:60:00,510.00\n"
+                            "M-100006,03 15 26 10:30:00 XYZ,610.00\n"
+                            "M-100007,03 15 26 10:30:00 XM,710.00\n"
+                            "M-100008,03 15 26 10:30:00+99:99,810.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 8)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 8)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 8})
+
     def test_read_claims_csv_normalizes_ampm_basic_iso_datetimes(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"

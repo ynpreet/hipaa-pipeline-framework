@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-234 stdlib-only tests (Nov 18, 2026, all passing): hash determinism and
+236 stdlib-only tests (Nov 18, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -2922,6 +2922,55 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   space-separated forms ("26 03 15", "03 15 26", "15 03 26",
   "03 15 2026", "15 03 2026") still quarantine — probed this
   run, 0 of 5 forms govern — for a later run.
+
+- Nov 18, 2026 build block (9:05 PM run):
+  two-digit-year and non-year-first space-separated dates
+  (read_claims_csv in io.py) — "03 15 26", "15 03 26",
+  "03 15 2026", and "15 03 2026" now normalize on read and
+  govern as their calendar date, as do single-digit month and
+  day forms ("3 5 26" → 2026-03-05) and weekday-prefixed forms
+  ("Sunday, 03 15 26"). Two-digit-year and non-year-first
+  space-separated datetimes ("03 15 26 10:30:00", the space- or
+  T-separated form, or a no-seconds form "03 15 26 10:30")
+  normalize the same way — the time part is dropped and only
+  the date part governs — as do fractional-second,
+  timezone-suffixed (attached and space-separated), named RFC
+  2822 zone, and AM/PM forms (in both orders), and
+  weekday-prefixed forms. The US form is tried first, so only
+  an unambiguous day-first date reads day-first ("26 03 15"
+  governs as 2015-03-26, "15 03 26" as 2026-03-15) and there
+  is no separate year-first two-digit form — the same
+  convention as the two-digit-year dot and underscore forms.
+  The two-digit year follows Python's strptime %y pivot
+  (00-68 read as 2000-2068, 69-99 as 1969-1999), so
+  "03 15 99" governs as 1999-03-15 and "03 15 68" as
+  2068-03-15. This closes the gap the Nov 18 3:05 PM run left
+  open: space-separated ISO dates ("2026 03 15") governed
+  while the two-digit-year and non-year-first forms
+  quarantined (verified by probe before the fix — 0 of 14
+  valid forms governed, 3 of 3 invalid quarantined). An
+  impossible two-digit date ("02 30 26", "03 32 26"), a
+  day-first read giving an impossible month ("13 15 26"), an
+  out-of-range time ("03 15 26 25:60:00"), an unknown zone
+  ("03 15 26 10:30:00 XYZ"), a malformed marker ("03 15 26
+  10:30:00 XM"), a malformed suffix ("03 15 26 10:30:00+99:99"),
+  or a weekday-prefixed date with a bogus label ("Funday,
+  03 15 26") is left untouched so the gates quarantine it
+  normally; the quality gates stay strict and see only the
+  normalized value; 2 new tests (suite now 236, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.127s; CLI governed,
+  quarantine, and summary.json outputs byte-identical to a
+  pre-change run this run; audit.csv 10,001 lines and audit.jsonl
+  10,000 lines, each identical ignoring the timestamp column
+  across repeat runs; zero raw member IDs, zero patient names in
+  all outputs; CLI smoke-tested on a two-digit-year
+  space-separated-date 2-row CSV: 2 in, 1 governed,
+  1 quarantined).
+  Remaining gap noted: year-month-only ("2026 03") and
+  four-digit-year non-year-first dot dates ("03.15.2026")
+  still quarantine — probed this run, 0 of 2 forms govern —
+  for a later run.
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

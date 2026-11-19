@@ -454,6 +454,23 @@ def read_claims_csv(path):
     forms included, which normalize to their date part); an
     impossible space-separated ISO date (e.g. "2026 02 30") is
     left untouched so the gates quarantine it normally.
+    A service_date in two-digit-year or non-year-first
+    space-separated form ("03 15 26", "15 03 26", "03 15 2026",
+    or "15 03 2026", the way legacy exports write dates)
+    normalizes the same way, so it governs; the US form is
+    tried first, so only an unambiguous day-first date reads
+    day-first ("26 03 15" governs as 2015-03-26, "15 03 26"
+    as 2026-03-15) and there is no separate year-first
+    two-digit form — the same convention as the two-digit-year
+    dot and underscore forms. The two-digit year follows
+    Python's strptime %y pivot (00-68 read as 2000-2068, 69-99
+    as 1969-1999), so "03 15 99" governs as 1999-03-15.
+    Two-digit-year and non-year-first space-separated datetimes
+    ("03 15 26 10:30:00", fractional and timezone-suffixed
+    forms included) normalize to their date part the same way;
+    an impossible two-digit date ("02 30 26") or a malformed
+    suffix is left untouched so the gates quarantine it
+    normally.
     A service_date in dot-separated form (YYYY.MM.DD, another
     export convention) normalizes to ISO form (YYYY-MM-DD) on
     read, so "2026.03.15" governs instead of quarantining as
@@ -4425,6 +4442,57 @@ def read_claims_csv(path):
                 candidate = re.sub(
                     r"^(\d{4}) (\d{1,2}) (\d{1,2})(?=[\sT]|$)",
                     r"\1-\2-\3", candidate)
+                # Two-digit-year and non-year-first space-separated
+                # forms: "03 15 26" or "15 03 26" (two-digit
+                # year last), and "03 15 2026" or "15 03 2026"
+                # (four-digit year last), the way legacy exports
+                # write dates with spaces instead of hyphens —
+                # the three components are reordered into ISO
+                # form so the remainder parses as an ISO date or
+                # datetime below; the rewrite runs before the
+                # timezone and AM/PM steps so datetimes
+                # ("03 15 26 10:30:00", fractional,
+                # timezone-suffixed, named-zone, AM/PM, and
+                # weekday-prefixed forms included) normalize
+                # to their date part the same way. The US form
+                # is tried first, so only an unambiguous
+                # day-first date reaches the day-first order; a
+                # leading component above 12 therefore reads
+                # day-first ("26 03 15" governs as 2015-03-26,
+                # "15 03 26" as 2026-03-15) and there is no
+                # separate year-first two-digit form — the same
+                # convention as the two-digit-year dot and
+                # underscore forms. A two-digit year follows
+                # Python's strptime %y pivot (00-68 read as
+                # 2000-2068, 69-99 as 1969-1999), so "03 15 99"
+                # governs as 1999-03-15 and "03 15 68" as
+                # 2068-03-15. Only a form whose third component
+                # is a two- or four-digit year is rewritten, and
+                # only when the year is followed by the end of
+                # the value, a space, or a "T", so "03 15 26abc"
+                # is left untouched; an impossible date
+                # ("02 30 26", "13 15 26" — the day-first read
+                # gives month 15) still fails every format and
+                # the gates quarantine it normally.
+                _space_ymd = re.match(
+                    r"^(\d{1,2}) (\d{1,2}) (\d{2}|\d{4})(?=[\sT]|$)",
+                    candidate)
+                if _space_ymd is not None:
+                    _first, _second, _year_text = _space_ymd.groups()
+                    if int(_first) > 12:
+                        _month_text, _day_text = _second, _first
+                    else:
+                        _month_text, _day_text = _first, _second
+                    if len(_year_text) == 2:
+                        _year_num = int(_year_text)
+                        _year = (2000 + _year_num if _year_num <= 68
+                                 else 1900 + _year_num)
+                    else:
+                        _year = int(_year_text)
+                    candidate = (
+                        f"{_year:04d}-{int(_month_text):02d}-"
+                        f"{int(_day_text):02d}"
+                        + candidate[_space_ymd.end():])
                 # A timezone suffix trailing the AM/PM marker:
                 # "2026-03-15 10:30:00 AM Z" or
                 # "2026-03-15T09:00:00 PM -04:00", the way
