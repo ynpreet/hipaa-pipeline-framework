@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-236 stdlib-only tests (Nov 18, 2026, all passing): hash determinism and
+238 stdlib-only tests (Nov 19, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -2971,6 +2971,49 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   four-digit-year non-year-first dot dates ("03.15.2026")
   still quarantine — probed this run, 0 of 2 forms govern —
   for a later run.
+
+- Nov 19, 2026 build block (3:05 AM run):
+  four-digit-year non-year-first dot dates (read_claims_csv in
+  io.py) — "03.15.2026" and "15.03.2026" now normalize on read
+  and govern as their calendar date, as do single-digit month
+  and day forms and weekday-prefixed forms ("Sunday,
+  03.16.2026"). Four-digit-year non-year-first dot datetimes
+  ("03.15.2026 10:30:00", the space- or T-separated form, or a
+  no-seconds form) normalize the same way — the time part is
+  dropped and only the date part governs — as do
+  fractional-second, timezone-suffixed (attached and
+  space-separated), named RFC 2822 zone, and AM/PM forms (in
+  both orders), and weekday-prefixed forms. The US form is
+  tried first, so only an unambiguous day-first date reads
+  day-first ("03.04.2026" governs as 2026-03-04, "15.03.2026"
+  as 2026-03-15) and a leading component above 12 reads
+  day-first ("26.03.2015" governs as 2015-03-26) — the same
+  convention as the two-digit-year dot forms. This closes one
+  half of the gap the Nov 18 9:05 PM run left open (verified by
+  probe before the fix — 0 of 8 valid forms governed, 5 of 5
+  invalid quarantined). The other half is closed by decision,
+  not by code: a year-month-only value ("2026 03") carries no
+  day, so there is no calendar date to govern — mapping it to
+  the 1st of the month would fabricate a service date, which a
+  fail-closed governance framework must not do — so it stays
+  quarantined as unparseable_date (verified this run: 0
+  governed, 1 quarantined). An impossible four-digit-year dot
+  date ("02.30.2026"), a malformed suffix ("03.15.2026
+  10:30:00+99:99"), an unknown zone ("03.15.2026 10:30:00
+  XYZ"), or a weekday-prefixed date with a bogus label
+  ("Funday, 03.15.2026") is left untouched so the gates
+  quarantine it normally; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 238,
+  all passing). The fractional-second trap was re-checked:
+  "03-15-2026 10:30:00.123Z" and "2026-03-15T09:00:00.123Z"
+  still govern through their own branches, not the dot branch.
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.572s; governed,
+  quarantine, and summary.json outputs byte-identical to
+  pre-run outputs; audit.csv 10,001 lines and audit.jsonl
+  10,000 lines; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a four-digit-year dot-date 2-row
+  CSV: 2 in, 1 governed, 1 quarantined).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

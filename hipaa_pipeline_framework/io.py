@@ -491,7 +491,20 @@ def read_claims_csv(path):
     timezone-suffixed forms included) normalize to their date
     part the same way; an impossible two-digit date
     ("02.30.26") or a malformed suffix is left untouched so
-    the gates quarantine it normally. A dot-separated datetime ("2026.03.15 10:30:00"
+    the gates quarantine it normally. A service_date in
+    four-digit-year non-year-first dot-separated form
+    ("03.15.2026" or "15.03.2026", the way some exports write
+    dot dates with the year last) normalizes the same way, so
+    it governs; the same US-first order holds ("03.04.2026"
+    reads as 2026-03-04, while an unambiguous day-first
+    "15.03.2026" governs as 2026-03-15), and a leading
+    component above 12 reads day-first ("26.03.2015" governs
+    as 2015-03-26). Four-digit-year non-year-first dot
+    datetimes ("03.15.2026 10:30:00", fractional and
+    timezone-suffixed forms included) normalize to their date
+    part the same way; an impossible date ("02.30.2026") or a
+    malformed suffix is left untouched so the gates quarantine
+    it normally. A dot-separated datetime ("2026.03.15 10:30:00"
     or "2026.03.15T09:00:00", the way some exports write dot
     dates with a time stamp) normalizes to its date part the
     same way, so it governs; an impossible dot datetime (e.g.
@@ -1246,11 +1259,20 @@ def read_claims_csv(path):
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                         r"Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}\.\d{1,2}\.\d{2}(?:[ T]|$)",
+                        date, flags=re.IGNORECASE)
+                    or re.match(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
+                        r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
+                        r"Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}\.\d{1,2}\.\d{4}(?:[ T]|$)",
                         date, flags=re.IGNORECASE)):
                 # Dot-separated form only: the branch claims
                 # year-first dot dates ("2026.03.15", optionally
-                # weekday-prefixed) and two-digit-year dot dates
+                # weekday-prefixed), two-digit-year dot dates
                 # ("03.15.26", "15.03.26", optionally
+                # weekday-prefixed or carrying a time part), and
+                # four-digit-year non-year-first dot dates
+                # ("03.15.2026", "15.03.2026", optionally
                 # weekday-prefixed or carrying a time part), not
                 # every value carrying a dot — a fractional second
                 # in another family ("03-15-2026 10:30:00.123Z",
@@ -1259,8 +1281,10 @@ def read_claims_csv(path):
                 # here and left unparseable. The two-digit-year
                 # guard requires the two-digit year to be
                 # followed by the end of the value or a space or
-                # "T", so a four-digit-year dot date ("15.03.2026")
-                # is not claimed by it and still quarantines.
+                # "T", and the four-digit-year guard requires
+                # the same after its four-digit year, so a
+                # fractional second in another family is still
+                # not claimed by either.
                 # weekday-prefixed dot form ("Sunday, 2026.03.15"
                 # or "Mon, 2026.03.16") has its weekday label
                 # dropped (it is not validated against the date)
@@ -1323,7 +1347,16 @@ def read_claims_csv(path):
                 # form. A four-digit year never reaches the %y
                 # formats: %Y matches it first, and %y fails on
                 # it (it consumes two digits, then expects ".").
-                for fmt in ("%Y.%m.%d", "%m.%d.%y", "%d.%m.%y"):
+                # Four-digit-year non-year-first dot form:
+                # "03.15.2026" or "15.03.2026", the way some
+                # exports write dot dates with the year last —
+                # the same US-first order holds, so only an
+                # unambiguous day-first date reaches the
+                # DD.MM.YYYY attempt; a leading component above
+                # 12 therefore reads day-first ("26.03.2015"
+                # governs as 2015-03-26).
+                for fmt in ("%Y.%m.%d", "%m.%d.%y", "%d.%m.%y",
+                            "%m.%d.%Y", "%d.%m.%Y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(
                             dot_date, fmt).strftime("%Y-%m-%d")
@@ -1342,7 +1375,11 @@ def read_claims_csv(path):
                     # Two-digit-year dot datetimes ("03.15.26
                     # 10:30:00", fractional and timezone-suffixed
                     # forms included) normalize to their date part
-                    # the same way.
+                    # the same way. Four-digit-year non-year-first
+                    # dot datetimes ("03.15.2026 10:30:00",
+                    # fractional and timezone-suffixed forms
+                    # included) normalize to their date part the
+                    # same way, with the same US-first order.
                     for fmt in ("%Y.%m.%d %H:%M:%S",
                                 "%Y.%m.%d %H:%M",
                                 "%Y.%m.%d %H:%M:%S.%f",
@@ -1360,7 +1397,19 @@ def read_claims_csv(path):
                                 "%d.%m.%y %H:%M:%S.%f",
                                 "%d.%m.%yT%H:%M:%S",
                                 "%d.%m.%yT%H:%M",
-                                "%d.%m.%yT%H:%M:%S.%f"):
+                                "%d.%m.%yT%H:%M:%S.%f",
+                                "%m.%d.%Y %H:%M:%S",
+                                "%m.%d.%Y %H:%M",
+                                "%m.%d.%Y %H:%M:%S.%f",
+                                "%m.%d.%YT%H:%M:%S",
+                                "%m.%d.%YT%H:%M",
+                                "%m.%d.%YT%H:%M:%S.%f",
+                                "%d.%m.%Y %H:%M:%S",
+                                "%d.%m.%Y %H:%M",
+                                "%d.%m.%Y %H:%M:%S.%f",
+                                "%d.%m.%YT%H:%M:%S",
+                                "%d.%m.%YT%H:%M",
+                                "%d.%m.%YT%H:%M:%S.%f"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 dot_date, fmt).strftime("%Y-%m-%d")
@@ -1441,7 +1490,19 @@ def read_claims_csv(path):
                                         "%d.%m.%y %H:%M:%S.%f",
                                         "%d.%m.%yT%H:%M:%S",
                                         "%d.%m.%yT%H:%M",
-                                        "%d.%m.%yT%H:%M:%S.%f"):
+                                        "%d.%m.%yT%H:%M:%S.%f",
+                                        "%m.%d.%Y %H:%M:%S",
+                                        "%m.%d.%Y %H:%M",
+                                        "%m.%d.%Y %H:%M:%S.%f",
+                                        "%m.%d.%YT%H:%M:%S",
+                                        "%m.%d.%YT%H:%M",
+                                        "%m.%d.%YT%H:%M:%S.%f",
+                                        "%d.%m.%Y %H:%M:%S",
+                                        "%d.%m.%Y %H:%M",
+                                        "%d.%m.%Y %H:%M:%S.%f",
+                                        "%d.%m.%YT%H:%M:%S",
+                                        "%d.%m.%YT%H:%M",
+                                        "%d.%m.%YT%H:%M:%S.%f"):
                                 try:
                                     cleaned["service_date"] = (
                                         datetime.strptime(
