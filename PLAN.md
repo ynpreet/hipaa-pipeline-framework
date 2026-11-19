@@ -3202,6 +3202,54 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   outputs; CLI smoke-tested on a four-digit-year dot-date 2-row
   CSV: 2 in, 1 governed, 1 quarantined).
 
+- Nov 19, 2026 build block (9:05 AM run):
+  four-digit-year non-year-first underscore dates
+  (read_claims_csv in io.py) — "03_15_2026" and "15_03_2026"
+  now normalize on read and govern as their calendar date, as
+  do single-digit month and day forms ("3_5_2026" →
+  2026-03-05) and weekday-prefixed forms ("Sunday,
+  03_16_2026"). Four-digit-year non-year-first underscore
+  datetimes ("03_15_2026 10:30:00", the space- or T-separated
+  form, or a no-seconds form) normalize the same way — the
+  time part is dropped and only the date part governs — as do
+  fractional-second, timezone-suffixed (attached and
+  space-separated), named RFC 2822 zone, and AM/PM forms (in
+  both orders), and weekday-prefixed forms. The US form is
+  tried first, so only an unambiguous day-first date reads
+  day-first ("03_04_2026" governs as 2026-03-04, "15_03_2026"
+  as 2026-03-15) and a leading component above 12 reads
+  day-first ("26_03_2015" governs as 2015-03-26) — the same
+  convention as the four-digit-year dot forms. This closes
+  the gap the Nov 19 3:05 AM run left open: four-digit-year
+  non-year-first dot dates ("03.15.2026") governed while the
+  underscore forms quarantined (verified by probe before the
+  fix — 0 of 6 valid forms governed). An impossible four-digit-year underscore
+  date ("02_30_2026"), a day-first read giving an impossible
+  month ("13_15_2026"), an out-of-range time ("03_15_2026
+  25:60:00"), an unknown zone ("03_15_2026 10:30:00 XYZ"),
+  a malformed suffix ("03_15_2026 10:30:00+99:99"), or a
+  weekday-prefixed date with a bogus label ("Funday,
+  03_15_2026") is left untouched so the gates quarantine it
+  normally; the quality gates stay strict and see only the
+  normalized value; 2 new tests (suite now 240, all
+  passing). The year-month-only form ("2026_03") carries no
+  day, so there is no calendar date to govern — mapping it to
+  the 1st of the month would fabricate a service date, which
+  a fail-closed governance framework must not do — so it
+  stays quarantined as unparseable_date (verified this run:
+  0 governed, 1 quarantined), the same decision as the
+  "2026 03" form. Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged;
+  runtime 0.450s; governed, quarantine, and summary.json
+  outputs byte-identical to a pre-run run this run; audit.csv
+  10,001 lines and audit.jsonl 10,000 lines; zero raw member
+  IDs, zero patient names in all outputs; CLI smoke-tested
+  on a four-digit-year underscore-date 2-row CSV: 2 in, 1
+  governed, 1 quarantined).
+  Remaining gap noted: compact non-year-first dates
+  ("03152026", "15032026") still quarantine — probed this
+  run, 0 of 2 forms govern — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
