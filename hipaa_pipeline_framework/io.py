@@ -417,7 +417,11 @@ def read_claims_csv(path):
     an unknown zone (e.g. "03/15/2026 10:30:00 XYZ") is left in
     place and the gates quarantine it normally, as does an
     impossible date carrying a valid zone (e.g. "02/30/2026
-    10:00:00 GMT").
+    10:00:00 GMT"). A lowercase "z" reads as "Z" here, so
+    "03/15/2026 10:30:00z", "03/15/2026t10:30:00z", and a
+    weekday-prefixed "Sunday, 03/15/2026 10:30:00z" strip the
+    same way and govern, while every lowercase-z slash form
+    quarantined until now (verified by probe before the fix).
     A service_date carrying a time stamp
     (a space- or "T"-separated datetime such as "2026-03-15
     10:30:00" or "2026-03-15T09:00:00", the way spreadsheet
@@ -1223,7 +1227,9 @@ def read_claims_csv(path):
                         # "03/15/2026 10:30:00 GMT", the way
                         # email headers write zoned slash
                         # timestamps) and the date part governs;
-                        # the offset itself is not converted.
+                        # a lowercase "z" reads as "Z" here, so
+                        # "03/15/2026 10:30:00z" strips the same
+                        # way. The offset itself is not converted.
                         # Only the RFC 2822 obsolete-zone list
                         # plus UTC is accepted (UT, GMT, UTC,
                         # EST, EDT, CST, CDT, MST, MDT, PST,
@@ -1251,7 +1257,7 @@ def read_claims_csv(path):
                         # an impossible date carrying a valid
                         # suffix ("02/30/2026 10:00:00Z").
                         tz_stripped = slash_date
-                        if tz_stripped.endswith("Z"):
+                        if tz_stripped.endswith(("Z", "z")):
                             tz_stripped = tz_stripped[:-1]
                         else:
                             suffix = re.search(
