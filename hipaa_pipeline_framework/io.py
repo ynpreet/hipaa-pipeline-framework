@@ -98,7 +98,14 @@ digits), "1710460800000000" (microseconds, fifteen or sixteen
 digits), or "1710460800000000000" (nanoseconds, eighteen or
 nineteen digits, the way API and database exports write
 timestamps) — the
-UTC date governs, and an epoch whose UTC date falls outside
+UTC date governs, and fractional-second epoch timestamps such
+as "1710460800.5" (seconds), "1710460800000.25"
+(milliseconds), "1710460800000000.5" (microseconds), or
+"1710460800000000000.5" (nanoseconds, the way
+high-resolution API and database exports write timestamps as
+a float) govern the same way — the sub-second part is
+dropped, only the whole count is scaled — while an epoch
+whose UTC date falls outside
 2000-01-01..2100-01-01, or an eleven-digit bare number (ambiguous
 between seconds and milliseconds), or a fourteen-digit bare number
 (microseconds before 2000 only), or a seventeen-digit bare number
@@ -918,7 +925,15 @@ def read_claims_csv(path):
     ("1710460800000000000"),
     the way API and database exports write timestamps —
     converts to its UTC date (YYYY-MM-DD) on read and governs
-    instead of quarantining as unparseable_date; only epochs
+    instead of quarantining as unparseable_date; a
+    fractional-second epoch timestamp ("1710460800.5",
+    "1710460800000.25", "1710460800000000.5", or
+    "1710460800000000000.5", the way high-resolution exports
+    write timestamps as a float) governs the same way — the
+    sub-second part is dropped and only the whole count is
+    scaled, under the same 2000-01-01..2100-01-01 window and
+    the same whole-part length rules (an eleven-, fourteen-,
+    or seventeen-digit whole part stays quarantined); only epochs
     whose UTC date falls in 2000-01-01..2100-01-01 are accepted,
     so an epoch outside that window ("9999999999999999999" reads
     as 2286, "0000000000000000000" as 1970) or a bare number of any
@@ -4607,6 +4622,50 @@ def read_claims_csv(path):
                 elif len(date) in (15, 16):
                     seconds //= 1000000
                 elif len(date) in (18, 19):
+                    seconds //= 1000000000
+                if 946684800 <= seconds <= 4102444800:
+                    cleaned["service_date"] = datetime.fromtimestamp(
+                        seconds, tz=timezone.utc).strftime("%Y-%m-%d")
+            elif isinstance(date, str) and re.fullmatch(
+                    r"\d+\.\d+", date) and len(
+                        date.split(".", 1)[0]) in (
+                            9, 10, 12, 13, 15, 16, 18, 19):
+                # Fractional-second Unix epoch timestamps: a bare
+                # epoch count carrying a fractional part
+                # ("1710460800.5", "1710460800.123"), the way
+                # high-resolution API and database exports write
+                # timestamps as a float — converts to its UTC date
+                # (YYYY-MM-DD) and governs instead of
+                # quarantining as unparseable_date. The fractional
+                # part is below one second, so it is dropped and
+                # only the whole count is scaled: nine or ten
+                # digits are seconds, twelve or thirteen are
+                # milliseconds ("1710460800000.5"), fifteen or
+                # sixteen are microseconds, eighteen or nineteen
+                # are nanoseconds. The same window as the bare
+                # epoch branch applies — only epochs whose UTC
+                # date falls in 2000-01-01..2100-01-01 are
+                # accepted, so a fractional epoch outside that
+                # window ("710460800.5" reads as 1992) is left
+                # untouched so the gates quarantine it normally,
+                # as is a fractional number whose whole part has
+                # an ambiguous length ("17104608000.5", eleven
+                # digits — seconds past 2100 or milliseconds
+                # before 2001), a fourteen- or seventeen-digit
+                # whole part (microseconds or nanoseconds before
+                # 2000 only), or a value that is not a plain
+                # digits-dot-digits number ("1710460800.",
+                # "1710460800.5x", ".5") — the fullmatch keeps
+                # those out of this branch. A non-midnight
+                # fractional epoch still governs as its UTC date
+                # part; the time of day needs no conversion.
+                whole = date.split(".", 1)[0]
+                seconds = int(whole)
+                if len(whole) in (12, 13):
+                    seconds //= 1000
+                elif len(whole) in (15, 16):
+                    seconds //= 1000000
+                elif len(whole) in (18, 19):
                     seconds //= 1000000000
                 if 946684800 <= seconds <= 4102444800:
                     cleaned["service_date"] = datetime.fromtimestamp(

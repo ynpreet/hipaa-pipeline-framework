@@ -2102,6 +2102,52 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.BAD_DATE: 4})
 
+    def test_read_claims_csv_normalizes_fractional_epoch_timestamps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,1710460800.5,120.50\n"
+                            "M-100002,1710460800000.25,200.00\n"
+                            "M-100003,1710500000.999,310.00\n"
+                            "M-100004,1710460800000000.5,410.00\n"
+                            "M-100005,1710460800000000000.5,510.00\n"
+                            "M-100006,946684800.0,610.00\n"
+                            "M-100007,4102444800000.999,710.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 7)
+            self.assertEqual(rows[0]["service_date"], "2024-03-15")
+            self.assertEqual(rows[1]["service_date"], "2024-03-15")
+            # A non-midnight fractional epoch still governs as its
+            # UTC date; the sub-second part never shifts the date.
+            self.assertEqual(rows[2]["service_date"], "2024-03-15")
+            self.assertEqual(rows[3]["service_date"], "2024-03-15")
+            self.assertEqual(rows[4]["service_date"], "2024-03-15")
+            # Range bounds are inclusive: 2000-01-01 and 2100-01-01.
+            self.assertEqual(rows[5]["service_date"], "2000-01-01")
+            self.assertEqual(rows[6]["service_date"], "2100-01-01")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 7)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_fractional_epoch_still_quarantines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,710460800.5,120.50\n"
+                            "M-100002,9999999999999999999.5,200.00\n"
+                            "M-100003,17104608000.5,310.00\n"
+                            "M-100004,17104608000000.5,410.00\n"
+                            "M-100005,17104608000000000.5,510.00\n"
+                            "M-100006,1710460800.,610.00\n"
+                            "M-100007,1710460800.5x,710.00\n"
+                            "M-100008,.5,810.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 8)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 8)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 8})
+
     def test_read_claims_csv_normalizes_ordinal_dates(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"

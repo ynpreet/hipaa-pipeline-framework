@@ -3334,6 +3334,44 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   patient names in all outputs; CLI smoke-tested on a
   sub-1000-year 2-row CSV: 2 in, 1 governed, 1 quarantined).
 
+- Nov 20, 2026 build block (3:05 AM run):
+  fractional-second epoch timestamps (read_claims_csv in
+  io.py) — a service_date written as a Unix epoch carrying a
+  fractional part ("1710460800.5", "1710460800.123"), the way
+  high-resolution API and database exports write timestamps
+  as a float, now converts to its UTC date (YYYY-MM-DD) and
+  governs instead of quarantining as unparseable_date; the
+  sub-second part is dropped and only the whole count is
+  scaled, so seconds ("1710460800.5"), milliseconds
+  ("1710460800000.25"), microseconds
+  ("1710460800000000.5"), and nanoseconds
+  ("1710460800000000000.5") all govern as 2024-03-15, as does
+  a non-midnight fractional epoch ("1710500000.999"), and the
+  window bounds are inclusive ("946684800.0" governs as
+  2000-01-01, "4102444800000.999" as 2100-01-01). This closes
+  a gap found by probe before the fix — 0 of 4 fractional
+  epoch forms governed. A fractional epoch outside the
+  2000-01-01..2100-01-01 window ("710460800.5" reads as 1992,
+  "9999999999999999999.5" as 2286), a fractional number whose
+  whole part has an ambiguous length ("17104608000.5",
+  eleven digits; "17104608000000.5", fourteen digits;
+  "17104608000000000.5", seventeen digits), or a value that
+  is not plain digits-dot-digits ("1710460800.",
+  "1710460800.5x", ".5") is left untouched so the gates
+  quarantine it normally; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 246,
+  all passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime
+  0.544s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines
+  and audit.jsonl 10,000 lines, differing only in their
+  timestamp columns; zero raw member IDs, zero patient names
+  in all outputs; CLI smoke-tested on a fractional-epoch
+  3-row CSV: 3 in, 2 governed, 1 quarantined).
+  Remaining gap noted: an ISO datetime with lowercase
+  separators ("2026-03-15t10:30:00z") still quarantines —
+  probed this run, 0 of 1 forms govern — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
