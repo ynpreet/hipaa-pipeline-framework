@@ -29,7 +29,9 @@ datetime-stamped dates such as "2026-03-15 10:30:00",
 AM/PM ISO datetimes such as "2026-03-15 10:30:00 AM" (the
 marker is dropped, only the date part governs), and
 timezone-suffixed datetimes such as "2026-03-15T09:00:00Z" or
-"2026-03-15 10:30:00+05:30", dot-separated dates such as
+"2026-03-15 10:30:00+05:30" (a lowercase "t" separator and "z"
+designator, as in "2026-03-15t10:30:00z", read the same way),
+dot-separated dates such as
 "2026.03.15", two-digit-year dot-separated dates such as
 "03.15.26" (a legacy export convention; the two-digit year
 follows Python's %y pivot, 00-68 read as 2000-2068 and 69-99
@@ -421,9 +423,16 @@ def read_claims_csv(path):
     10:30:00" or "2026-03-15T09:00:00", the way spreadsheet
     exports write datetimes) is normalized to its date part
     (YYYY-MM-DD) on read, so it governs instead of quarantining
-    as unparseable_date; a datetime that is not a real calendar
-    date or has a garbage time part (e.g. "2026-02-30 10:00:00")
-    is left untouched so the gates quarantine it normally. The quality
+    as unparseable_date; a lowercase separator and designator
+    ("2026-03-15t10:30:00", "2026-03-15t10:30:00z", or
+    "2026-03-15T09:00:00z", the way some exports write ISO 8601
+    in lowercase) normalize the same way — the separator and the
+    designator are case-insensitive, so only the date part
+    governs, while every lowercase form quarantined until now
+    (verified by probe before the fix); a datetime that is not a
+    real calendar date or has a garbage time part (e.g.
+    "2026-02-30 10:00:00") is left untouched so the gates
+    quarantine it normally. The quality
     gates themselves stay strict: they see only the normalized
     value, never the raw formatting.
     An AM/PM ISO datetime ("2026-03-15 10:30:00 AM" or
@@ -451,7 +460,8 @@ def read_claims_csv(path):
     timestamps — has that suffix stripped before the datetime is
     parsed, so "2026-03-15T09:00:00Z", "2026-03-15 10:30:00+05:30",
     and "2026-03-15 10:30:00 GMT" also govern as their date part;
-    the offset itself is not converted (the gate needs the service
+    a lowercase "z" reads as "Z", so "2026-03-15 10:30:00z"
+    governs too; the offset itself is not converted (the gate needs the service
     date as written, not a shifted one). Only the RFC 2822
     obsolete-zone list plus UTC is accepted (UT, GMT, UTC, EST,
     EDT, CST, CDT, MST, MDT, PST, PDT), so an unknown zone
@@ -466,8 +476,8 @@ def read_claims_csv(path):
     instead of hyphens) normalizes to ISO form (YYYY-MM-DD) on
     read, so it governs instead of quarantining as
     unparseable_date, as does a space-separated ISO datetime
-    ("2026 03 15 10:30:00", the space- or T-separated form, or
-    a no-seconds form "2026 03 15 10:30", fractional,
+    ("2026 03 15 10:30:00", the space-, T-, or lowercase-t-separated
+    form, or a no-seconds form "2026 03 15 10:30", fractional,
     timezone-suffixed, named-zone, AM/PM, and weekday-prefixed
     forms included, which normalize to their date part); an
     impossible space-separated ISO date (e.g. "2026 02 30") is
@@ -4670,7 +4680,8 @@ def read_claims_csv(path):
                 if 946684800 <= seconds <= 4102444800:
                     cleaned["service_date"] = datetime.fromtimestamp(
                         seconds, tz=timezone.utc).strftime("%Y-%m-%d")
-            elif isinstance(date, str) and (" " in date or "T" in date):
+            elif isinstance(date, str) and (" " in date or "T" in date
+                                         or "t" in date):
                 candidate = date
                 # Weekday-prefixed ISO form: "Sunday, 2026-03-15"
                 # or "Mon, 2026-03-16 10:30:00", the way
@@ -4713,7 +4724,7 @@ def read_claims_csv(path):
                 # month and day ("2026 3 5") rewrite the same
                 # way, since strptime accepts them unpadded.
                 candidate = re.sub(
-                    r"^(\d{4}) (\d{1,2}) (\d{1,2})(?=[\sT]|$)",
+                    r"^(\d{4}) (\d{1,2}) (\d{1,2})(?=[\sTt]|$)",
                     r"\1-\2-\3", candidate)
                 # Two-digit-year and non-year-first space-separated
                 # forms: "03 15 26" or "15 03 26" (two-digit
@@ -4748,7 +4759,7 @@ def read_claims_csv(path):
                 # gives month 15) still fails every format and
                 # the gates quarantine it normally.
                 _space_ymd = re.match(
-                    r"^(\d{1,2}) (\d{1,2}) (\d{2}|\d{4})(?=[\sT]|$)",
+                    r"^(\d{1,2}) (\d{1,2}) (\d{2}|\d{4})(?=[\sTt]|$)",
                     candidate)
                 if _space_ymd is not None:
                     _first, _second, _year_text = _space_ymd.groups()
@@ -4786,8 +4797,10 @@ def read_claims_csv(path):
                 # ("AM +99:99") is not a well-formed
                 # designator or offset, so it stays and
                 # parsing fails and the gates quarantine
-                # the value normally.
-                if candidate.endswith("Z"):
+                # the value normally. A lowercase "z" reads
+                # as "Z" here, so "2026-03-15t10:30:00 am z"
+                # strips the same way.
+                if candidate.endswith(("Z", "z")):
                     candidate = candidate[:-1].rstrip()
                 else:
                     _ampm_suffix = re.search(
@@ -4832,8 +4845,10 @@ def read_claims_csv(path):
                 # fails and the gates quarantine the value
                 # normally. Anything else is left in place so
                 # parsing fails and the gates quarantine the
-                # value normally.
-                if candidate.endswith("Z"):
+                # value normally. A lowercase "z" reads as "Z"
+                # here, so "2026-03-15t10:30:00z" strips the
+                # same way.
+                if candidate.endswith(("Z", "z")):
                     candidate = candidate[:-1]
                 else:
                     suffix = re.search(

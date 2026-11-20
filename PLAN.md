@@ -3368,9 +3368,40 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   timestamp columns; zero raw member IDs, zero patient names
   in all outputs; CLI smoke-tested on a fractional-epoch
   3-row CSV: 3 in, 2 governed, 1 quarantined).
-  Remaining gap noted: an ISO datetime with lowercase
-  separators ("2026-03-15t10:30:00z") still quarantines —
-  probed this run, 0 of 1 forms govern — for a later run.
+
+- Nov 20, 2026 build block (9:05 AM run):
+  lowercase ISO datetimes (read_claims_csv in io.py) — a
+  service_date written as an ISO 8601 datetime in lowercase
+  ("2026-03-15t10:30:00z", the way some exports write ISO
+  timestamps) now normalizes to its date part (YYYY-MM-DD) and
+  governs instead of quarantining as unparseable_date: the ISO
+  branch guard now also accepts a lowercase "t", and a trailing
+  lowercase "z" is stripped as "Z" before parsing (the "T"
+  formats already matched case-insensitively, which is why only
+  the spaced AM/PM form governed before). This closes the gap
+  the 3:05 AM run left open (verified by probe before the fix —
+  1 of 9 lowercase forms governed, the spaced AM/PM form only;
+  after the fix all 10 forms in the new test govern end-to-end):
+  "2026-03-15t10:30:00z", "2026-03-15t10:30:00",
+  "2026-03-15T09:00:00z", "2026-03-15 10:30:00z",
+  "2026-03-15t10:30:00.123z", "2026-03-15t10:30:00+05:30",
+  "2026-03-15t10:30", "2026-03-15t10:30:00am",
+  "Sunday, 2026-03-16t10:30:00z", and "2026 03 15t10:30:00".
+  An impossible lowercase date ("2026-02-30t10:30:00z"), a
+  malformed offset ("2026-03-15t10:30:00+99:99"), an unknown
+  zone ("2026-03-15t10:30:00 xyz"), or a malformed marker
+  ("2026-03-15t10:30:00 xm") is left untouched so the gates
+  quarantine it normally, as is a colon-less time
+  ("2026-03-15T103000"); the quality gates stay strict and see
+  only the normalized value; 2 new tests (suite now 248, all
+  passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime
+  0.530s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines
+  and audit.jsonl 10,000 lines, differing only in their
+  timestamp columns; zero raw member IDs, zero patient names
+  in all outputs; CLI smoke-tested on a lowercase-ISO 3-row
+  CSV: 3 in, 2 governed, 1 quarantined).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
