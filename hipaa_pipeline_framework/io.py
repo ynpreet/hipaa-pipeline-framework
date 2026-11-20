@@ -289,6 +289,11 @@ write_summary_json writes a run summary (the plain dict from
 summarize_run, which contains counts and tallies and no record
 data) to JSON so a run's outcome can be filed or reported without
 any patient data attached.
+A normalized date in a year below 1000 — "01120315", "03/15/0112",
+"0112-03-15 10:30:00" — governs as a four-digit year ("0112-03-15"):
+strftime does not zero-pad such years, so the short year is padded
+back to four digits on read, once, for every date form; an
+impossible date in such a year still quarantines.
 """
 
 import csv
@@ -4798,6 +4803,23 @@ def read_claims_csv(path):
                 if parsed is not None:
                     cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
                 # else: not a real datetime: gates quarantine it
+            # strftime("%Y") does not zero-pad years below 1000,
+            # so a normalized date in year 112 comes out as
+            # "112-03-15" and the gates — which need exactly four
+            # year digits — quarantine it. Pad a short year back
+            # to four digits here, once, for every branch, so
+            # "01120315" governs as 0112-03-15. Only a value
+            # shaped like a short-year ISO date is touched; the
+            # gates still validate the calendar date afterwards,
+            # so an impossible date still quarantines.
+            date = cleaned.get("service_date") or ""
+            parts = date.split("-")
+            if (len(parts) == 3 and parts[0].isdigit()
+                    and len(parts[0]) < 4
+                    and len(parts[1]) == 2 and parts[1].isdigit()
+                    and len(parts[2]) == 2 and parts[2].isdigit()):
+                cleaned["service_date"] = (parts[0].zfill(4) + "-"
+                                           + parts[1] + "-" + parts[2])
             if cleaned and any(value not in (None, "")
                                for value in cleaned.values()):
                 rows.append(cleaned)

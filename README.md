@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-242 stdlib-only tests (Nov 19, 2026, all passing): hash determinism and
+244 stdlib-only tests (Nov 19, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -3111,6 +3111,38 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   %Y expects exactly four digits — a later run must decide
   whether to zero-pad the normalized year or leave the
   fail-closed quarantine in place.
+
+- Nov 19, 2026 build block (9:05 PM run):
+  sub-1000-year dates (read_claims_csv in io.py) — a
+  normalized date in a year below 1000 now governs instead of
+  quarantining: strftime("%Y") does not zero-pad such years,
+  so "01120315" came out as "112-03-15" and the gates (which
+  need exactly four year digits) quarantined it. The short year
+  is now padded back to four digits on read, once, at the point
+  rows are collected, so the fix covers every date form at once
+  — compact ("01120315" governs as 0112-03-15), slash
+  ("0112/03/15", "03/15/0112"), dot ("0112.03.15",
+  "03.15.0112"), underscore ("0112_03_15", "03_15_0112"), and
+  ISO datetimes ("0112-03-15 10:30:00"); an already-ISO
+  "0112-03-15" governed before and still does. This closes the
+  gap the Nov 19 3:05 PM run left open (verified by probe
+  before the fix — 1 of 11 valid forms governed, the other 10
+  quarantined on the short year; after the fix all 11 govern
+  end-to-end). An ambiguous compact value ("03150112") keeps
+  its year-first reading and governs as 0315-01-12, and a
+  compact value whose year-first reading is impossible
+  ("01120230") takes the non-year-first fallback and governs
+  as 0230-01-12; an impossible date in a sub-1000 year
+  ("0112-02-30", "02/30/0112") is left untouched so the gates
+  quarantine it normally; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 244,
+  all passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime
+  0.639s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines
+  and audit.jsonl 10,000 lines; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a
+  sub-1000-year 2-row CSV: 2 in, 1 governed, 1 quarantined).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 

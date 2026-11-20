@@ -3302,6 +3302,38 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   whether to zero-pad the normalized year or leave the
   fail-closed quarantine in place.
 
+- Nov 19, 2026 build block (9:05 PM run):
+  sub-1000-year dates (read_claims_csv in io.py) — a
+  normalized date in a year below 1000 now governs instead of
+  quarantining: strftime("%Y") does not zero-pad such years,
+  so "01120315" came out as "112-03-15" and the gates (which
+  need exactly four year digits) quarantined it. The short year
+  is now padded back to four digits on read, once, at the point
+  rows are collected, so the fix covers every date form at once
+  — compact ("01120315" governs as 0112-03-15), slash
+  ("0112/03/15", "03/15/0112"), dot ("0112.03.15",
+  "03.15.0112"), underscore ("0112_03_15", "03_15_0112"), and
+  ISO datetimes ("0112-03-15 10:30:00"); an already-ISO
+  "0112-03-15" governed before and still does. This closes the
+  gap the Nov 19 3:05 PM run left open (verified by probe
+  before the fix — 1 of 11 valid forms governed, the other 10
+  quarantined on the short year; after the fix all 11 govern
+  end-to-end). An ambiguous compact value ("03150112") keeps
+  its year-first reading and governs as 0315-01-12, and a
+  compact value whose year-first reading is impossible
+  ("01120230") takes the non-year-first fallback and governs
+  as 0230-01-12; an impossible date in a sub-1000 year
+  ("0112-02-30", "02/30/0112") is left untouched so the gates
+  quarantine it normally; the quality gates stay strict and
+  see only the normalized value; 2 new tests (suite now 244,
+  all passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime
+  0.639s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines
+  and audit.jsonl 10,000 lines; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a
+  sub-1000-year 2-row CSV: 2 in, 1 governed, 1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

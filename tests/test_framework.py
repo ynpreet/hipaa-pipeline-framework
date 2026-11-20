@@ -1722,6 +1722,48 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.BAD_DATE: 2})
 
+    def test_read_claims_csv_zero_pads_sub_thousand_year_dates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,01120315,120.50\n"
+                            "M-100002,03150112,200.00\n"
+                            "M-100003,0112/03/15,310.00\n"
+                            "M-100004,03/15/0112,410.00\n"
+                            "M-100005,0112.03.15,510.00\n"
+                            "M-100006,03_15_0112,610.00\n"
+                            "M-100007,0112-03-15 10:30:00,710.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 7)
+            self.assertEqual(rows[0]["service_date"], "0112-03-15")
+            # "03150112" is ambiguous: the year-first compact
+            # reading (0315-01-12) is a real date and keeps
+            # priority over the non-year-first reading, so the
+            # short year is the 0315 one, padded back to four
+            # digits the same way.
+            self.assertEqual(rows[1]["service_date"], "0315-01-12")
+            self.assertEqual(rows[2]["service_date"], "0112-03-15")
+            self.assertEqual(rows[3]["service_date"], "0112-03-15")
+            self.assertEqual(rows[4]["service_date"], "0112-03-15")
+            self.assertEqual(rows[5]["service_date"], "0112-03-15")
+            self.assertEqual(rows[6]["service_date"], "0112-03-15")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 7)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_sub_thousand_year_date_still_quarantines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,0112-02-30,120.50\n"
+                            "M-100002,02/30/0112,200.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 2)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 2)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 2})
+
     def test_read_claims_csv_normalizes_two_digit_year_hyphen_dates(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"
