@@ -648,7 +648,10 @@ def read_claims_csv(path):
     datetime ("20260230T103000"), an out-of-range time
     ("20260315T256000"), or a malformed suffix
     ("20260315T103000+99:99") is left untouched so the gates
-    quarantine it normally. An impossible plain compact datetime
+    quarantine it normally. A lowercase "z" reads as "Z" here, so
+    "20260315T103000z" strips the same way and governs, while
+    every lowercase-z compact form quarantined until now (verified
+    by probe before the fix). An impossible plain compact datetime
     ("20260230 10:00:00") is left untouched so the gates
     quarantine it normally. A service_date in four-digit-year
     non-year-first compact form ("03152026" or "15032026", the
@@ -2893,7 +2896,9 @@ def read_claims_csv(path):
                 compact_date = re.sub(
                     r"\s*(?:AM|PM)$", "", compact_date,
                     flags=re.IGNORECASE).rstrip()
-                if compact_date.endswith("Z"):
+                # A lowercase "z" reads as "Z" here, so
+                # "20260315T103000z" strips the same way.
+                if compact_date.endswith(("Z", "z")):
                     compact_date = compact_date[:-1]
                 else:
                     suffix = re.search(

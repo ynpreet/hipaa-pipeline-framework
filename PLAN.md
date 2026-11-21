@@ -3505,7 +3505,39 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   audit.csv 10,001 lines and audit.jsonl 10,000 lines, differing
   only in their timestamp columns; zero raw member IDs, zero
   patient names in all outputs; CLI smoke-tested on a
-  lowercase-z underscore 3-row CSV: 3 in, 2 governed,
+- Nov 21, 2026 build block (9:05 AM run):
+  lowercase-z compact datetimes (read_claims_csv in io.py) — a
+  service_date written as a compact datetime carrying a lowercase
+  "z" designator ("20260315T103000z", the way some API exports
+  write compact datetimes) now has the "z" stripped as "Z" in
+  the compact timezone branch and normalizes to its date part
+  (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date: the compact branch guard already accepted a
+  lowercase "t" separator (strptime literals match
+  case-insensitively, which is why "20260315t103000"
+  governed before), so only the trailing "z" needed the fix.
+  This closes the gap the 3:05 AM run left open (verified by
+  probe before the fix — 0 of 10 lowercase-z compact forms
+  governed; after the fix all 10 forms in the new test govern
+  end-to-end): "20260315T103000z", "20260315t103000z",
+  "20260315 10:30:00z", "20260315T103000.123z",
+  "20260315 10:30:00 z", "20260315T09:00:00z",
+  "20260315T1030z", "20260315 10:30z",
+  "Sunday, 20260316T103000z", and "20260315 10:30:00z AM". An
+  impossible lowercase-z date ("20260230T103000z"), a malformed
+  offset ("20260315T103000+99:99"), an unknown zone
+  ("20260315T103000 xyz"), a bogus weekday label ("Funday,
+  20260315T103000z"), or an out-of-range time
+  ("20260315T256000z") is left untouched so the gates quarantine
+  it normally; the quality gates stay strict and see only the
+  normalized value; 2 new tests (suite now 256, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.970s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  differing only in their timestamp columns; zero raw member IDs,
+  zero patient names in all outputs; CLI smoke-tested on a
+  lowercase-z compact 3-row CSV: 3 in, 2 governed,
   1 quarantined).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
