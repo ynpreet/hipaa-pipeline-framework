@@ -787,7 +787,11 @@ def read_claims_csv(path):
     timezone-suffixed underscore datetime ("2026_02_30
     10:00:00Z") or a malformed suffix ("2026_03_15
     10:30:00+99:99") is left untouched so the gates
-    quarantine it normally. A service_date in
+    quarantine it normally. A lowercase "z" reads as "Z"
+    here, so "2026_03_15 10:30:00z" strips the same way
+    and governs, while every lowercase-z underscore form
+    quarantined until now (verified by probe before the
+    fix). A service_date in
     two-digit-year underscore-separated form ("03_15_26"
     or "15_03_26", the way legacy exports write dates)
     normalizes the same way, so it governs; the two-digit
@@ -1865,7 +1869,9 @@ def read_claims_csv(path):
                 underscore_date = re.sub(
                     r"\s*(?:AM|PM)$", "", underscore_date,
                     flags=re.IGNORECASE).rstrip()
-                if underscore_date.endswith("Z"):
+                # A lowercase "z" reads as "Z" here, so
+                # "2026_03_15 10:30:00z" strips the same way.
+                if underscore_date.endswith(("Z", "z")):
                     underscore_date = underscore_date[:-1]
                 else:
                     suffix = re.search(

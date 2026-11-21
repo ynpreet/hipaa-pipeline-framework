@@ -3283,6 +3283,41 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   smoke-tested on a lowercase-z dot 3-row CSV: 3 in,
   2 governed, 1 quarantined).
 
+- Nov 21, 2026 build block (3:05 AM run):
+  lowercase-z underscore datetimes (read_claims_csv in io.py) — a
+  service_date written as an underscore datetime carrying a lowercase
+  "z" designator ("2026_03_15 10:30:00z", the way some exports
+  write underscore timestamps) now has the "z" stripped as "Z" in
+  the underscore timezone branch and normalizes to its date part
+  (YYYY-MM-DD) and governs instead of quarantining as
+  unparseable_date: the underscore branch guard already accepted a
+  lowercase "t" separator (strptime literals match
+  case-insensitively, which is why "2026_03_15t10:30:00"
+  governed before), so only the trailing "z" needed the fix.
+  This closes the gap the 9:05 PM run left open (verified by
+  probe before the fix — 1 of 10 lowercase-z underscore forms
+  governed, the "am z" form only; after the fix all 10 forms in
+  the new test govern end-to-end): "2026_03_15 10:30:00z",
+  "2026_03_15t10:30:00z", "03_15_2026 10:30:00z",
+  "2026_03_15 10:30:00.123z", "2026_03_15 10:30:00 z",
+  "2026_03_15T09:00:00z", "15_03_2026 10:30:00z",
+  "03_15_26 10:30:00z", "Sunday, 2026_03_16 10:30:00z", and
+  "2026_03_15 10:30:00 am z". An impossible lowercase-z date
+  ("2026_02_30 10:00:00z"), a malformed offset ("2026_03_15
+  10:30:00.123+99:99"), an unknown zone ("2026_03_15 10:30:00
+  xyz"), or a bogus weekday label ("Funday, 2026_03_15 10:30:00z")
+  is left untouched so the gates quarantine it normally; the
+  quality gates stay strict and see only the normalized value;
+  2 new tests (suite now 254, all passing). Demo re-verified same
+  run (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.813s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines and audit.jsonl 10,000 lines, differing
+  only in their timestamp columns; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a
+  lowercase-z underscore 3-row CSV: 3 in, 2 governed,
+  1 quarantined).
+
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
 - Records in: 10,000
