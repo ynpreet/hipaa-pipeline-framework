@@ -3540,6 +3540,39 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   lowercase-z compact 3-row CSV: 3 in, 2 governed,
   1 quarantined).
 
+- Nov 21, 2026 build block (3:05 PM run):
+  lowercase month names (read_claims_csv in io.py) — a
+  service_date written with a month name in lowercase ("mar 15,
+  2026" or "15 march 2026", the way some exports write month
+  names without capitals) now normalizes to ISO form (YYYY-MM-DD)
+  on read and governs instead of quarantining as
+  unparseable_date: the month-name dispatch guard matched month
+  names case-sensitively, so a lowercase month never reached the
+  branch, while strptime %b/%B already matches
+  case-insensitively — only the guard needed the fix. Probe
+  before the fix: 0 of 11 lowercase month-name forms governed;
+  after the fix all 10 forms in the new test govern end-to-end:
+  "mar 15, 2026", "15 mar 2026", "march 15, 2026",
+  "15 march 2026", "mar-15-2026", "15-mar-2026",
+  "march 15 2026", "mar 15, 2026 10:30:00",
+  "15th of march 2026", and "sunday, mar 16, 2026". An
+  impossible lowercase month-name date ("feb 30, 2026"), an
+  unknown zone ("mar 15, 2026 10:30:00 xyz"), a bogus weekday
+  label ("funday, mar 15, 2026"), an impossible day
+  ("mar 32, 2026"), or a lowercase-z month-name datetime
+  ("mar 15, 2026 10:30:00z" — the timezone strip in this branch
+  still takes only an uppercase "Z", the next gap) is left
+  untouched so the gates quarantine it normally; the quality
+  gates stay strict and see only the normalized value; 2 new
+  tests (suite now 258, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.662s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines and audit.jsonl 10,000 lines; zero raw
+  member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a lowercase month-name 2-row CSV: 2 in,
+  1 governed, 1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

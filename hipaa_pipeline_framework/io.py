@@ -253,6 +253,10 @@ AM/PM numeric hyphen datetimes such as "03-15-2026 10:30:00 AM"
 (the marker is dropped, only the date part governs), and
 month-name datetimes such as "Mar 15, 2026 10:30:00" (the date part
 governs, the time part is dropped), and
+lowercase month names such as "mar 15, 2026" or "15 march 2026"
+(the way some exports write month names without capitals) normalize
+the same way — the date governs, while every lowercase month-name
+form quarantined until now (verified by probe before the fix) — and
 month-name dates without the comma such as "March 15 2026" (the
 way some exports write month-first dates with no comma after the
 day) normalize the same way — the date governs, and a no-comma
@@ -575,7 +579,13 @@ def read_claims_csv(path):
     quarantine it normally. A service_date written with a month name ("Mar 15,
     2026" or "15 Mar 2026", abbreviated or full month name, the
     way human-readable exports write dates) normalizes the same
-    way, so it governs; a month-name date without the comma
+    way, so it governs; a month name in lowercase ("mar 15, 2026"
+    or "15 march 2026", the way some exports write month names
+    without capitals) reads the same way — the dispatch guard
+    matches month names without regard to case, and strptime
+    already does — so it governs, while every lowercase month-name
+    form quarantined until now (verified by probe before the
+    fix); a month-name date without the comma
     ("March 15 2026" or "Mar 15 2026", the way some exports write
     month-first dates with no comma after the day) normalizes the
     same way too, so it governs, as does a no-comma month-name
@@ -1985,9 +1995,9 @@ def read_claims_csv(path):
                             except ValueError:
                                 continue
             elif isinstance(date, str) and any(
-                    month in date for month in
-                    ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")):
+                    month in date.lower() for month in
+                    ("jan", "feb", "mar", "apr", "may", "jun",
+                     "jul", "aug", "sep", "oct", "nov", "dec")):
                 # Month-name form: "Mar 15, 2026" or "15 Mar 2026",
                 # abbreviated or full month name, including the
                 # hyphenated forms "15-Mar-2026" and "Mar-15-2026",
@@ -1998,6 +2008,14 @@ def read_claims_csv(path):
                 # before the fix — no candidate rewrote "15 of
                 # March" into a day-first month-name date, so
                 # the value never reached the parsers).
+                # A month name in lowercase ("mar 15, 2026" or
+                # "15 march 2026", the way some exports write
+                # month names without capitals) reads the same
+                # way: the guard above matches month names
+                # without regard to case, and strptime already
+                # does, so only the dispatch was missing — every
+                # lowercase month-name form quarantined until
+                # now (verified by probe before the fix).
                 # A name that is not a real month, or an impossible
                 # day, fails every format and is left untouched so
                 # the gates quarantine it normally. Ordinal day
