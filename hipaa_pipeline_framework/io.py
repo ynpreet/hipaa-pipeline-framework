@@ -560,7 +560,11 @@ def read_claims_csv(path):
     EDT, CST, CDT, MST, MDT, PST, PDT), so an unknown zone
     (e.g. "2026.03.15 10:30:00 XYZ") is left in place and the
     gates quarantine it normally, as does an impossible date
-    carrying a valid zone (e.g. "2026.02.30 10:00:00 GMT"). A service_date in weekday-prefixed dot-separated
+    carrying a valid zone (e.g. "2026.02.30 10:00:00 GMT"). A
+    lowercase "z" reads as "Z" here, so "2026.03.15 10:30:00z"
+    strips the same way and governs, while every lowercase-z dot
+    form quarantined until now (verified by probe before the
+    fix). A service_date in weekday-prefixed dot-separated
     form ("Sunday, 2026.03.15" or "Mon, 2026.03.16", the way
     email-style timestamps write dates) has its weekday label
     stripped on read and then normalizes the same way, so it
@@ -1498,8 +1502,10 @@ def read_claims_csv(path):
                         # "2026.03.15 10:30:00 GMT", the way
                         # email headers write zoned dot
                         # timestamps) and the date part governs;
-                        # the offset itself is not converted.
-                        # Only the RFC 2822 obsolete-zone list
+                        # the offset itself is not converted. A
+                        # lowercase "z" reads as "Z" here, so
+                        # "2026.03.15 10:30:00z" strips the same
+                        # way. Only the RFC 2822 obsolete-zone list
                         # plus UTC is accepted (UT, GMT, UTC,
                         # EST, EDT, CST, CDT, MST, MDT, PST,
                         # PDT), so an unknown zone ("2026.03.15
@@ -1522,7 +1528,7 @@ def read_claims_csv(path):
                         # carrying a valid suffix
                         # ("2026.02.30 10:00:00Z").
                         tz_stripped = dot_date
-                        if tz_stripped.endswith("Z"):
+                        if tz_stripped.endswith(("Z", "z")):
                             tz_stripped = tz_stripped[:-1]
                         else:
                             suffix = re.search(
