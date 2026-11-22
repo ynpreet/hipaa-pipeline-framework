@@ -3573,6 +3573,42 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   smoke-tested on a lowercase month-name 2-row CSV: 2 in,
   1 governed, 1 quarantined).
 
+- Nov 21, 2026 build block (9:05 PM run):
+  lowercase-z month-name datetimes (read_claims_csv in io.py)
+  — a service_date written with a month name and a lowercase
+  "z" suffix ("mar 15, 2026 10:30:00z" or "15 mar 2026
+  10:30:00z", the way some exports write zoned month-name
+  timestamps without capitals) now normalizes to ISO form
+  (YYYY-MM-DD) on read and governs instead of quarantining as
+  unparseable_date: the timezone strip in the month-name branch
+  took only an uppercase "Z", so a lowercase "z" was never
+  stripped. Probe before the fix: 1 of 12 lowercase-z
+  month-name datetime forms governed (only "mar 15, 2026
+  10:30:00 am z", via the AM/PM marker-suffix step, which
+  already matches case-insensitively); after the fix all 12
+  forms in the new test govern end-to-end: "mar 15, 2026
+  10:30:00z", "Mar 15, 2026 10:30:00z", "mar 15, 2026
+  10:30:00 z", "15 mar 2026 10:30:00z", "mar 15, 2026T10:30:00z",
+  "mar 15, 2026 10:30:00.123z", "Mar 15, 2026 10:30:00z AM",
+  "mar 15, 2026 10:30:00 am z", "sunday, mar 16, 2026
+  10:30:00z", "15th of march 2026 10:30:00z",
+  "mar-15-2026 10:30:00z", and "mar 15, 26 10:30:00z". An
+  impossible lowercase-z month-name datetime ("feb 30, 2026
+  10:00:00z"), a malformed suffix ("mar 15, 2026 10:30:00+99:99"),
+  an out-of-range time ("mar 15, 2026 25:30:00z"), a doubled
+  suffix ("mar 15, 2026 10:30:00zz"), or a bogus weekday label
+  ("funday, mar 15, 2026 10:30:00z") is left untouched so the
+  gates quarantine it normally; the quality gates stay strict
+  and see only the normalized value; 2 new tests (suite now
+  260, all passing). Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged;
+  runtime 0.701s; governed, quarantine, and summary.json
+  outputs byte-identical to pre-run outputs; audit.csv 10,001
+  lines and audit.jsonl 10,000 lines, differing only in their
+  timestamp columns; zero raw member IDs, zero patient names
+  in all outputs; CLI smoke-tested on a lowercase-z
+  month-name 2-row CSV: 2 in, 1 governed, 1 quarantined).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

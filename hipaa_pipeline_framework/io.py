@@ -257,6 +257,10 @@ lowercase month names such as "mar 15, 2026" or "15 march 2026"
 (the way some exports write month names without capitals) normalize
 the same way — the date governs, while every lowercase month-name
 form quarantined until now (verified by probe before the fix) — and
+lowercase-z month-name datetimes such as "mar 15, 2026 10:30:00z"
+(a lowercase "z" reads as "Z", the suffix is dropped, only the date
+part governs, while every lowercase-z month-name datetime
+quarantined until now — verified by probe before the fix) — and
 month-name dates without the comma such as "March 15 2026" (the
 way some exports write month-first dates with no comma after the
 day) normalize the same way — the date governs, and a no-comma
@@ -2213,7 +2217,12 @@ def read_claims_csv(path):
                 # the space-separated form quarantined until
                 # now while the attached form governed. A space
                 # before a "Z" ("Mar 15, 2026 10:30:00 Z")
-                # strips the same way. A named RFC 2822 zone
+                # strips the same way. A lowercase "z" reads
+                # as "Z" here, so "Mar 15, 2026 10:30:00z"
+                # strips the same way and governs, while every
+                # lowercase-z month-name datetime quarantined
+                # until now (verified by probe before the fix).
+                # A named RFC 2822 zone
                 # ("Sun, 15 Mar 2026 10:30:00 GMT", "15 Mar
                 # 2026 10:30:00 EST", "Mar 15, 2026 10:30:00
                 # UTC", the way email headers write zoned
@@ -2232,7 +2241,7 @@ def read_claims_csv(path):
                 # trailing a marker ("10:30:00 AM GMT").
                 for base in list(candidates):
                     tz_stripped = base
-                    if tz_stripped.endswith("Z"):
+                    if tz_stripped.endswith(("Z", "z")):
                         tz_stripped = tz_stripped[:-1]
                     else:
                         suffix = re.search(
