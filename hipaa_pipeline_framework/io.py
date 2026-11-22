@@ -230,6 +230,13 @@ timestamp); an impossible two-digit-year week-date datetime ("25-W53-1
 malformed marker ("26-W11-1 10:30:00 XM") is left untouched so the gates
 quarantine it normally; the quality gates stay strict and
 see only the normalized value, and
+lowercase-w week dates such as "2026-w11-1", "2026w111",
+"2026-w11", "26-w11-1", or "26w111" (a lowercase "w" designator,
+the way some exports write ISO week dates without capitals)
+normalize the same way — the designator reads as "W", so the date
+governs, while every lowercase-w week date quarantined until now
+(verified by probe before the fix), as do lowercase-w week-only
+datetimes such as "2026-w11 10:30:00" (its Monday governs) — and
 weekday-prefixed month-name dates such as "Sunday, March 15, 2026"
 (the weekday label is dropped, only the date part governs), and
 weekday-prefixed ISO dates such as "Sunday, 2026-03-15" (the
@@ -3592,10 +3599,14 @@ def read_claims_csv(path):
                 if parsed is not None:
                     cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
             elif isinstance(date, str) and (
-                    re.fullmatch(r"\d{4}-W\d{2}-[1-7]", date)
-                    or re.fullmatch(r"\d{4}W\d{2}[1-7]", date)
-                    or re.fullmatch(r"\d{4}-W\d{2}", date)
-                    or re.fullmatch(r"\d{4}W\d{2}", date)
+                    re.fullmatch(r"\d{4}-W\d{2}-[1-7]", date,
+                                 flags=re.IGNORECASE)
+                    or re.fullmatch(r"\d{4}W\d{2}[1-7]", date,
+                                    flags=re.IGNORECASE)
+                    or re.fullmatch(r"\d{4}-W\d{2}", date,
+                                    flags=re.IGNORECASE)
+                    or re.fullmatch(r"\d{4}W\d{2}", date,
+                                    flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
@@ -3904,9 +3915,17 @@ def read_claims_csv(path):
                 # quarantined until now while the hyphenated form
                 # governed (verified by probe before the fix): the
                 # guard had no compact week-only alternative and
-                # the parser below only took the hyphenated form.
-                if (re.fullmatch(r"\d{4}-W\d{2}", week_date)
-                        or re.fullmatch(r"\d{4}W\d{2}", week_date)):
+                # the parser below only took the hyphenated form. A
+                # lowercase "w" designator ("2026-w11", the way some
+                # exports write the week designator without capitals)
+                # reads the same way — the designator matches either
+                # case here — so it governs, while every lowercase-w
+                # bare week date quarantined until now (verified by
+                # probe before the fix).
+                if (re.fullmatch(r"\d{4}-W\d{2}", week_date,
+                                 flags=re.IGNORECASE)
+                        or re.fullmatch(r"\d{4}W\d{2}", week_date,
+                                        flags=re.IGNORECASE)):
                     try:
                         parsed = datetime.fromisocalendar(
                             iso_year, iso_week, 1)
@@ -3931,13 +3950,20 @@ def read_claims_csv(path):
                 # time ("2026-W11 25:60:00") or a week that
                 # does not exist in that year ("2025-W53
                 # 10:30:00") leaves parsed unset so the gates
-                # quarantine it normally.
+                # quarantine it normally. A lowercase "w"
+                # designator ("2026-w11 10:30:00", the way some
+                # exports write the week designator without
+                # capitals) reads the same way — the designator
+                # matches either case here — so it governs, while
+                # every lowercase-w week-only datetime
+                # quarantined until now (verified by probe before
+                # the fix).
                 if parsed is None:
                     week_time = re.fullmatch(
                         r"(?:\d{4}-W\d{2}|\d{4}W\d{2})[ T]"
                         r"(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|"
                         r"\d{4,6}(?:\.\d+)?)",
-                        week_date)
+                        week_date, flags=re.IGNORECASE)
                     if week_time is not None:
                         time_valid = None
                         for time_fmt in ("%H:%M:%S.%f", "%H:%M:%S",
@@ -4009,10 +4035,14 @@ def read_claims_csv(path):
                 if parsed is not None:
                     cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
             elif isinstance(date, str) and (
-                    re.fullmatch(r"\d{2}-W\d{2}-[1-7]", date)
-                    or re.fullmatch(r"\d{2}W\d{2}[1-7]", date)
-                    or re.fullmatch(r"\d{2}-W\d{2}", date)
-                    or re.fullmatch(r"\d{2}W\d{2}", date)
+                    re.fullmatch(r"\d{2}-W\d{2}-[1-7]", date,
+                                 flags=re.IGNORECASE)
+                    or re.fullmatch(r"\d{2}W\d{2}[1-7]", date,
+                                    flags=re.IGNORECASE)
+                    or re.fullmatch(r"\d{2}-W\d{2}", date,
+                                    flags=re.IGNORECASE)
+                    or re.fullmatch(r"\d{2}W\d{2}", date,
+                                    flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
@@ -4283,17 +4313,24 @@ def read_claims_csv(path):
                 week_date = week_date.rstrip()
                 iso_year = datetime.strptime(week_date[:2], "%y").year
                 parsed = None
+                # A lowercase "w" designator ("26-w11-1 10:30:00",
+                # the way some exports write the week designator
+                # without capitals) reads the same way — the
+                # designator matches either case in every check
+                # below — so it governs, while every lowercase-w
+                # two-digit-year week date quarantined until now
+                # (verified by probe before the fix).
                 week_datetime = re.fullmatch(
                     r"\d{2}-W\d{2}-[1-7][ T]"
                     r"(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|"
                     r"\d{4,6}(?:\.\d+)?)",
-                    week_date)
+                    week_date, flags=re.IGNORECASE)
                 if week_datetime is None:
                     week_datetime = re.fullmatch(
                         r"\d{2}W\d{2}[1-7][ T]"
                         r"(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|"
                         r"\d{4,6}(?:\.\d+)?)",
-                        week_date)
+                        week_date, flags=re.IGNORECASE)
                 if week_datetime is not None:
                     time_valid = None
                     for time_fmt in ("%H:%M:%S.%f", "%H:%M:%S",
@@ -4322,13 +4359,13 @@ def read_claims_csv(path):
                         r"\d{2}-W\d{2}[ T]"
                         r"(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|"
                         r"\d{4,6}(?:\.\d+)?)",
-                        week_date)
+                        week_date, flags=re.IGNORECASE)
                     if week_only_datetime is None:
                         week_only_datetime = re.fullmatch(
                             r"\d{2}W\d{2}[ T]"
                             r"(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|"
                             r"\d{4,6}(?:\.\d+)?)",
-                            week_date)
+                            week_date, flags=re.IGNORECASE)
                     if week_only_datetime is not None:
                         time_valid = None
                         for time_fmt in ("%H:%M:%S.%f", "%H:%M:%S",
@@ -4351,10 +4388,14 @@ def read_claims_csv(path):
                             except ValueError:
                                 parsed = None
                 if parsed is None and (
-                        re.fullmatch(r"\d{2}-W\d{2}-[1-7]", week_date)
-                        or re.fullmatch(r"\d{2}W\d{2}[1-7]", week_date)
-                        or re.fullmatch(r"\d{2}-W\d{2}", week_date)
-                        or re.fullmatch(r"\d{2}W\d{2}", week_date)):
+                        re.fullmatch(r"\d{2}-W\d{2}-[1-7]", week_date,
+                                     flags=re.IGNORECASE)
+                        or re.fullmatch(r"\d{2}W\d{2}[1-7]", week_date,
+                                        flags=re.IGNORECASE)
+                        or re.fullmatch(r"\d{2}-W\d{2}", week_date,
+                                        flags=re.IGNORECASE)
+                        or re.fullmatch(r"\d{2}W\d{2}", week_date,
+                                        flags=re.IGNORECASE)):
                     # Date-only forms only: a datetime whose time
                     # failed validation above ("26-W11-1 25:60:00")
                     # must not fall through here — the position-based

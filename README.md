@@ -3421,6 +3421,52 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   in all outputs; CLI smoke-tested on a lowercase-z
   month-name 2-row CSV: 2 in, 1 governed, 1 quarantined).
 
+- Nov 22, 2026 build block (3:05 AM run):
+  lowercase-w ISO week dates (read_claims_csv in io.py) — a
+  service_date written with a lowercase "w" week designator
+  ("2026-w11-1", "2026w111", "2026-w11", "2026w11", or the
+  two-digit-year "26-w11-1", "26w111", "26-w11", "26w11", the way
+  some exports write ISO week dates without capitals) now
+  normalizes to its calendar date and governs instead of
+  quarantining as unparseable_date: the bare-date guard
+  alternatives matched the designator case-sensitively, so a
+  lowercase "w" never reached the parsers, while the datetime
+  alternatives already matched either case — which is why
+  week-date datetimes such as "2026-w11-1 10:30:00" governed
+  while every bare lowercase-w form quarantined. Probe before
+  the fix: 0 of 7 bare lowercase-w forms governed; after the
+  fix all 17 forms in the new test govern end-to-end:
+  "2026-w11-1", "2026w111", "2026-w11", "2026w11",
+  "2026-w11 10:30:00", "2026-w11T103000", "2026-w11 10:30:00
+  AM", "Sunday, 2026-w11-1", "26-w11-1", "26w111", "26-w11",
+  "26w11", "26-w11 10:30:00", "26-w11-1 10:30:00",
+  "26w111T103000", "99-w01-1" (1999-01-04), and "69w111"
+  (1969-03-10). The week-only datetimes needed the same
+  case-insensitive match in the body (their fullmatch checks
+  took only an uppercase "W"), and the two-digit-year body
+  needed it on its datetime, week-only datetime, and bare-date
+  checks too, since it parses via fromisocalendar with
+  position-based slicing rather than strptime. An impossible
+  lowercase-w week date ("2025-w53-1", "25-w53-1"), a weekday
+  outside 1-7 ("2026-w11-8", "26-w11-8"), a week outside 1-53
+  ("2026-w00", "26-w00"), a bogus weekday label ("Funday,
+  2026-w11-1"), an out-of-range time ("2026-w11-1 25:60:00"),
+  a malformed marker ("2026-w11-1 10:30:00 XM"), or a malformed
+  suffix ("2026-w11-1 10:30:00+99:99") is left untouched so the
+  gates quarantine it normally; the quality gates stay strict
+  and see only the normalized value; 2 new tests (suite now
+  262, all passing). Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged;
+  runtime 0.455s; governed, quarantine, and summary.json
+  outputs byte-identical to pre-run outputs; audit.csv 10,001
+  lines and audit.jsonl 10,000 lines, differing only in their
+  timestamp columns; zero raw member IDs, zero patient names
+  in all outputs; CLI smoke-tested on a lowercase-w week-date
+  3-row CSV: 3 in, 2 governed, 1 quarantined). Next gap noted:
+  lowercase-z week-date datetimes ("2026-W11-1 10:30:00z")
+  still quarantine — the trailing-"Z" strip in the week-date
+  bodies takes only an uppercase "Z".
+
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
 - Records in: 10,000
