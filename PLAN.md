@@ -3694,6 +3694,55 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   in the ordinal and hyphen bodies take only an uppercase "Z"
   (verified by probe: the uppercase forms govern to 2026-03-15).
 
+- Nov 22, 2026 build block (9:05 PM run):
+  lowercase-z ordinal, hyphen, and two-digit compact datetimes
+  (read_claims_csv in io.py) — an ordinal datetime carrying a
+  lowercase "z" zone designator ("2026-074 10:30:00z",
+  "2026074T103000z", "2026-074T103000z", "2026-074 10:30:00 z",
+  "2026-074 10:30:00z AM", "Sunday, 2026-074 10:30:00z", or the
+  two-digit-year "26-074 10:30:00z", "26074T103000z",
+  "26-074T103000z", "26074 10:30:00z AM"), a day-first /
+  month-first hyphen datetime ("15-03-2026 10:30:00z",
+  "03-15-2026 10:30:00z", "03-15-2026 10:30:00 z",
+  "03-15-2026 10:30:00z AM", "Sunday, 03-15-2026 10:30:00z", or
+  the two-digit-year "15-03-26 10:30:00z", "03-15-26 10:30:00z"),
+  and a two-digit compact datetime ("031526 10:30:00z",
+  "031526T103000z", "031526 10:30:00 z", "031526 10:30:00z AM",
+  "Sunday, 031526 10:30:00z", "150326 10:30:00z", the way some
+  exports write the UTC designator without capitals) now
+  normalizes to its calendar date and governs instead of
+  quarantining as unparseable_date: the trailing-"Z" strips in
+  the ordinal bodies (four-digit and two-digit year), the hyphen
+  body, and the two-digit compact body took only an uppercase
+  "Z", while the guards and the AM/PM-suffix strips already
+  matched either case. Probe before the fix: 0 of 10 ordinal,
+  0 of 9 hyphen, and 0 of 6 compact lowercase-z forms governed;
+  after the fix all 23 forms in the new test govern end-to-end,
+  all to 2026-03-15. An impossible lowercase-z ordinal date
+  ("2026-366 10:30:00z", "26-366 10:30:00z"), a doubled suffix
+  ("2026074 10:30:00zz", "26074 10:30:00zz", "031526 10:30:00zz"),
+  a malformed suffix ("2026-074 10:30:00+99:99", "031526
+  10:30:00+99:99"), a bogus weekday label ("Funday, 2026-074
+  10:30:00z"), an impossible hyphen date ("02-30-2026 10:30:00z",
+  "15-13-2026 10:30:00z"), a malformed marker ("03-15-2026
+  10:30:00 XM"), or an impossible compact date ("023026
+  10:30:00z") is left untouched so the gates quarantine it
+  normally; the quality gates stay strict and see only the
+  normalized value; 2 new tests (suite now 266, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.589s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  differing only in their timestamp columns; zero raw member IDs,
+  zero patient names in all outputs; CLI smoke-tested on a
+  lowercase-z ordinal/hyphen 3-row CSV: 3 in, 2 governed, 1
+  quarantined). Next gap noted: colon-less T-separated hyphen
+  datetimes ("15-03-2026T103000z", "03-15-26T103000z") still
+  quarantine in either case — the hyphen guard and format list
+  have no colon-less time alternative (verified by probe: the
+  uppercase-Z forms quarantine too, while the colon forms
+  govern).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

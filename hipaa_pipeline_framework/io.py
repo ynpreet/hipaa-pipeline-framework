@@ -2583,7 +2583,9 @@ def read_claims_csv(path):
                 hyphen_date = re.sub(
                     r"\s*(?:AM|PM)$", "", hyphen_date,
                     flags=re.IGNORECASE).rstrip()
-                if hyphen_date.endswith("Z"):
+                # A lowercase "z" reads as "Z" here, so
+                # "03-15-2026 10:30:00z" governs the same way.
+                if hyphen_date.endswith(("Z", "z")):
                     hyphen_date = hyphen_date[:-1]
                 else:
                     suffix = re.search(
@@ -3225,7 +3227,9 @@ def read_claims_csv(path):
                 short_compact_date = re.sub(
                     r"\s*(?:AM|PM)$", "", short_compact_date,
                     flags=re.IGNORECASE).rstrip()
-                if short_compact_date.endswith("Z"):
+                # A lowercase "z" reads as "Z" here, so
+                # "031526 10:30:00z" governs the same way.
+                if short_compact_date.endswith(("Z", "z")):
                     short_compact_date = short_compact_date[:-1]
                 else:
                     suffix = re.search(
@@ -3522,7 +3526,9 @@ def read_claims_csv(path):
                 ordinal_date = re.sub(
                     r"\s*(?:AM|PM)$", "", ordinal_date,
                     flags=re.IGNORECASE).rstrip()
-                if ordinal_date.endswith("Z"):
+                # A lowercase "z" reads as "Z" here, so
+                # "2026-074 10:30:00z" governs the same way.
+                if ordinal_date.endswith(("Z", "z")):
                     ordinal_date = ordinal_date[:-1]
                 else:
                     suffix = re.search(
@@ -4614,7 +4620,9 @@ def read_claims_csv(path):
                 ordinal_date = re.sub(
                     r"\s*(?:AM|PM)$", "", ordinal_date,
                     flags=re.IGNORECASE).rstrip()
-                if ordinal_date.endswith("Z"):
+                # A lowercase "z" reads as "Z" here, so
+                # "26-074 10:30:00z" governs the same way.
+                if ordinal_date.endswith(("Z", "z")):
                     ordinal_date = ordinal_date[:-1]
                 else:
                     suffix = re.search(
