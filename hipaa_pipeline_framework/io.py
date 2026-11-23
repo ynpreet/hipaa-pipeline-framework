@@ -3805,7 +3805,9 @@ def read_claims_csv(path):
                 # the way API and EHR exports write week-date
                 # datetimes with a zone) has its suffix stripped
                 # and normalizes to its date part the same way; the
-                # offset itself is not converted. A named RFC 2822
+                # offset itself is not converted. A lowercase "z"
+                # reads as "Z" here, so "2026-W11-1 10:30:00z"
+                # governs the same way. A named RFC 2822
                 # zone ("2026-W11-1 10:30:00 GMT", the way email
                 # headers write zoned week-date timestamps) strips
                 # the same way; only the RFC 2822 obsolete-zone
@@ -3888,7 +3890,9 @@ def read_claims_csv(path):
                 week_date = re.sub(
                     r"\s*(?:AM|PM)$", "", week_date,
                     flags=re.IGNORECASE).rstrip()
-                if week_date.endswith("Z"):
+                # A lowercase "z" reads as "Z" here, so
+                # "2026-W11-1 10:30:00z" governs the same way.
+                if week_date.endswith(("Z", "z")):
                     week_date = week_date[:-1]
                 else:
                     suffix = re.search(
@@ -4294,7 +4298,9 @@ def read_claims_csv(path):
                 week_date = re.sub(
                     r"\s*(?:AM|PM)$", "", week_date,
                     flags=re.IGNORECASE).rstrip()
-                if week_date.endswith("Z"):
+                # A lowercase "z" reads as "Z" here, so
+                # "26-W11-1 10:30:00z" governs the same way.
+                if week_date.endswith(("Z", "z")):
                     week_date = week_date[:-1]
                 else:
                     suffix = re.search(

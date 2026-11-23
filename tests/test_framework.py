@@ -4439,6 +4439,51 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.BAD_DATE: 10})
 
+    def test_read_claims_csv_normalizes_lowercase_z_week_date_datetimes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,\"2026-W11-1 10:30:00z\",120.50\n"
+                            "M-100002,2026-W11-1T103000z,200.00\n"
+                            "M-100003,\"2026-W11 10:30:00z\",310.00\n"
+                            "M-100004,\"2026-W11-1 10:30:00 z\",410.00\n"
+                            "M-100005,\"2026-W11-1 10:30:00z AM\",510.00\n"
+                            "M-100006,\"2026-W11-1 10:30:00 AM z\",610.00\n"
+                            "M-100007,\"Sunday, 2026-W11-1 10:30:00z\",710.00\n"
+                            "M-100008,\"2026-w11-1 10:30:00z\",810.00\n"
+                            "M-100009,\"26-W11-1 10:30:00z\",910.00\n"
+                            "M-100010,26W111T103000z,1010.00\n"
+                            "M-100011,\"26-W11 10:30:00z\",1110.00\n"
+                            "M-100012,\"26-W11-1 10:30:00z AM\",1210.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 12)
+            for row in rows:
+                self.assertEqual(row["service_date"], "2026-03-09")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 12)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_lowercase_z_week_date_datetimes_still_quarantine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,\"2025-W53-1 10:30:00z\",120.50\n"
+                            "M-100002,\"2026-W11-8 10:30:00z\",200.00\n"
+                            "M-100003,\"2026-W00 10:30:00z\",310.00\n"
+                            "M-100004,\"Funday, 2026-W11-1 10:30:00z\",410.00\n"
+                            "M-100005,\"2026-W11-1 25:60:00z\",510.00\n"
+                            "M-100006,\"2026-W11-1 10:30:00z XM\",610.00\n"
+                            "M-100007,\"2026-W11-1 10:30:00zz\",710.00\n"
+                            "M-100008,\"25-W53-1 10:30:00z\",810.00\n"
+                            "M-100009,\"26-W11-8 10:30:00z\",910.00\n"
+                            "M-100010,\"26-W00 10:30:00z\",1010.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 10)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 10)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 10})
+
     def test_read_claims_csv_normalizes_datetime_stamped_dates(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"

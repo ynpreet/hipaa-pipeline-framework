@@ -3655,6 +3655,45 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   still quarantine — the trailing-"Z" strip in the week-date
   bodies takes only an uppercase "Z".
 
+- Nov 22, 2026 build block (9:05 AM run):
+  lowercase-z ISO week-date datetimes (read_claims_csv in io.py) — a
+  week-date datetime carrying a lowercase "z" zone designator
+  ("2026-W11-1 10:30:00z", "2026-W11-1T103000z", "2026-W11 10:30:00z",
+  "2026-W11-1 10:30:00 z", "2026-W11-1 10:30:00z AM", "Sunday,
+  2026-W11-1 10:30:00z", or the two-digit-year "26-W11-1 10:30:00z",
+  "26W111T103000z", "26-W11 10:30:00z", "26-W11-1 10:30:00z AM", the
+  way some exports write the UTC designator without capitals) now
+  normalizes to its calendar date and governs instead of quarantining
+  as unparseable_date: the trailing-"Z" strip in both week-date bodies
+  (four-digit and two-digit year) took only an uppercase "Z", while
+  the guards and the AM/PM-suffix strip already matched either case —
+  which is why "2026-W11-1 10:30:00 AM z" already governed while every
+  other lowercase-z week-date datetime quarantined. Probe before the
+  fix: 1 of 12 forms governed; after the fix all 12 forms in the new
+  test govern end-to-end, all to 2026-03-09, including the combined
+  lowercase-w + lowercase-z form "2026-w11-1 10:30:00z". An impossible
+  lowercase-z week date ("2025-W53-1 10:30:00z", "25-W53-1 10:30:00z"),
+  a weekday outside 1-7 ("2026-W11-8 10:30:00z", "26-W11-8 10:30:00z"),
+  a week outside 1-53 ("2026-W00 10:30:00z", "26-W00 10:30:00z"), a
+  bogus weekday label ("Funday, 2026-W11-1 10:30:00z"), an out-of-range
+  time ("2026-W11-1 25:60:00z"), a malformed marker ("2026-W11-1
+  10:30:00z XM"), or a doubled suffix ("2026-W11-1 10:30:00zz") is left
+  untouched so the gates quarantine it normally; the quality gates stay
+  strict and see only the normalized value; 2 new tests (suite now
+  264, all passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime 0.557s;
+  governed, quarantine, and summary.json outputs byte-identical to
+  pre-run outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  differing only in their timestamp columns; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a lowercase-z
+  week-date 3-row CSV: 3 in, 2 governed, 1 quarantined). Next gap noted:
+  lowercase-z ordinal datetimes ("2026-074 10:30:00z",
+  "2026074T103000z", "2026-074T103000z") and lowercase-z day-first /
+  month-first hyphen datetimes ("15-03-2026 10:30:00z",
+  "03-15-2026 10:30:00z") still quarantine — the trailing-"Z" strips
+  in the ordinal and hyphen bodies take only an uppercase "Z"
+  (verified by probe: the uppercase forms govern to 2026-03-15).
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
