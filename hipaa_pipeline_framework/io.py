@@ -787,7 +787,15 @@ def read_claims_csv(path):
     an unknown zone (e.g. "03-15-2026 10:30:00 XYZ") is left in
     place and the gates quarantine it normally, as does an
     impossible date carrying a valid zone (e.g. "02-30-2026
-    10:00:00 GMT").
+    10:00:00 GMT"). A colon-less T-separated numeric hyphen
+    datetime ("03-15-2026T103000Z", "15-03-2026T103000z", or a
+    two-digit-year "03-15-26T103000z", the way compact-timestamp
+    exports write hyphen datetimes without colons in the time)
+    normalizes to its date part the same way, with fractional
+    seconds, a zone suffix, and AM/PM forms included; an
+    impossible colon-less hyphen datetime ("02-30-2026T103000z")
+    or a malformed suffix ("03-15-2026T103000+99:99") is left
+    untouched so the gates quarantine it normally.
     A service_date in underscore-separated form (YYYY_MM_DD,
     the way some exports and file-naming conventions write
     dates) normalizes the same way, so "2026_03_15" governs;
@@ -2420,6 +2428,40 @@ def read_claims_csv(path):
                         r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
                         r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{6}"
+                        r"(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{6}"
+                        r"(?:\.\d+)?\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{6}"
+                        r"(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{6}"
+                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Numeric hyphen form: "03-15-2026" (US) or an
                 # unambiguous day-first "15-03-2026", or the
@@ -2470,7 +2512,30 @@ def read_claims_csv(path):
                 # ("03-15-2026 10:30:00.123Z", the way
                 # high-resolution exports write hyphen datetimes)
                 # normalizes the same way — the fractional
-                # seconds are dropped with the time part. An
+                # seconds are dropped with the time part. A
+                # colon-less T-separated numeric hyphen datetime
+                # ("03-15-2026T103000Z", "15-03-2026T103000z",
+                # or the two-digit-year "03-15-26T103000z", the
+                # way compact-timestamp exports write hyphen
+                # datetimes without colons in the time)
+                # normalizes to its date part the same way: the
+                # guard arms above admit a T followed by six
+                # digits (fractional seconds and a zone suffix
+                # optional, AM/PM forms included), and the
+                # %H%M%S formats below parse the colon-less
+                # time. Until now the guard and the format list
+                # had no colon-less time alternative, so every
+                # such form quarantined in either case
+                # (verified by probe before the fix: 0 of 20
+                # forms governed, including the uppercase-Z
+                # forms). An impossible colon-less hyphen
+                # datetime ("02-30-2026T103000z"), a doubled
+                # suffix ("03-15-2026T103000zz"), a malformed
+                # suffix ("03-15-2026T103000+99:99"), a bogus
+                # weekday label ("Funday, 03-15-2026T103000z"),
+                # or a malformed marker ("03-15-2026T103000 XM")
+                # is left untouched so the gates quarantine it
+                # normally. An
                 # AM/PM numeric hyphen datetime ("03-15-2026
                 # 10:30:00 AM", the way exports write hyphen
                 # datetimes on a 12-hour clock) has its marker
@@ -2612,19 +2677,25 @@ def read_claims_csv(path):
                             "%m-%d-%YT%H:%M:%S.%f",
                             "%d-%m-%Y %H:%M:%S.%f",
                             "%d-%m-%YT%H:%M:%S.%f",
+                            "%m-%d-%YT%H%M%S.%f",
+                            "%d-%m-%YT%H%M%S.%f",
                             "%m-%d-%Y %H:%M:%S", "%m-%d-%Y %H:%M",
                             "%m-%d-%YT%H:%M:%S", "%m-%d-%YT%H:%M",
                             "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M",
                             "%d-%m-%YT%H:%M:%S", "%d-%m-%YT%H:%M",
+                            "%m-%d-%YT%H%M%S", "%d-%m-%YT%H%M%S",
                             "%m-%d-%Y", "%d-%m-%Y",
                             "%m-%d-%y %H:%M:%S.%f",
                             "%m-%d-%yT%H:%M:%S.%f",
                             "%d-%m-%y %H:%M:%S.%f",
                             "%d-%m-%yT%H:%M:%S.%f",
+                            "%m-%d-%yT%H%M%S.%f",
+                            "%d-%m-%yT%H%M%S.%f",
                             "%m-%d-%y %H:%M:%S", "%m-%d-%y %H:%M",
                             "%m-%d-%yT%H:%M:%S", "%m-%d-%yT%H:%M",
                             "%d-%m-%y %H:%M:%S", "%d-%m-%y %H:%M",
                             "%d-%m-%yT%H:%M:%S", "%d-%m-%yT%H:%M",
+                            "%m-%d-%yT%H%M%S", "%d-%m-%yT%H%M%S",
                             "%m-%d-%y", "%d-%m-%y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(

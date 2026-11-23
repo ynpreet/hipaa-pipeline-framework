@@ -4542,6 +4542,63 @@ class TestCsvIO(unittest.TestCase):
             self.assertEqual(result["reasons"],
                              {QuarantineReason.BAD_DATE: 12})
 
+    def test_read_claims_csv_normalizes_colonless_t_hyphen_datetimes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,15-03-2026T103000z,120.50\n"
+                            "M-100002,03-15-2026T103000z,200.00\n"
+                            "M-100003,03-15-2026T103000Z,310.00\n"
+                            "M-100004,15-03-2026T103000.123z,410.00\n"
+                            "M-100005,03-15-2026T103000+05:30,510.00\n"
+                            "M-100006,03-15-2026T103000+0530,610.00\n"
+                            "M-100007,03-15-2026T103000-04:00,710.00\n"
+                            "M-100008,03-15-2026T103000.123+05:30,810.00\n"
+                            "M-100009,\"Sunday, 03-15-2026T103000z\",910.00\n"
+                            "M-100010,\"03-15-2026T103000 AM\",1010.00\n"
+                            "M-100011,\"03-15-2026T103000z AM\",1110.00\n"
+                            "M-100012,\"03-15-2026T103000 AM Z\",1210.00\n"
+                            "M-100013,03-15-2026T103000 GMT,1310.00\n"
+                            "M-100014,\"03-15-2026T103000 AM GMT\",1410.00\n"
+                            "M-100015,\"03-15-2026T103000 GMT AM\",1510.00\n"
+                            "M-100016,15-03-26T103000z,1610.00\n"
+                            "M-100017,03-15-26T103000z,1710.00\n"
+                            "M-100018,03-15-26T103000.123z,1810.00\n"
+                            "M-100019,\"03-15-26T103000 AM\",1910.00\n"
+                            "M-100020,\"Sunday, 03-15-26T103000z\",2010.00\n"
+                            "M-100021,26-03-15T103000z,2110.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 21)
+            for row in rows[:20]:
+                self.assertEqual(row["service_date"], "2026-03-15")
+            self.assertEqual(rows[20]["service_date"], "2015-03-26")
+            result = run_pipeline(rows)
+            self.assertEqual(result["governed_count"], 21)
+            self.assertEqual(result["quarantined_count"], 0)
+
+    def test_read_claims_csv_bad_colonless_t_hyphen_datetimes_still_quarantine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "claims.csv"
+            path.write_text("member_id,service_date,claim_amount\n"
+                            "M-100001,02-30-2026T103000z,120.50\n"
+                            "M-100002,03-15-2026T103000zz,200.00\n"
+                            "M-100003,03-15-2026T103000+99:99,310.00\n"
+                            "M-100004,\"Funday, 03-15-2026T103000z\",410.00\n"
+                            "M-100005,\"03-15-2026T103000 XM\",510.00\n"
+                            "M-100006,15-13-2026T103000z,610.00\n"
+                            "M-100007,03-15-2026T103000 XYZ,710.00\n"
+                            "M-100008,\"03-15-2026T103000 AM +99:99\",810.00\n"
+                            "M-100009,02-30-26T103000z,910.00\n"
+                            "M-100010,03-15-2026T103000.123zz,1010.00\n"
+                            "M-100011,03-15-2026T10300z,1110.00\n"
+                            "M-100012,03-15-2026T1030000z,1210.00\n")
+            rows = read_claims_csv(path)
+            self.assertEqual(len(rows), 12)
+            result = run_pipeline(rows)
+            self.assertEqual(result["quarantined_count"], 12)
+            self.assertEqual(result["reasons"],
+                             {QuarantineReason.BAD_DATE: 12})
+
     def test_read_claims_csv_normalizes_datetime_stamped_dates(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.csv"

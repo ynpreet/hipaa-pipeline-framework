@@ -83,7 +83,7 @@ python3 -m hipaa_pipeline_framework input.csv \
 python3 -m unittest discover -s tests -v
 ```
 
-266 stdlib-only tests (Nov 22, 2026, all passing): hash determinism and
+268 stdlib-only tests (Nov 23, 2026, all passing): hash determinism and
 uniqueness, identifier stripping, every quality gate (missing field,
 impossible/non-ISO date, invalid amount, duplicate), audit-log
 JSON-lines output, read-back, and summary tallies, secure-default config validation
@@ -3548,12 +3548,50 @@ outputs; CLI smoke-tested on an ISO-week-date 2-row CSV: 2 in,
   differing only in their timestamp columns; zero raw member IDs,
   zero patient names in all outputs; CLI smoke-tested on a
   lowercase-z ordinal/hyphen 3-row CSV: 3 in, 2 governed, 1
-  quarantined). Next gap noted: colon-less T-separated hyphen
-  datetimes ("15-03-2026T103000z", "03-15-26T103000z") still
-  quarantine in either case — the hyphen guard and format list
-  have no colon-less time alternative (verified by probe: the
-  uppercase-Z forms quarantine too, while the colon forms
-  govern).
+  quarantined). Next gap noted: colon-less hyphen times without
+  seconds ("03-15-2026T1030z") and space-separated colon-less
+  times ("03-15-2026 103000z") still quarantine — the guard
+  admits six-digit T-separated times only (verified by probe:
+  0 of 4 such forms govern).
+- Nov 23, 2026 build block (3:05 AM run):
+  colon-less T-separated numeric hyphen datetimes
+  (read_claims_csv in io.py) — a hyphen datetime whose time has
+  no colons ("03-15-2026T103000Z", "15-03-2026T103000z", or the
+  two-digit-year "03-15-26T103000z", the way compact-timestamp
+  exports write hyphen datetimes) now normalizes to its calendar
+  date and governs instead of quarantining as unparseable_date:
+  the hyphen guard and format list had no colon-less time
+  alternative, so every such form quarantined in either case.
+  Four new guard arms admit a T followed by six digits
+  (fractional seconds and a zone suffix optional, AM/PM forms
+  included), and the %H%M%S formats parse the colon-less time.
+  Probe before the fix: 0 of 20 forms governed; after the fix
+  20 of the 21 forms in the new test govern to 2026-03-15 and
+  the year-first two-digit form "26-03-15T103000z" governs as
+  2015-03-26, following the existing no-separate-year-first-form
+  rule. An impossible colon-less hyphen date
+  ("02-30-2026T103000z", "15-13-2026T103000z"), a doubled suffix
+  ("03-15-2026T103000zz", "03-15-2026T103000.123zz"), a
+  malformed suffix ("03-15-2026T103000+99:99",
+  "03-15-2026T103000 AM +99:99"), a bogus weekday label
+  ("Funday, 03-15-2026T103000z"), a malformed marker
+  ("03-15-2026T103000 XM"), an unknown zone
+  ("03-15-2026T103000 XYZ"), or a wrong-length time
+  ("03-15-2026T10300z", "03-15-2026T1030000z") is left untouched
+  so the gates quarantine it normally; the quality gates stay
+  strict and see only the normalized value; 2 new tests (suite
+  now 268, all passing). Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged; runtime
+  0.488s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines and
+  audit.jsonl 10,000 lines, differing only in their timestamp
+  columns; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a colon-less T-separated hyphen
+  3-row CSV: 3 in, 2 governed, 1 quarantined). Next gap noted:
+  colon-less hyphen times without seconds ("03-15-2026T1030z")
+  and space-separated colon-less times ("03-15-2026 103000z")
+  still quarantine — the guard admits six-digit T-separated
+  times only (verified by probe: 0 of 4 such forms govern).
 
 ## Measured demo run (Oct 21, 2026, seed 42, synthetic data only)
 
