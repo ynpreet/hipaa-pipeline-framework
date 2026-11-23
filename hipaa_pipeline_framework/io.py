@@ -795,7 +795,29 @@ def read_claims_csv(path):
     seconds, a zone suffix, and AM/PM forms included; an
     impossible colon-less hyphen datetime ("02-30-2026T103000z")
     or a malformed suffix ("03-15-2026T103000+99:99") is left
-    untouched so the gates quarantine it normally.
+    untouched so the gates quarantine it normally. A no-seconds
+    colon-less T-separated numeric hyphen datetime
+    ("03-15-2026T1030z", "15-03-2026T1030z", or a two-digit-year
+    "03-15-26T1030z", the way compact-timestamp exports write
+    hyphen datetimes with no seconds and no colons in the time)
+    normalizes to its date part the same way, with a zone suffix
+    and AM/PM forms included; a fractional-second no-seconds form
+    ("03-15-2026T1030.123z") is left untouched so the gates
+    quarantine it normally, as is an impossible no-seconds
+    colon-less hyphen datetime ("02-30-2026T1030z"), a wrong-length
+    time ("03-15-2026T10300z", "03-15-2026T1030000z"), or a
+    malformed suffix ("03-15-2026T1030+99:99"). A space-separated
+    colon-less numeric hyphen datetime ("03-15-2026 103000z",
+    "15-03-2026 103000z", or a two-digit-year "03-15-26 103000z",
+    the way exports write hyphen datetimes with a space before a
+    colon-less time) normalizes to its date part the same way, with
+    fractional seconds, a zone suffix, and AM/PM forms included,
+    as does a no-seconds space-separated form ("03-15-2026 1030z");
+    an impossible space-separated colon-less hyphen datetime
+    ("02-30-2026 103000z"), a wrong-length time
+    ("03-15-2026 10300z", "03-15-2026 1030000z"), or a malformed
+    suffix ("03-15-2026 103000+99:99") is left untouched so the
+    gates quarantine it normally.
     A service_date in underscore-separated form (YYYY_MM_DD,
     the way some exports and file-naming conventions write
     dates) normalizes the same way, so "2026_03_15" governs;
@@ -2462,6 +2484,106 @@ def read_claims_csv(path):
                         r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
                         r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{4}"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{4}"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{6}"
+                        r"(?:\.\d+)?"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{6}"
+                        r"(?:\.\d+)?\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{6}"
+                        r"(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{6}"
+                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{4}"
+                        r"\s*(?:AM|PM)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{4}"
+                        r"\s*(?:AM|PM)\s+"
+                        r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        date, flags=re.IGNORECASE)
+                    or re.fullmatch(
+                        r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
+                        r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
+                        r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
+                        r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{4}"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
+                        r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
                 # Numeric hyphen form: "03-15-2026" (US) or an
                 # unambiguous day-first "15-03-2026", or the
@@ -2528,7 +2650,33 @@ def read_claims_csv(path):
                 # such form quarantined in either case
                 # (verified by probe before the fix: 0 of 20
                 # forms governed, including the uppercase-Z
-                # forms). An impossible colon-less hyphen
+                # forms). A no-seconds colon-less T-separated
+                # numeric hyphen datetime ("03-15-2026T1030z",
+                # "15-03-2026T1030z", or the two-digit-year
+                # "03-15-26T1030z", the way compact-timestamp
+                # exports write hyphen datetimes with no seconds
+                # and no colons in the time) normalizes the same
+                # way: the guard arms above admit a T followed by
+                # four digits (a zone suffix optional, AM/PM
+                # forms included, no fractional seconds), and the
+                # %H%M formats below parse the colon-less time.
+                # A space-separated colon-less numeric hyphen
+                # datetime ("03-15-2026 103000z",
+                # "15-03-2026 103000z", or the two-digit-year
+                # "03-15-26 103000z", the way exports write
+                # hyphen datetimes with a space before a
+                # colon-less time) normalizes the same way: the
+                # guard arms above admit a space followed by six
+                # digits (fractional seconds and a zone suffix
+                # optional, AM/PM forms included), and the
+                # %H%M%S formats below parse the colon-less
+                # time, as does a no-seconds space-separated form
+                # ("03-15-2026 1030z") via the %H%M formats.
+                # Until now the guard admitted six-digit
+                # T-separated times only, so every no-seconds
+                # and space-separated colon-less hyphen form
+                # quarantined (verified by probe before the fix:
+                # 0 of 29 forms governed). An impossible colon-less hyphen
                 # datetime ("02-30-2026T103000z"), a doubled
                 # suffix ("03-15-2026T103000zz"), a malformed
                 # suffix ("03-15-2026T103000+99:99"), a bogus
@@ -2679,11 +2827,16 @@ def read_claims_csv(path):
                             "%d-%m-%YT%H:%M:%S.%f",
                             "%m-%d-%YT%H%M%S.%f",
                             "%d-%m-%YT%H%M%S.%f",
+                            "%m-%d-%Y %H%M%S.%f",
+                            "%d-%m-%Y %H%M%S.%f",
                             "%m-%d-%Y %H:%M:%S", "%m-%d-%Y %H:%M",
                             "%m-%d-%YT%H:%M:%S", "%m-%d-%YT%H:%M",
                             "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M",
                             "%d-%m-%YT%H:%M:%S", "%d-%m-%YT%H:%M",
                             "%m-%d-%YT%H%M%S", "%d-%m-%YT%H%M%S",
+                            "%m-%d-%YT%H%M", "%d-%m-%YT%H%M",
+                            "%m-%d-%Y %H%M%S", "%d-%m-%Y %H%M%S",
+                            "%m-%d-%Y %H%M", "%d-%m-%Y %H%M",
                             "%m-%d-%Y", "%d-%m-%Y",
                             "%m-%d-%y %H:%M:%S.%f",
                             "%m-%d-%yT%H:%M:%S.%f",
@@ -2691,11 +2844,16 @@ def read_claims_csv(path):
                             "%d-%m-%yT%H:%M:%S.%f",
                             "%m-%d-%yT%H%M%S.%f",
                             "%d-%m-%yT%H%M%S.%f",
+                            "%m-%d-%y %H%M%S.%f",
+                            "%d-%m-%y %H%M%S.%f",
                             "%m-%d-%y %H:%M:%S", "%m-%d-%y %H:%M",
                             "%m-%d-%yT%H:%M:%S", "%m-%d-%yT%H:%M",
                             "%d-%m-%y %H:%M:%S", "%d-%m-%y %H:%M",
                             "%d-%m-%yT%H:%M:%S", "%d-%m-%yT%H:%M",
                             "%m-%d-%yT%H%M%S", "%d-%m-%yT%H%M%S",
+                            "%m-%d-%yT%H%M", "%d-%m-%yT%H%M",
+                            "%m-%d-%y %H%M%S", "%d-%m-%y %H%M%S",
+                            "%m-%d-%y %H%M", "%d-%m-%y %H%M",
                             "%m-%d-%y", "%d-%m-%y"):
                     try:
                         cleaned["service_date"] = datetime.strptime(

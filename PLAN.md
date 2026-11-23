@@ -3780,6 +3780,57 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   and space-separated colon-less times ("03-15-2026 103000z")
   still quarantine — the guard admits six-digit T-separated
   times only (verified by probe: 0 of 4 such forms govern).
+- Nov 23, 2026 build block (9:05 AM run):
+  no-seconds colon-less T-separated numeric hyphen datetimes
+  and space-separated colon-less numeric hyphen datetimes
+  (read_claims_csv in io.py) — a hyphen datetime whose time has
+  no seconds and no colons ("03-15-2026T1030z",
+  "15-03-2026T1030z", or the two-digit-year "03-15-26T1030z")
+  or whose colon-less time is space-separated ("03-15-2026
+  103000z", "03-15-2026 1030z", two-digit-year forms included)
+  now normalizes to its calendar date and governs instead of
+  quarantining as unparseable_date: the hyphen guard admitted
+  six-digit T-separated times only, so every no-seconds and
+  space-separated colon-less hyphen form quarantined. Twelve
+  new guard arms admit a T followed by four digits and a space
+  followed by six or four digits (fractional seconds on the
+  six-digit space form, zone suffix and AM/PM forms included),
+  and the %H%M / %H%M%S formats parse the colon-less times.
+  Probe before the fix: 0 of 29 forms governed; after the fix
+  28 of the 29 forms in the probe govern to 2026-03-15 and only
+  the fractional-second no-seconds form ("03-15-2026T1030.123z")
+  still quarantines, by design. An impossible no-seconds or
+  space-separated colon-less hyphen date ("02-30-2026T1030z",
+  "02-30-2026 103000z"), a doubled suffix
+  ("03-15-2026T1030zz", "03-15-2026 103000zz"), a malformed
+  suffix ("03-15-2026T1030+99:99",
+  "03-15-2026 103000+99:99"), a bogus weekday label ("Funday,
+  03-15-2026T1030z"), a malformed marker ("03-15-2026T1030 XM",
+  "03-15-2026 103000 XM"), an unknown zone
+  ("03-15-2026T1030 XYZ", "03-15-2026 103000 XYZ"), or a
+  wrong-length time ("03-15-2026T10300z",
+  "03-15-2026T1030000z", "03-15-2026 10300z",
+  "03-15-2026 1030000z") is left untouched so the gates
+  quarantine it normally; the quality gates stay strict and see
+  only the normalized value; 2 new tests (suite now 270, all
+  passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime
+  0.421s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv 10,001 lines and
+  audit.jsonl 10,000 lines, differing only in their timestamp
+  columns; zero raw member IDs, zero patient names in all
+  outputs; CLI smoke-tested on a no-seconds / space-separated
+  colon-less hyphen 3-row CSV: 3 in, 2 governed, 1 quarantined).
+  No further gap found in this family this run: adjacent variants
+  probed after the fix already govern — lowercase-t separator
+  ("03-15-2026t103000z", "03-15-2026t1030z", 4 of 4), attached
+  markers ("03-15-2026 103000am", "03-15-2026T1030am"), colon-less
+  offsets ("03-15-2026T1030+0530", "03-15-2026 103000-0500"), a
+  bare fractional six-digit space form ("03-15-2026 103000.123"),
+  and AM/PM with a named zone ("03-15-2026 103000 AM GMT",
+  "03-15-2026T1030 AM EST"); the fractional no-seconds space form
+  ("03-15-2026 1030.123z") still quarantines, by design, matching
+  the T-separated form.
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
