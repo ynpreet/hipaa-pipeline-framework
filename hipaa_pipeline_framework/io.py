@@ -298,6 +298,15 @@ space-separated timezone-suffixed month-name datetimes such as
 "Mar 15, 2026 10:30:00 +05:00" or "Sun, 15 Mar 2026 10:30:00 GMT"
 (the suffix and its separating space are dropped, only the date
 part governs; named zones are the RFC 2822 list plus UTC), and
+colon-less month-name datetimes such as "Mar 15, 2026T103000z" or
+"15 Mar 2026 1030" (the way compact-timestamp exports write
+month-name datetimes; the %H%M%S / %H%M formats parse the
+colon-less time, six-digit and no-seconds, T- and space-separated
+alike, across the month-first, day-first, and hyphenated shapes
+and both year widths, with the same fractional, timezone-suffix,
+AM/PM, weekday, ordinal, and day-of handling — only the date part
+governs, while every colon-less month-name datetime quarantined
+until now, verified by probe before the fix) — and
 two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
 2000-2068 and 69-99 as 1969-1999, with the same forms as the
@@ -2409,7 +2418,53 @@ def read_claims_csv(path):
                 # ("Feb 30, 2026 10:00:00 AM Z") or a
                 # malformed suffix ("Mar 15, 2026 10:30:00
                 # AM +99:99") is left untouched so the gates
-                # quarantine it normally. A two-digit-year
+                # quarantine it normally. A colon-less
+                # month-name datetime ("Mar 15, 2026T103000z"
+                # or "15 Mar 2026 1030", the way
+                # compact-timestamp exports write month-name
+                # datetimes) normalizes the same way: the
+                # %H%M%S / %H%M formats below parse the
+                # colon-less time, six-digit and no-seconds,
+                # T- and space-separated alike, across the
+                # month-first, day-first, and hyphenated shapes
+                # and both year widths, with the same
+                # fractional, timezone-suffix, AM/PM, weekday,
+                # ordinal, and day-of handling — the candidate
+                # stripping above is time-agnostic, so no
+                # guard change was needed. Until now the list
+                # had no colon-less alternative, so every such
+                # form quarantined (verified by probe before
+                # the fix: 0 of 30 forms governed). The list
+                # below carries no guard of its own — the
+                # dispatch above is only "contains a month
+                # name" — so a colon-less time guard runs over
+                # the candidates just before the format loop:
+                # strptime reads one- or two-digit time
+                # components, so without it a five-digit time
+                # ("Mar 15, 2026T10300z") or a fractional
+                # no-seconds time ("Mar 15, 2026T1030.123z")
+                # would parse as some other hour/minute/second
+                # and govern, the same leniency the underscore
+                # and hyphen families already refuse via their
+                # strict guards. A candidate carrying a
+                # malformed colon-less time is dropped by the
+                # guard, so the gates quarantine it normally;
+                # a fractional no-seconds form therefore
+                # quarantines by design — a fractional part
+                # follows a seconds-bearing time only, the same
+                # rule the colon forms already carry — and an
+                # attached named zone ("Mar 15,
+                # 2026T103000GMT") quarantines, matching the
+                # colon family exactly. Space-separated times
+                # after a two-digit-year day-first or no-comma
+                # month-first date ("15 Mar 26 10300", "March
+                # 15 26 1030.123") are NOT guarded — the
+                # trailing token there is indistinguishable
+                # from the two-digit year itself ("March 15 26"
+                # reads as a date plus a two-digit time) — so
+                # those two shapes still govern on strptime
+                # leniency; every T-separated form is guarded.
+                # A two-digit-year
                 # month-name date ("Mar 15, 26" or "15 Mar 26",
                 # "15-Mar-26" or "Mar-15-26", the way legacy
                 # exports write dates) normalizes the same way:
@@ -2578,6 +2633,33 @@ def read_claims_csv(path):
                     if (tz_stripped != base
                             and tz_stripped not in candidates):
                         candidates.append(tz_stripped)
+                # Colon-less time guard (see the comment
+                # above): drop any candidate whose trailing
+                # colon-less time is not exactly six digits
+                # (with an optional one-to-six-digit fraction)
+                # or exactly four digits with no fraction.
+                # A T-separated time is always a time; a
+                # space-separated time is checked only after
+                # a four-digit year or a comma two-digit year,
+                # where the year cannot be mistaken for the
+                # time itself.
+                for candidate in list(candidates):
+                    time_match = re.search(
+                        r"T(\d+)(?:\.(\d+))?$", candidate)
+                    if time_match is None:
+                        time_match = re.search(
+                            r"\d{4} (\d+)(?:\.(\d+))?$", candidate)
+                    if time_match is None:
+                        time_match = re.search(
+                            r", \d{2} (\d+)(?:\.(\d+))?$", candidate)
+                    if time_match is not None:
+                        digits, frac = time_match.groups()
+                        if not ((len(digits) == 6
+                                 and (frac is None
+                                      or 1 <= len(frac) <= 6))
+                                or (len(digits) == 4
+                                    and frac is None)):
+                            candidates.remove(candidate)
                 for candidate in candidates:
                     for fmt in ("%b %d, %Y", "%B %d, %Y",
                                 "%b %d %Y", "%B %d %Y",
@@ -2680,7 +2762,127 @@ def read_claims_csv(path):
                                 "%d-%b-%yT%H:%M:%S.%f",
                                 "%b-%d-%yT%H:%M:%S.%f",
                                 "%d-%B-%yT%H:%M:%S.%f",
-                                "%B-%d-%yT%H:%M:%S.%f"):
+                                "%B-%d-%yT%H:%M:%S.%f",
+                                "%b %d, %YT%H%M%S",
+                                "%B %d, %YT%H%M%S",
+                                "%b %d %YT%H%M%S",
+                                "%B %d %YT%H%M%S",
+                                "%b %d, %Y %H%M%S",
+                                "%B %d, %Y %H%M%S",
+                                "%b %d %Y %H%M%S",
+                                "%B %d %Y %H%M%S",
+                                "%d %b %YT%H%M%S",
+                                "%d %B %YT%H%M%S",
+                                "%d %b %Y %H%M%S",
+                                "%d %B %Y %H%M%S",
+                                "%d-%b-%YT%H%M%S",
+                                "%b-%d-%YT%H%M%S",
+                                "%d-%B-%YT%H%M%S",
+                                "%B-%d-%YT%H%M%S",
+                                "%d-%b-%Y %H%M%S",
+                                "%b-%d-%Y %H%M%S",
+                                "%d-%B-%Y %H%M%S",
+                                "%B-%d-%Y %H%M%S",
+                                "%b %d, %YT%H%M",
+                                "%B %d, %YT%H%M",
+                                "%b %d %YT%H%M",
+                                "%B %d %YT%H%M",
+                                "%b %d, %Y %H%M",
+                                "%B %d, %Y %H%M",
+                                "%b %d %Y %H%M",
+                                "%B %d %Y %H%M",
+                                "%d %b %YT%H%M",
+                                "%d %B %YT%H%M",
+                                "%d %b %Y %H%M",
+                                "%d %B %Y %H%M",
+                                "%d-%b-%YT%H%M",
+                                "%b-%d-%YT%H%M",
+                                "%d-%B-%YT%H%M",
+                                "%B-%d-%YT%H%M",
+                                "%d-%b-%Y %H%M",
+                                "%b-%d-%Y %H%M",
+                                "%d-%B-%Y %H%M",
+                                "%B-%d-%Y %H%M",
+                                "%b %d, %YT%H%M%S.%f",
+                                "%B %d, %YT%H%M%S.%f",
+                                "%b %d %YT%H%M%S.%f",
+                                "%B %d %YT%H%M%S.%f",
+                                "%b %d, %Y %H%M%S.%f",
+                                "%B %d, %Y %H%M%S.%f",
+                                "%b %d %Y %H%M%S.%f",
+                                "%B %d %Y %H%M%S.%f",
+                                "%d %b %YT%H%M%S.%f",
+                                "%d %B %YT%H%M%S.%f",
+                                "%d %b %Y %H%M%S.%f",
+                                "%d %B %Y %H%M%S.%f",
+                                "%d-%b-%YT%H%M%S.%f",
+                                "%b-%d-%YT%H%M%S.%f",
+                                "%d-%B-%YT%H%M%S.%f",
+                                "%B-%d-%YT%H%M%S.%f",
+                                "%d-%b-%Y %H%M%S.%f",
+                                "%b-%d-%Y %H%M%S.%f",
+                                "%d-%B-%Y %H%M%S.%f",
+                                "%B-%d-%Y %H%M%S.%f",
+                                "%b %d, %yT%H%M%S",
+                                "%B %d, %yT%H%M%S",
+                                "%b %d %yT%H%M%S",
+                                "%B %d %yT%H%M%S",
+                                "%b %d, %y %H%M%S",
+                                "%B %d, %y %H%M%S",
+                                "%b %d %y %H%M%S",
+                                "%B %d %y %H%M%S",
+                                "%d %b %yT%H%M%S",
+                                "%d %B %yT%H%M%S",
+                                "%d %b %y %H%M%S",
+                                "%d %B %y %H%M%S",
+                                "%d-%b-%yT%H%M%S",
+                                "%b-%d-%yT%H%M%S",
+                                "%d-%B-%yT%H%M%S",
+                                "%B-%d-%yT%H%M%S",
+                                "%d-%b-%y %H%M%S",
+                                "%b-%d-%y %H%M%S",
+                                "%d-%B-%y %H%M%S",
+                                "%B-%d-%y %H%M%S",
+                                "%b %d, %yT%H%M",
+                                "%B %d, %yT%H%M",
+                                "%b %d %yT%H%M",
+                                "%B %d %yT%H%M",
+                                "%b %d, %y %H%M",
+                                "%B %d, %y %H%M",
+                                "%b %d %y %H%M",
+                                "%B %d %y %H%M",
+                                "%d %b %yT%H%M",
+                                "%d %B %yT%H%M",
+                                "%d %b %y %H%M",
+                                "%d %B %y %H%M",
+                                "%d-%b-%yT%H%M",
+                                "%b-%d-%yT%H%M",
+                                "%d-%B-%yT%H%M",
+                                "%B-%d-%yT%H%M",
+                                "%d-%b-%y %H%M",
+                                "%b-%d-%y %H%M",
+                                "%d-%B-%y %H%M",
+                                "%B-%d-%y %H%M",
+                                "%b %d, %yT%H%M%S.%f",
+                                "%B %d, %yT%H%M%S.%f",
+                                "%b %d %yT%H%M%S.%f",
+                                "%B %d %yT%H%M%S.%f",
+                                "%b %d, %y %H%M%S.%f",
+                                "%B %d, %y %H%M%S.%f",
+                                "%b %d %y %H%M%S.%f",
+                                "%B %d %y %H%M%S.%f",
+                                "%d %b %yT%H%M%S.%f",
+                                "%d %B %yT%H%M%S.%f",
+                                "%d %b %y %H%M%S.%f",
+                                "%d %B %y %H%M%S.%f",
+                                "%d-%b-%yT%H%M%S.%f",
+                                "%b-%d-%yT%H%M%S.%f",
+                                "%d-%B-%yT%H%M%S.%f",
+                                "%B-%d-%yT%H%M%S.%f",
+                                "%d-%b-%y %H%M%S.%f",
+                                "%b-%d-%y %H%M%S.%f",
+                                "%d-%B-%y %H%M%S.%f",
+                                "%B-%d-%y %H%M%S.%f"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 candidate, fmt).strftime("%Y-%m-%d")

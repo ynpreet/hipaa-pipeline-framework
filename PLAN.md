@@ -3958,6 +3958,55 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   Next gap noted: colon-less datetimes on month-name dates
   ("Mar 15, 2026T103000z") still quarantine — probe: 0 of 14
   govern.
+- Nov 24, 2026, 09:05 run: colon-less month-name datetimes now
+  normalize on read. "Mar 15, 2026T103000z", "March 15,
+  2026T103000z", "15 Mar 2026T103000z", "15-Mar-2026T103000z",
+  "Mar-15-2026T103000z" (plus bare, Z/z, fractional,
+  numeric-offset, named-zone, weekday-prefixed, lowercase-month,
+  ordinal, and day-of variants), no-seconds "Mar 15,
+  2026T1030z" (same variants), and space-separated "Mar 15, 2026
+  103000z" / "Mar 15, 2026 1030z" (same variants) govern instead
+  of quarantining as unparseable_date. Cause: the month-name
+  format list had no colon-less alternative — the dispatch ("any
+  month name in the value") and all candidate stripping (weekday,
+  AM/PM, ordinal, day-of, timezone) are time-agnostic, so no
+  guard change was needed. 120 new %H%M%S / %H%M / %H%M%S.%f
+  formats added across the four-digit and two-digit-year month-name
+  lists (month-first, day-first, and hyphenated shapes, T- and
+  space-separated alike). Probe before the fix: 0 of 30 colon-less
+  month-name forms governed; after: all 30 govern to 2026-03-15.
+  Bad forms still quarantine (impossible dates, out-of-range
+  times, doubled/malformed suffixes, bogus weekday, malformed
+  marker, unknown zone, wrong-length times, fractional longer than
+  six digits). A new colon-less time guard runs over the candidates
+  before the format loop — strptime reads one- or two-digit time
+  components, so without it a five-digit time ("Mar 15,
+  2026T10300z") or a fractional no-seconds time ("Mar 15,
+  2026T1030.123z") would parse as some other hour/minute/second
+  and govern; the guard drops such candidates, so both quarantine,
+  matching the underscore and hyphen families. A fractional
+  no-seconds form quarantines by design — a fractional part follows
+  a seconds-bearing time only, the same rule the colon forms
+  already carry. Attached named zone ("Mar 15, 2026T103000GMT")
+  quarantines, matching the colon family exactly. Known limitation,
+  documented in the code: space-separated malformed colon-less
+  times after a two-digit-year day-first or no-comma month-first
+  date ("15 Mar 26 10300", "March 15 26 1030.123") are not guarded
+  — the trailing token there is indistinguishable from the
+  two-digit year itself — so those two shapes still govern on
+  strptime leniency. 2 new tests (suite now 278, all passing).
+  Demo re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.419s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  differing only in their timestamp columns; zero raw member IDs
+  in governed output; CLI smoke-tested on a colon-less month-name
+  3-row CSV: 3 in, 2 governed, 1 quarantined).
+  Next gap noted: space-separated malformed colon-less times after
+  two-digit-year day-first / no-comma month-first dates ("15 Mar
+  26 10300", "March 15 26 1030.123") still govern on strptime
+  leniency — the guard cannot tell the trailing token from the
+  two-digit year there.
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
