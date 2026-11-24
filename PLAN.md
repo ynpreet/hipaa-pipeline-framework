@@ -3874,11 +3874,50 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   guard quarantines the fractional no-seconds form by design.
   The negative test asserts out-of-range times, over-long digit
   runs, and over-long fractional seconds instead.
-  Next gap noted: colon-less datetimes on dot-separated
-  ("2026.03.15T103000z"), underscore-separated
-  ("2026_03_15T103000z"), and month-name ("Mar 15,
-  2026T103000z") dates still quarantine — probe: 0 of 5, 0 of 5,
-  0 of 3 govern.
+- Nov 23, 2026 build block (9:05 PM run):
+  Colon-less dot datetimes now normalize on read
+  (read_claims_csv in io.py) — a dot datetime whose time has
+  no colons ("2026.03.15T103000z", "03.15.2026T103000z", or the
+  two-digit-year "03.15.26T103000z", the way compact-timestamp
+  exports write dot datetimes) now normalizes to its calendar
+  date and governs instead of quarantining as unparseable_date:
+  the dot datetime formats had no colon-less alternative, so
+  every such form quarantined. Thirty new %H%M%S / %H%M /
+  %H%M%S.%f formats (T- and space-separated, in all five dot
+  date orders) were added to both the plain and the
+  timezone-stripped dot datetime format lists; the dot branch
+  dispatch already claimed colon-less dot datetimes, so no
+  guard change was needed. Probe before the fix: 0 of 5 forms
+  governed; after the fix all 5 govern to 2026-03-15. An
+  impossible colon-less dot datetime ("2026.02.30T103000z"),
+  a doubled suffix ("2026.03.15T103000zz"), a malformed suffix
+  ("2026.03.15T103000+99:99"), a bogus weekday label ("Funday,
+  2026.03.15T103000z"), a malformed marker ("2026.03.15T103000
+  XM"), an unknown zone ("2026.03.15T103000 XYZ"), an
+  out-of-range time ("2026.03.15T256000z",
+  "2026.03.15T106000z", "2026.03.15T103060z"), a time with too
+  many digits ("2026.03.15T1030000z"), or a fractional second
+  longer than six digits ("2026.03.15T103000.1234567z") is left
+  untouched so the gates quarantine it normally; the quality
+  gates stay strict and see only the normalized value; 2 new
+  tests (suite now 274, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.477s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines and audit.jsonl 10,000 lines, differing
+  only in their timestamp columns; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a
+  colon-less dot 3-row CSV: 3 in, 2 governed, 1 quarantined).
+  Short colon-less times ("2026.03.15T10300z",
+  "2026.03.15T103z") and a fractional no-seconds form
+  ("2026.03.15T1030.123z") govern, the same strptime leniency
+  the colon forms already carry.
+  Next gap noted: colon-less datetimes on underscore-separated
+  ("2026_03_15T103000z") and month-name ("Mar 15,
+  2026T103000z") dates still quarantine — probe: 0 of 5, 0 of
+  3 govern. The underscore branch also needs its dispatch
+  guards widened (its strict fullmatch guards require a colon
+  in the time), unlike the dot branch.
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

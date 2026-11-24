@@ -615,7 +615,42 @@ def read_claims_csv(path):
     lowercase "z" reads as "Z" here, so "2026.03.15 10:30:00z"
     strips the same way and governs, while every lowercase-z dot
     form quarantined until now (verified by probe before the
-    fix). A service_date in weekday-prefixed dot-separated
+    fix). A colon-less dot datetime ("2026.03.15T103000z",
+    "03.15.2026T103000z", or the two-digit-year
+    "03.15.26T103000z", the way compact-timestamp exports write
+    dot datetimes without colons in the time) normalizes to its
+    date part the same way: the %H%M%S formats parse the
+    colon-less time, with fractional-second,
+    timezone-suffixed, named-zone, AM/PM, and weekday-prefixed
+    forms included, as does a no-seconds form
+    ("2026.03.15T1030z", the %H%M formats parse it) and a
+    space-separated form ("2026.03.15 103000z",
+    "2026.03.15 1030z", the way exports write dot datetimes
+    with a space before a colon-less time). Until now the dot
+    datetime formats had no colon-less alternative, so every
+    such form quarantined (verified by probe before the fix: 0
+    of 5 forms governed). An impossible colon-less dot datetime
+    ("2026.02.30T103000z"), a doubled suffix
+    ("2026.03.15T103000zz"), a malformed suffix
+    ("2026.03.15T103000+99:99"), a bogus weekday label
+    ("Funday, 2026.03.15T103000z"), a malformed marker
+    ("2026.03.15T103000 XM"), an unknown zone
+    ("2026.03.15T103000 XYZ"), or a time with too many digits
+    ("2026.03.15T1030000z") is left untouched so the gates
+    quarantine it normally. An out-of-range colon-less time
+    ("2026.03.15T256000z", "2026.03.15T106000z",
+    "2026.03.15T103060z") or a fractional second longer than
+    six digits ("2026.03.15T103000.1234567z") is left untouched
+    so the gates quarantine it normally. A short colon-less
+    time ("2026.03.15T10300z", "2026.03.15T103z") still
+    governs — strptime reads one- or two-digit time
+    components, the same leniency the colon forms already
+    carry ("2026.03.15 1:30:00" governs), and only the date
+    part governs, so the date is still correct — as does a
+    fractional no-seconds form ("2026.03.15T1030.123z"), which
+    the %H%M%S.%f format reads with the digits re-split;
+    unlike the hyphen family, where the strict guard
+    quarantines it by design. A service_date in weekday-prefixed dot-separated
     form ("Sunday, 2026.03.15" or "Mon, 2026.03.16", the way
     email-style timestamps write dates) has its weekday label
     stripped on read and then normalizes the same way, so it
@@ -1626,7 +1661,27 @@ def read_claims_csv(path):
                     # dot datetimes ("03.15.2026 10:30:00",
                     # fractional and timezone-suffixed forms
                     # included) normalize to their date part the
-                    # same way, with the same US-first order.
+                    # same way, with the same US-first order. A
+                    # colon-less time ("2026.03.15T103000",
+                    # "2026.03.15 1030", the way
+                    # compact-timestamp exports write dot
+                    # datetimes) normalizes the same way: the
+                    # %H%M%S / %H%M formats below parse the
+                    # colon-less time, six-digit and no-seconds,
+                    # T- and space-separated alike. Until now
+                    # the list had no colon-less alternative, so
+                    # every such form quarantined (verified by
+                    # probe before the fix: 0 of 5 forms
+                    # governed). A short colon-less time
+                    # ("2026.03.15T10300z") still governs —
+                    # strptime reads one- or two-digit time
+                    # components, the same leniency the colon
+                    # forms already carry, and only the date
+                    # part governs. A fractional no-seconds form
+                    # ("2026.03.15T1030.123z") governs the same
+                    # way via %H%M%S.%f, unlike the hyphen
+                    # family where the strict guard quarantines
+                    # it by design.
                     for fmt in ("%Y.%m.%d %H:%M:%S",
                                 "%Y.%m.%d %H:%M",
                                 "%Y.%m.%d %H:%M:%S.%f",
@@ -1656,7 +1711,37 @@ def read_claims_csv(path):
                                 "%d.%m.%Y %H:%M:%S.%f",
                                 "%d.%m.%YT%H:%M:%S",
                                 "%d.%m.%YT%H:%M",
-                                "%d.%m.%YT%H:%M:%S.%f"):
+                                "%d.%m.%YT%H:%M:%S.%f",
+                                "%Y.%m.%dT%H%M%S",
+                                "%Y.%m.%dT%H%M",
+                                "%Y.%m.%dT%H%M%S.%f",
+                                "%Y.%m.%d %H%M%S",
+                                "%Y.%m.%d %H%M",
+                                "%Y.%m.%d %H%M%S.%f",
+                                "%m.%d.%yT%H%M%S",
+                                "%m.%d.%yT%H%M",
+                                "%m.%d.%yT%H%M%S.%f",
+                                "%m.%d.%y %H%M%S",
+                                "%m.%d.%y %H%M",
+                                "%m.%d.%y %H%M%S.%f",
+                                "%d.%m.%yT%H%M%S",
+                                "%d.%m.%yT%H%M",
+                                "%d.%m.%yT%H%M%S.%f",
+                                "%d.%m.%y %H%M%S",
+                                "%d.%m.%y %H%M",
+                                "%d.%m.%y %H%M%S.%f",
+                                "%m.%d.%YT%H%M%S",
+                                "%m.%d.%YT%H%M",
+                                "%m.%d.%YT%H%M%S.%f",
+                                "%m.%d.%Y %H%M%S",
+                                "%m.%d.%Y %H%M",
+                                "%m.%d.%Y %H%M%S.%f",
+                                "%d.%m.%YT%H%M%S",
+                                "%d.%m.%YT%H%M",
+                                "%d.%m.%YT%H%M%S.%f",
+                                "%d.%m.%Y %H%M%S",
+                                "%d.%m.%Y %H%M",
+                                "%d.%m.%Y %H%M%S.%f"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 dot_date, fmt).strftime("%Y-%m-%d")
@@ -1751,7 +1836,37 @@ def read_claims_csv(path):
                                         "%d.%m.%Y %H:%M:%S.%f",
                                         "%d.%m.%YT%H:%M:%S",
                                         "%d.%m.%YT%H:%M",
-                                        "%d.%m.%YT%H:%M:%S.%f"):
+                                        "%d.%m.%YT%H:%M:%S.%f",
+                                        "%Y.%m.%dT%H%M%S",
+                                        "%Y.%m.%dT%H%M",
+                                        "%Y.%m.%dT%H%M%S.%f",
+                                        "%Y.%m.%d %H%M%S",
+                                        "%Y.%m.%d %H%M",
+                                        "%Y.%m.%d %H%M%S.%f",
+                                        "%m.%d.%yT%H%M%S",
+                                        "%m.%d.%yT%H%M",
+                                        "%m.%d.%yT%H%M%S.%f",
+                                        "%m.%d.%y %H%M%S",
+                                        "%m.%d.%y %H%M",
+                                        "%m.%d.%y %H%M%S.%f",
+                                        "%d.%m.%yT%H%M%S",
+                                        "%d.%m.%yT%H%M",
+                                        "%d.%m.%yT%H%M%S.%f",
+                                        "%d.%m.%y %H%M%S",
+                                        "%d.%m.%y %H%M",
+                                        "%d.%m.%y %H%M%S.%f",
+                                        "%m.%d.%YT%H%M%S",
+                                        "%m.%d.%YT%H%M",
+                                        "%m.%d.%YT%H%M%S.%f",
+                                        "%m.%d.%Y %H%M%S",
+                                        "%m.%d.%Y %H%M",
+                                        "%m.%d.%Y %H%M%S.%f",
+                                        "%d.%m.%YT%H%M%S",
+                                        "%d.%m.%YT%H%M",
+                                        "%d.%m.%YT%H%M%S.%f",
+                                        "%d.%m.%Y %H%M%S",
+                                        "%d.%m.%Y %H%M",
+                                        "%d.%m.%Y %H%M%S.%f"):
                                 try:
                                     cleaned["service_date"] = (
                                         datetime.strptime(
