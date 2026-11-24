@@ -4007,6 +4007,33 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   26 10300", "March 15 26 1030.123") still govern on strptime
   leniency — the guard cannot tell the trailing token from the
   two-digit year there.
+- Nov 24, 2026, 15:05 run: colon-less time guard extended to
+  space-separated malformed colon-less times after two-digit-year
+  day-first and no-comma month-first month-name dates. "15 Mar 26
+  10300" and "March 15 26 1030.123" (plus z-suffixed, AM/PM,
+  weekday-prefixed, and hyphenated variants) now quarantine as
+  unparseable_date instead of governing on strptime leniency.
+  Cause: the guard's space-separated arms only matched a
+  four-digit year or a comma two-digit year before the time, so
+  these two shapes were never checked. The new arms anchor the
+  time to the month name (day-first spaced and hyphenated,
+  month-first no-comma spaced and hyphenated), so a bare
+  two-digit-year date ("March 15 26") is never mistaken for a
+  date plus a two-digit time — a bare " \d{2} (\d+)$" arm would
+  read its day as the year and its year as the time and drop the
+  date itself. Probe before the fix: 11 of 33 forms governed that
+  should quarantine; after the fix all 33 behave as expected, and
+  all 16 extra valid variants probed (AM/PM, weekday, lowercase
+  month, day-of, named zone, numeric offset) still govern. 2 new
+  tests (suite now 280, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 1.625s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv 10,001 lines and audit.jsonl 10,000 lines, differing
+  only in their timestamp columns; zero raw member IDs, zero
+  patient names in all outputs; CLI smoke-tested on a 3-row CSV:
+  3 in, 2 governed, 1 quarantined — the malformed "15 Mar 26
+  10300" row quarantined as unparseable_date).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

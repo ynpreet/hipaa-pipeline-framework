@@ -306,7 +306,17 @@ alike, across the month-first, day-first, and hyphenated shapes
 and both year widths, with the same fractional, timezone-suffix,
 AM/PM, weekday, ordinal, and day-of handling — only the date part
 governs, while every colon-less month-name datetime quarantined
-until now, verified by probe before the fix) — and
+until now, verified by probe before the fix; a colon-less time
+guard drops any candidate whose trailing time is not exactly six
+digits with an optional one-to-six-digit fraction or exactly four
+digits with no fraction, so a five-digit time ("Mar 15,
+2026T10300z") or a fractional no-seconds time ("Mar 15,
+2026T1030.123z") quarantines instead of governing on strptime
+leniency — and the guard's space-separated arms anchor the time to
+the month name, so a malformed space-separated time after a
+two-digit-year day-first or no-comma month-first date ("15 Mar 26
+10300", "March 15 26 1030.123") quarantines the same way while a
+bare two-digit-year date ("March 15 26") still governs) — and
 two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
 2000-2068 and 69-99 as 1969-1999, with the same forms as the
@@ -2458,12 +2468,22 @@ def read_claims_csv(path):
                 # colon family exactly. Space-separated times
                 # after a two-digit-year day-first or no-comma
                 # month-first date ("15 Mar 26 10300", "March
-                # 15 26 1030.123") are NOT guarded — the
-                # trailing token there is indistinguishable
-                # from the two-digit year itself ("March 15 26"
-                # reads as a date plus a two-digit time) — so
-                # those two shapes still govern on strptime
-                # leniency; every T-separated form is guarded.
+                # 15 26 1030.123") are guarded too — the guard
+                # arms below anchor the time to the month name,
+                # so a bare two-digit-year date ("March 15 26")
+                # is never mistaken for a date plus a two-digit
+                # time: a bare " \d{2} (\d+)$" arm would read
+                # its day as the year and its year as the time
+                # and drop the date itself. With the month-name
+                # anchor, a five-digit time ("15 Mar 26 10300")
+                # or a fractional no-seconds time ("March 15 26
+                # 1030.123") is dropped by the guard, so the
+                # gates quarantine it normally, while a valid
+                # six-digit or no-seconds time ("15 Mar 26
+                # 103000", "March 15 26 1030") still governs;
+                # weekday-prefixed, AM/PM, and hyphenated
+                # forms funnel through the same stripped
+                # candidates, so they are guarded the same way.
                 # A two-digit-year
                 # month-name date ("Mar 15, 26" or "15 Mar 26",
                 # "15-Mar-26" or "Mar-15-26", the way legacy
@@ -2639,10 +2659,12 @@ def read_claims_csv(path):
                 # (with an optional one-to-six-digit fraction)
                 # or exactly four digits with no fraction.
                 # A T-separated time is always a time; a
-                # space-separated time is checked only after
-                # a four-digit year or a comma two-digit year,
-                # where the year cannot be mistaken for the
-                # time itself.
+                # space-separated time is checked after a
+                # four-digit year, after a comma two-digit
+                # year, or after a two-digit-year day-first
+                # or no-comma month-first date, where the arm
+                # is anchored to the month name so the year
+                # cannot be mistaken for the time itself.
                 for candidate in list(candidates):
                     time_match = re.search(
                         r"T(\d+)(?:\.(\d+))?$", candidate)
@@ -2652,6 +2674,30 @@ def read_claims_csv(path):
                     if time_match is None:
                         time_match = re.search(
                             r", \d{2} (\d+)(?:\.(\d+))?$", candidate)
+                    if time_match is None:
+                        time_match = re.search(
+                            r"\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|"
+                            r"Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{2} "
+                            r"(\d+)(?:\.(\d+))?$", candidate,
+                            flags=re.IGNORECASE)
+                    if time_match is None:
+                        time_match = re.search(
+                            r"\d{1,2}-(?:Jan|Feb|Mar|Apr|May|Jun|"
+                            r"Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*-\d{2} "
+                            r"(\d+)(?:\.(\d+))?$", candidate,
+                            flags=re.IGNORECASE)
+                    if time_match is None:
+                        time_match = re.search(
+                            r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|"
+                            r"Sep|Oct|Nov|Dec)[a-z]* \d{1,2} \d{2} "
+                            r"(\d+)(?:\.(\d+))?$", candidate,
+                            flags=re.IGNORECASE)
+                    if time_match is None:
+                        time_match = re.search(
+                            r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|"
+                            r"Sep|Oct|Nov|Dec)[a-z]*-\d{1,2}-\d{2} "
+                            r"(\d+)(?:\.(\d+))?$", candidate,
+                            flags=re.IGNORECASE)
                     if time_match is not None:
                         digits, frac = time_match.groups()
                         if not ((len(digits) == 6
