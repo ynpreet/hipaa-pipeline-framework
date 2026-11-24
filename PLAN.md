@@ -3918,6 +3918,46 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   3 govern. The underscore branch also needs its dispatch
   guards widened (its strict fullmatch guards require a colon
   in the time), unlike the dot branch.
+- Nov 24, 2026, 03:05 run: colon-less underscore datetimes now
+  normalize on read. "2026_03_15T103000z", "03_15_2026T103000z",
+  "15_03_2026T103000z", "03_15_26T103000z" (plus bare, Z/z,
+  fractional, numeric-offset, named-zone, weekday-prefixed, and
+  AM/PM variants), no-seconds "2026_03_15T1030z" (same variants),
+  and space-separated "2026_03_15 103000z" / "2026_03_15 1030z"
+  (same variants) govern instead of quarantining as
+  unparseable_date. Cause: the underscore dispatch guards were
+  strict fullmatches requiring a colon in the time, and the
+  format lists had no colon-less alternative. All 12 guard arms
+  (24h + AM/PM + AM/PM-with-zone + suffix-before-marker, across
+  the year-first, non-year-first, and two-digit-year families)
+  widened to accept six-digit and four-digit colon-less times,
+  and 30 new %H%M%S / %H%M / %H%M%S.%f formats added across the
+  three format lists. Probe before the fix: 0 of 28 colon-less
+  underscore forms governed; after: all 28 govern to their
+  calendar date, and day-first two-digit-year forms
+  ("26_03_15T103000z") govern as 2015-03-26 per the existing
+  no-separate-year-first-form rule. Bad forms still quarantine
+  (impossible dates, out-of-range times, doubled/malformed
+  suffixes, bogus weekday, malformed marker, unknown zone,
+  wrong-length times, fractional longer than six digits).
+  Attached named zone ("2026_03_15T103000GMT") quarantines,
+  matching the colon family exactly. A fractional no-seconds
+  form ("2026_03_15T1030.123z") quarantines by design — a
+  fractional part follows a seconds-bearing time only, the same
+  rule the colon forms already carry; the AM/PM arms were
+  tightened to match after a probe showed the widened arm
+  admitting it. 2 new tests (suite now 276, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.601s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  differing only in their timestamp columns; zero raw member IDs,
+  zero patient names in all outputs; CLI smoke-tested on a
+  colon-less underscore 3-row CSV: 3 in, 2 governed, 1
+  quarantined).
+  Next gap noted: colon-less datetimes on month-name dates
+  ("Mar 15, 2026T103000z") still quarantine — probe: 0 of 14
+  govern.
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)

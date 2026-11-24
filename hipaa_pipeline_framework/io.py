@@ -76,6 +76,11 @@ AM/PM underscore datetimes such as "2026_03_15 10:30:00 AM"
 AM/PM timezone-suffixed underscore datetimes such as
 "2026_03_15 10:30:00 AM Z" (the suffix trailing the marker is
 dropped first, then the marker, only the date part governs), and
+colon-less underscore datetimes such as
+"2026_03_15T103000z" or "2026_03_15 1030" (the time carries no
+colons, six-digit or no-seconds, T- or space-separated, fractional
+and timezone-suffixed and AM/PM forms included; only the date
+part governs), and
 timezone-suffixed compact datetimes such as
 "20260315 10:30:00Z" or "20260315T09:00:00-04:00" (the suffix
 is dropped, only the date part governs), and
@@ -958,7 +963,28 @@ def read_claims_csv(path):
     fractional-second underscore datetime without a suffix
     ("2026_03_15 10:30:00.999"); an impossible fractional
     underscore datetime or a malformed suffix is left
-    untouched so the gates quarantine it normally. An AM/PM
+    untouched so the gates quarantine it normally. A colon-less
+    underscore datetime ("2026_03_15T103000z",
+    "2026_03_15 1030", the way compact-timestamp exports write
+    underscore datetimes) normalizes the same way: the %H%M%S /
+    %H%M formats parse the colon-less time, six-digit and
+    no-seconds, T- and space-separated alike, with fractional,
+    timezone-suffixed, weekday-prefixed, and AM/PM forms
+    included. Until now the dispatch guards had no colon-less
+    alternative — their strict fullmatches required a colon in
+    the time — so every such form quarantined (verified by probe
+    before the fix: 0 of 28 forms governed). An impossible
+    colon-less underscore datetime ("2026_02_30T103000z"), an
+    out-of-range colon-less time ("2026_03_15T256000z"), a
+    wrong-length colon-less time ("2026_03_15T10300z",
+    "2026_03_15T1030000z"), a fractional second longer than six
+    digits ("2026_03_15T103000.1234567z"), or a fractional
+    no-seconds form ("2026_03_15T1030.123z", by design — a
+    fractional part follows a seconds-bearing time only, the
+    same rule the colon forms already carry) is left untouched
+    so the gates quarantine it normally, as is an attached named
+    zone ("2026_03_15T103000GMT"), matching the colon family
+    exactly. An AM/PM
     underscore datetime ("2026_03_15 10:30:00 AM",
     "2026_03_15T09:00:00 PM", or a fractional-second
     "2026_03_15 10:30:00.123 AM", the way exports write
@@ -1888,8 +1914,8 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{4}_\d{2}_\d{2}[ T]\d{2}:\d{2}"
-                        r"(?::\d{2}(?:\.\d+)?)?"
+                        r"\d{4}_\d{2}_\d{2}[ T](?:\d{2}:\d{2}"
+                        r"(?::\d{2}(?:\.\d+)?)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
                         r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
                         date, flags=re.IGNORECASE)
@@ -1897,15 +1923,15 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{4}_\d{2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?\s*(?:AM|PM)",
+                        r"\d{4}_\d{2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{4}_\d{2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"\d{4}_\d{2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
+                        r"\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
                         r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
                         date, flags=re.IGNORECASE)
@@ -1913,8 +1939,8 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{4}_\d{2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"\d{4}_\d{2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
                         r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)
@@ -1928,8 +1954,8 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}_\d{1,2}_\d{4}[ T]\d{2}:\d{2}"
-                        r"(?::\d{2}(?:\.\d+)?)?"
+                        r"\d{1,2}_\d{1,2}_\d{4}[ T](?:\d{2}:\d{2}"
+                        r"(?::\d{2}(?:\.\d+)?)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
                         r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
                         date, flags=re.IGNORECASE)
@@ -1937,15 +1963,15 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}_\d{1,2}_\d{4}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?\s*(?:AM|PM)",
+                        r"\d{1,2}_\d{1,2}_\d{4}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}_\d{1,2}_\d{4}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"\d{1,2}_\d{1,2}_\d{4}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
+                        r"\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
                         r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
                         date, flags=re.IGNORECASE)
@@ -1953,8 +1979,8 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}_\d{1,2}_\d{4}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"\d{1,2}_\d{1,2}_\d{4}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
                         r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)
@@ -1968,8 +1994,8 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{2}:\d{2}"
-                        r"(?::\d{2}(?:\.\d+)?)?"
+                        r"\d{1,2}_\d{1,2}_\d{2}[ T](?:\d{2}:\d{2}"
+                        r"(?::\d{2}(?:\.\d+)?)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
                         r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
                         date, flags=re.IGNORECASE)
@@ -1977,15 +2003,15 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?\s*(?:AM|PM)",
+                        r"\d{1,2}_\d{1,2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
+                        r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?\s*(?:AM|PM)\s+"
+                        r"\d{1,2}_\d{1,2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
+                        r"\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
                         r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
                         date, flags=re.IGNORECASE)
@@ -1993,8 +2019,8 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}_\d{1,2}_\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
+                        r"\d{1,2}_\d{1,2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
+                        r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
                         r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
                         r"\s*(?:AM|PM)",
                         date, flags=re.IGNORECASE)):
@@ -2188,7 +2214,13 @@ def read_claims_csv(path):
                                 "%Y_%m_%d %H:%M:%S",
                                 "%Y_%m_%d %H:%M",
                                 "%Y_%m_%dT%H:%M:%S",
-                                "%Y_%m_%dT%H:%M"):
+                                "%Y_%m_%dT%H:%M",
+                                "%Y_%m_%d %H%M%S.%f",
+                                "%Y_%m_%dT%H%M%S.%f",
+                                "%Y_%m_%d %H%M%S",
+                                "%Y_%m_%d %H%M",
+                                "%Y_%m_%dT%H%M%S",
+                                "%Y_%m_%dT%H%M"):
                         try:
                             cleaned["service_date"] = datetime.strptime(
                                 underscore_date, fmt).strftime("%Y-%m-%d")
@@ -2220,6 +2252,14 @@ def read_claims_csv(path):
                                     "%m_%d_%YT%H:%M:%S", "%m_%d_%YT%H:%M",
                                     "%d_%m_%Y %H:%M:%S", "%d_%m_%Y %H:%M",
                                     "%d_%m_%YT%H:%M:%S", "%d_%m_%YT%H:%M",
+                                    "%m_%d_%Y %H%M%S.%f",
+                                    "%m_%d_%YT%H%M%S.%f",
+                                    "%d_%m_%Y %H%M%S.%f",
+                                    "%d_%m_%YT%H%M%S.%f",
+                                    "%m_%d_%Y %H%M%S", "%m_%d_%Y %H%M",
+                                    "%m_%d_%YT%H%M%S", "%m_%d_%YT%H%M",
+                                    "%d_%m_%Y %H%M%S", "%d_%m_%Y %H%M",
+                                    "%d_%m_%YT%H%M%S", "%d_%m_%YT%H%M",
                                     "%m_%d_%Y", "%d_%m_%Y"):
                             try:
                                 cleaned["service_date"] = (
@@ -2257,6 +2297,14 @@ def read_claims_csv(path):
                                     "%m_%d_%yT%H:%M:%S", "%m_%d_%yT%H:%M",
                                     "%d_%m_%y %H:%M:%S", "%d_%m_%y %H:%M",
                                     "%d_%m_%yT%H:%M:%S", "%d_%m_%yT%H:%M",
+                                    "%m_%d_%y %H%M%S.%f",
+                                    "%m_%d_%yT%H%M%S.%f",
+                                    "%d_%m_%y %H%M%S.%f",
+                                    "%d_%m_%yT%H%M%S.%f",
+                                    "%m_%d_%y %H%M%S", "%m_%d_%y %H%M",
+                                    "%m_%d_%yT%H%M%S", "%m_%d_%yT%H%M",
+                                    "%d_%m_%y %H%M%S", "%d_%m_%y %H%M",
+                                    "%d_%m_%yT%H%M%S", "%d_%m_%yT%H%M",
                                     "%m_%d_%y", "%d_%m_%y"):
                             try:
                                 cleaned["service_date"] = (
