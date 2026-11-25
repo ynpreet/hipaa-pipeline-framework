@@ -317,6 +317,12 @@ the month name, so a malformed space-separated time after a
 two-digit-year day-first or no-comma month-first date ("15 Mar 26
 10300", "March 15 26 1030.123") quarantines the same way while a
 bare two-digit-year date ("March 15 26") still governs) — and
+the "Sept" spelling such as "Sept 15, 2026" or "Sept. 15, 2026"
+(the way some exports abbreviate September with four letters,
+with an optional period) normalizes the same way — the token is
+rewritten to "Sep" before parsing, so it governs, while
+"September" is untouched and an impossible "Sept" date still
+quarantines — and
 two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
 2000-2068 and 69-99 as 1969-1999, with the same forms as the
@@ -2653,6 +2659,37 @@ def read_claims_csv(path):
                     if (tz_stripped != base
                             and tz_stripped not in candidates):
                         candidates.append(tz_stripped)
+                # "Sept" spelling: "Sept 15, 2026" or "Sept. 15,
+                # 2026", the way some exports abbreviate September
+                # with four letters (and sometimes a period) —
+                # strptime %b reads "Sep" and %B reads "September"
+                # but neither reads "Sept", so every such form
+                # quarantined until now (verified by probe before
+                # the fix: 0 of 16 valid forms governed). The
+                # token is rewritten to "Sep" (dropping an
+                # optional trailing period). This runs after every
+                # other candidate step — the weekday step only
+                # strips the original date, so a normalized
+                # candidate made here first would never get its
+                # weekday stripped ("Sunday, Sept 15, 2026"
+                # stayed quarantined until the rewrite moved
+                # here) — and before the colon-less guard, so a
+                # malformed "Sept" time ("Sept 15, 2026T10300z")
+                # is still dropped by the guard instead of
+                # governing on strptime leniency through its
+                # rewritten twin. The lookahead keeps "September"
+                # untouched — "Sept" followed by a letter is not
+                # a "Sept" token — and the word boundary keeps
+                # words such as "Septimus" untouched too; an
+                # impossible "Sept" date ("Sept 31, 2026") still
+                # fails every format and quarantines normally.
+                for base in list(candidates):
+                    sept_normalized = re.sub(
+                        r"\bSept\.?(?![A-Za-z])", "Sep", base,
+                        flags=re.IGNORECASE)
+                    if (sept_normalized != base
+                            and sept_normalized not in candidates):
+                        candidates.append(sept_normalized)
                 # Colon-less time guard (see the comment
                 # above): drop any candidate whose trailing
                 # colon-less time is not exactly six digits

@@ -4034,6 +4034,40 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   patient names in all outputs; CLI smoke-tested on a 3-row CSV:
   3 in, 2 governed, 1 quarantined — the malformed "15 Mar 26
   10300" row quarantined as unparseable_date).
+- Nov 24, 2026, 21:05 run: "Sept" month-name spelling now
+  normalizes in read_claims_csv — "Sept 15, 2026", "15 Sept
+  2026", "Sept. 15, 2026" (optional period), hyphenated,
+  two-digit-year, lowercase/uppercase, no-comma datetime, AM/PM,
+  colon-less, named-zone, weekday-prefixed, and day-of forms
+  ("15th of Sept 2026") now govern as 2026-09-15 instead of
+  quarantining as unparseable_date. Cause: strptime %b reads
+  "Sep" and %B reads "September" but neither reads "Sept".
+  Fix: a rewrite step turns a "Sept" token (optional trailing
+  period) into "Sep" — the lookahead keeps "September"
+  untouched and the word boundary keeps words like "Septimus"
+  untouched. Placement matters: the rewrite runs after every
+  other candidate step (the weekday step only strips the
+  original date, so a rewrite made first left "Sunday, Sept 15,
+  2026" quarantined — caught by probe) and before the
+  colon-less guard, so a malformed "Sept" time ("Sept 15,
+  2026T10300z") is still dropped by the guard instead of
+  governing on strptime leniency through its rewritten twin.
+  Probe before the fix: 0 of 16 valid forms governed; after:
+  all 16 govern, plus all 6 extra valid variants probed
+  (named zone, numeric offset, fractional seconds, two-digit
+  colon-less, AM/PM zone), while all 10 bad forms probed
+  (impossible day, malformed colon-less times, unknown zone,
+  malformed marker, bogus weekday, malformed suffix) still
+  quarantine. 2 new tests (suite now 282, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.531s; governed,
+  quarantine, and summary.json outputs byte-identical to
+  pre-run outputs; audit.csv 10,001 lines and audit.jsonl
+  10,000 lines, differing only in their timestamp columns;
+  zero raw member IDs, zero patient names in all outputs; CLI
+  smoke-tested on a 3-row CSV: 3 in, 2 governed, 1
+  quarantined — the malformed "Sept 15, 2026T10300z" row
+  quarantined as unparseable_date).
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
