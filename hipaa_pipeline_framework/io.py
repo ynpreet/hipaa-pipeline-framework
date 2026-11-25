@@ -327,6 +327,10 @@ abbreviated months with a trailing period such as "Mar. 15, 2026"
 or "15 Mar. 2026" (the way some exports write the month
 abbreviation with a period) have the period dropped before parsing,
 so they govern, while an impossible "Feb. 30, 2026" still
+quarantines — and full month names with a trailing period such as
+"March. 15, 2026" or "15 March. 2026" have the period dropped the
+same way, so they govern, while a double period ("March.. 15, 2026")
+or a period followed by a letter ("March.ing 15, 2026") still
 quarantines — and
 two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
@@ -2730,6 +2734,43 @@ def read_claims_csv(path):
                     if (period_normalized != base
                             and period_normalized not in candidates):
                         candidates.append(period_normalized)
+                # Full month name with a trailing period:
+                # "March. 15, 2026" or "15 March. 2026", the way
+                # some exports write the full month name with a
+                # period — strptime %B reads "March" but not
+                # "March.", so every such form quarantined until
+                # now (verified by probe before the fix: 0 of 16
+                # valid forms governed). The period is dropped
+                # and the month token kept as written, so a
+                # lowercase "march." rewrites to "march"
+                # (strptime %B reads it case-insensitively) and
+                # the lookahead keeps a period followed by a
+                # letter (a word such as "March.ing") untouched;
+                # a double period ("March.. 15, 2026") rewrites
+                # to a single-period form that still fails every
+                # format and quarantines. This runs in the same
+                # spot as the "Sept" and abbreviated-period
+                # rewrites — after every other candidate step
+                # and before the colon-less guard — so a
+                # weekday-prefixed "March." date gets its
+                # weekday stripped and a malformed "March."
+                # time ("March. 15, 2026T10300z") is still
+                # dropped by the guard instead of governing
+                # through its rewritten twin; an impossible
+                # "March." date ("February. 30, 2026") still
+                # fails every format and quarantines normally.
+                for base in list(candidates):
+                    full_period_normalized = re.sub(
+                        r"\b(January|February|March|April|"
+                        r"May|June|July|August|September|"
+                        r"October|November|December)"
+                        r"\.(?![A-Za-z])",
+                        lambda m: m.group(1), base,
+                        flags=re.IGNORECASE)
+                    if (full_period_normalized != base
+                            and full_period_normalized
+                            not in candidates):
+                        candidates.append(full_period_normalized)
                 # Colon-less time guard (see the comment
                 # above): drop any candidate whose trailing
                 # colon-less time is not exactly six digits

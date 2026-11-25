@@ -4110,6 +4110,51 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   ("March. 15, 2026") still quarantines — only the twelve
   abbreviations are rewritten.
 
+- Nov 25, 2026, 9:05 run: full month name with a trailing
+  period now normalizes in read_claims_csv — "March. 15, 2026",
+  "15 March. 2026", "March. 15 2026", hyphenated, two-digit-year,
+  lowercase/uppercase, no-comma datetime, AM/PM, colon-less,
+  named-zone, weekday-prefixed, and day-of forms ("15th of
+  March. 2026") now govern as 2026-03-15 instead of
+  quarantining as unparseable_date. Cause: strptime %B reads
+  "March" but not "March.". Fix: a rewrite step drops the period
+  after any of the twelve full month names, keeping the token as
+  written (so "march." becomes "march", which %B reads
+  case-insensitively), with a lookahead keeping a period
+  followed by a letter untouched (a word such as "March.ing"
+  still quarantines) and a double period ("March.. 15, 2026")
+  rewriting to a single-period form that still fails every
+  format and quarantines. Placement matters: the rewrite runs
+  in the same spot as the "Sept" and abbreviated-period
+  rewrites — after every other candidate step and before the
+  colon-less guard — so a weekday-prefixed "March." date gets
+  its weekday stripped and a malformed "March." time ("March.
+  15, 2026T10300z") is still dropped by the guard instead of
+  governing through its rewritten twin. Probe before the fix:
+  0 of 16 valid forms governed (the "May." extra already
+  governed via the abbreviated-period rewrite); after: all 16
+  govern, plus all 12 extra variants probed (September., June.,
+  July., February., April., August., October., November.,
+  fractional seconds, named zone, no-seconds time), while all
+  8 bad forms probed (impossible day, malformed colon-less
+  times, unknown zone, bogus weekday, double period,
+  letter-after-period) still quarantine. 2 new tests (suite
+  now 286, all passing). Demo re-verified same run (10,000 in
+  → 1,589 governed, 8,411 quarantined, reasons unchanged;
+  runtime 0.636s; governed, quarantine, and summary.json
+  outputs byte-identical to pre-run outputs; audit.csv 10,001
+  lines and audit.jsonl 10,000 lines, identical ignoring the
+  timestamp column; zero raw member IDs, zero patient names in
+  all outputs; CLI smoke-tested on a 3-row CSV: 3 in, 2
+  governed, 1 quarantined — the "February. 30, 2026" row
+  quarantined as unparseable_date).
+  Next gap noted (verified by probe this run): a trailing
+  period after the year ("March 15, 2026.") still quarantines
+  — a sentence-final period on an otherwise valid date — and
+  a missing space after the month period ("March.15, 2026")
+  still quarantines. Ordinal + period month ("March. 15th,
+  2026", "15th March. 2026") already governs.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
