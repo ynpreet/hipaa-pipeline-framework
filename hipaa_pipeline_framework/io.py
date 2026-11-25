@@ -331,6 +331,12 @@ quarantines — and full month names with a trailing period such as
 "March. 15, 2026" or "15 March. 2026" have the period dropped the
 same way, so they govern, while a double period ("March.. 15, 2026")
 or a period followed by a letter ("March.ing 15, 2026") still
+quarantines — and a trailing period after the year such as
+"March 15, 2026." (the way a date copied out of a sentence carries
+its sentence-final period, with the same handling after a time)
+has the period dropped the same way, so it governs, while a double
+period ("March 15, 2026..") or a period followed by anything else
+("March 15, 2026.10:30:00", "March 15, 2026. XYZ") still
 quarantines — and
 two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
@@ -2771,6 +2777,42 @@ def read_claims_csv(path):
                             and full_period_normalized
                             not in candidates):
                         candidates.append(full_period_normalized)
+                # Trailing period after the year (or after the
+                # time): "March 15, 2026." or "March 15, 2026
+                # 10:30:00.", the way a date copied out of a
+                # sentence carries its sentence-final period —
+                # strptime reads "2026" but not "2026.", so
+                # every such form quarantined until now
+                # (verified by probe before the fix: 0 of 16
+                # valid forms governed). A single trailing
+                # period is dropped; a double period ("March
+                # 15, 2026..") rewrites to a single-period form
+                # that still fails every format and quarantines,
+                # and a period followed by anything else ("March
+                # 15, 2026.10:30:00", "March 15, 2026. XYZ")
+                # is not trailing and is left untouched. This
+                # runs in the same spot as the "Sept",
+                # abbreviated-period, and full-period rewrites
+                # — after every other candidate step and before
+                # the colon-less guard — so a weekday-prefixed
+                # "March 15, 2026." date gets its weekday
+                # stripped first and a malformed "March 15,
+                # 2026T10300." time is still dropped by the
+                # guard instead of governing through its
+                # rewritten twin (the rewrite strips the period
+                # first, leaving the five-digit time for the
+                # guard); an impossible "February 30, 2026."
+                # date still fails every format and quarantines
+                # normally, as does a period followed by a time
+                # ("March 15, 2026. 10300").
+                for base in list(candidates):
+                    trailing_period_normalized = re.sub(
+                        r"\.$", "", base)
+                    if (trailing_period_normalized != base
+                            and trailing_period_normalized
+                            not in candidates):
+                        candidates.append(
+                            trailing_period_normalized)
                 # Colon-less time guard (see the comment
                 # above): drop any candidate whose trailing
                 # colon-less time is not exactly six digits
