@@ -21,6 +21,12 @@ AM/PM timezone-suffixed slash datetimes such as
 "03/15/2026 10:30:00 AM Z" or a named RFC 2822 zone such as
 "03/15/2026 10:30:00 AM GMT" (the suffix trailing the marker is
 dropped first, then the marker, only the date part governs), and
+a trailing period after the year (or after the time) on a slash or
+ISO date such as "03/15/2026." or "2026-03-15 10:30:00." (the way a
+date copied out of a sentence carries its sentence-final period) has
+the period dropped, so it governs, while a double period
+("03/15/2026..", "2026-03-15..") or a period followed by anything
+else ("03/15/2026.10:30:00") still quarantines, and
 two-digit-year slash dates such as "03/15/26" (a legacy export
 convention; the two-digit year follows Python's %y pivot,
 00-68 read as 2000-2068 and 69-99 as 1969-1999, with the same
@@ -1325,6 +1331,28 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # Trailing period after the year (or after the
+                # time): "03/15/2026." or "03/15/2026 10:30:00.",
+                # the way a date copied out of a sentence carries
+                # its sentence-final period — strptime reads
+                # "2026" but not "2026.", so every such form
+                # quarantined until now (verified by probe before
+                # the fix: 0 of 26 valid forms governed). A single
+                # trailing period is dropped; a double period
+                # ("03/15/2026..") drops to a single-period form
+                # that still fails every format and quarantines,
+                # and a period followed by anything else
+                # ("03/15/2026.10:30:00", "03/15/2026. XYZ") is
+                # not trailing and is left untouched. This runs
+                # first in the slash branch — before the AM/PM
+                # and timezone strips — so a period after a
+                # marker or a suffix ("03/15/2026 10:30:00 AM.",
+                # "03/15/2026 10:30:00 GMT.") leaves the marker
+                # and the suffix at the end again and they strip
+                # normally; an impossible "02/30/2026." date
+                # still fails every format and quarantines
+                # normally.
+                slash_date = re.sub(r"\.$", "", slash_date)
                 # AM/PM timezone-suffixed slash datetime:
                 # "03/15/2026 10:30:00 AM Z" or
                 # "03/15/2026T09:00:00 PM -04:00", the way
@@ -5771,6 +5799,34 @@ def read_claims_csv(path):
                     flags=re.IGNORECASE)
                 if weekday_stripped != candidate:
                     candidate = weekday_stripped
+                # Trailing period after the year (or after the
+                # time): "2026-03-15 10:30:00." or
+                # "2026-03-15 10:30:00Z.", the way a timestamp
+                # copied out of a sentence carries its
+                # sentence-final period — strptime reads "2026"
+                # but not "2026.", so every such form quarantined
+                # until now (verified by probe before the fix: 0
+                # of 26 valid forms governed). A single trailing
+                # period is dropped; a double period
+                # ("2026-03-15 10:30:00..") drops to a
+                # single-period form that still fails every format
+                # and quarantines, and a period followed by
+                # anything else ("2026-03-15.10:30:00",
+                # "2026-03-15. XYZ") is not trailing and is left
+                # untouched. This runs first in this branch —
+                # before the space-separated rewrites and the
+                # AM/PM and timezone strips — so a period after a
+                # marker or a suffix ("2026-03-15 10:30:00 AM.",
+                # "2026-03-15 10:30:00 GMT.") leaves the marker
+                # and the suffix at the end again and they strip
+                # normally, and a space-separated form
+                # ("2026 03 15.") rewrites normally; an impossible
+                # "2026-02-30 10:00:00." date still fails every
+                # format and quarantines normally. A bare ISO date
+                # ("2026-03-15.") never reaches this branch — no
+                # space, "T", or "t" — so it is handled by the
+                # dedicated branch below.
+                candidate = re.sub(r"\.$", "", candidate)
                 # Space-separated ISO date: "2026 03 15", the
                 # way some exports write a year-first date
                 # with spaces instead of hyphens — the two
@@ -5945,6 +6001,28 @@ def read_claims_csv(path):
                 if parsed is not None:
                     cleaned["service_date"] = parsed.strftime("%Y-%m-%d")
                 # else: not a real datetime: gates quarantine it
+            elif isinstance(date, str) and re.fullmatch(
+                    r"\d{4}-\d{1,2}-\d{1,2}\.", date):
+                # Trailing period after the year on a bare ISO date:
+                # "2026-03-15.", the way a date copied out of a
+                # sentence carries its sentence-final period — the
+                # quality gates read "%Y-%m-%d" but not
+                # "%Y-%m-%d.", so every such form quarantined until
+                # now (verified by probe before the fix: 0 of 26
+                # valid forms governed). A single trailing period
+                # is dropped and the remainder parses as an ISO
+                # date; a double period ("2026-03-15..") does not
+                # match the fullmatch and is left untouched so the
+                # gates quarantine it normally, as is an impossible
+                # date ("2026-02-30."). Datetime forms never reach
+                # this branch — a space or "T" sends them to the
+                # branch above, whose own trailing-period strip
+                # covers them.
+                try:
+                    cleaned["service_date"] = datetime.strptime(
+                        date[:-1], "%Y-%m-%d").strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
             # strftime("%Y") does not zero-pad years below 1000,
             # so a normalized date in year 112 comes out as
             # "112-03-15" and the gates — which need exactly four

@@ -4238,6 +4238,49 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   ("2026-03-15.", "03/15/2026.") — those go through the ISO and
   slash normalizations, not this month-name candidate machinery.
 
+- Nov 26, 2026, 03:05 run: a trailing period after the year on the
+  ISO and slash paths now normalizes in read_claims_csv — bare ISO
+  dates ("2026-03-15.", "2026-3-5."), ISO datetimes (space- and
+  T-separated, fractional-second, timezone-suffixed, AM/PM, named
+  zone, lowercase-t/z, weekday-prefixed, and space-separated
+  "2026 03 15." forms), and slash dates and datetimes ("03/15/2026.",
+  "15/03/2026.", "2026/03/15.", two-digit-year "03/15/26.", and
+  datetime, AM/PM, named-zone, weekday-prefixed, fractional, and
+  colon-less forms) now govern as 2026-03-15 instead of
+  quarantining as unparseable_date. Cause: the month-name
+  trailing-period rewrite only produced candidates inside the
+  month-name machinery, so ISO and slash values never got a
+  period-free twin. Fix: a single trailing period is dropped at
+  the top of the slash branch (before the AM/PM and timezone
+  strips, so a period after a marker or suffix leaves them at the
+  end again), at the top of the ISO-datetime branch (before the
+  space-separated rewrites and the AM/PM and timezone strips),
+  and a dedicated branch drops it on a bare ISO date matched by
+  fullmatch (a double period does not match, so it still
+  quarantines). A double period, an impossible date, a period
+  followed by a time or junk, a bogus weekday, an over-long
+  fraction, and a colon-less ISO time ("2026-03-15T103000.")
+  still quarantine — the colon-less ISO forms never governed, so
+  the strip leaves them unparseable as before. Probe before the
+  fix: 0 of 26 valid forms governed; after: all 26 govern, plus
+  all 13 bad forms in the new test still quarantine. 2 new tests
+  (suite now 292, all passing). Demo re-verified same run (10,000
+  in → 1,589 governed, 8,411 quarantined, reasons unchanged;
+  runtime 0.424s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv and audit.jsonl
+  identical ignoring the timestamp column; zero raw member IDs,
+  zero patient names in all outputs; CLI smoke-tested on a 3-row
+  CSV: 3 in, 2 governed, 1 quarantined — the "2026-03-15." and
+  "03/15/2026." rows governed as 2026-03-15 and the
+  "February. 30, 2026" row quarantined as unparseable_date).
+  Next gap noted (verified by probe this run): a hyphenated form
+  with the period before the year ("15-Mar.2026") still
+  quarantines, and a trailing period after the year on the
+  remaining date paths (dot "2026.03.15.", underscore
+  "2026_03_15.", numeric hyphen "03-15-2026.") still quarantines
+  too — those go through their own normalizations, not the ISO
+  and slash branches touched here.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
