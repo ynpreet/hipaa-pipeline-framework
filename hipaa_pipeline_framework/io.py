@@ -21,9 +21,11 @@ AM/PM timezone-suffixed slash datetimes such as
 "03/15/2026 10:30:00 AM Z" or a named RFC 2822 zone such as
 "03/15/2026 10:30:00 AM GMT" (the suffix trailing the marker is
 dropped first, then the marker, only the date part governs), and
-a trailing period after the year (or after the time) on a slash or
-ISO date such as "03/15/2026." or "2026-03-15 10:30:00." (the way a
-date copied out of a sentence carries its sentence-final period) has
+a trailing period after the year (or after the time) on a slash,
+ISO, dot-separated, underscore-separated, or numeric hyphen date
+such as "03/15/2026." or "2026-03-15 10:30:00." or "2026.03.15."
+or "2026_03_15." or "03-15-2026." (the way a date copied out of a
+sentence carries its sentence-final period) has
 the period dropped, so it governs, while a double period
 ("03/15/2026..", "2026-03-15..") or a period followed by anything
 else ("03/15/2026.10:30:00") still quarantines, and
@@ -1639,13 +1641,13 @@ def read_claims_csv(path):
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                         r"Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}\.\d{1,2}\.\d{2}(?:[ T]|$)",
+                        r"\d{1,2}\.\d{1,2}\.\d{2}(?:[ T]|\.?$)",
                         date, flags=re.IGNORECASE)
                     or re.match(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                         r"Thu|Fri|Sat|Sun)[,\s]+)?"
-                        r"\d{1,2}\.\d{1,2}\.\d{4}(?:[ T]|$)",
+                        r"\d{1,2}\.\d{1,2}\.\d{4}(?:[ T]|\.?$)",
                         date, flags=re.IGNORECASE)):
                 # Dot-separated form only: the branch claims
                 # year-first dot dates ("2026.03.15", optionally
@@ -1679,6 +1681,33 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # Trailing period after the year (or after the
+                # time): "2026.03.15." or "2026.03.15 10:30:00.",
+                # the way a date copied out of a sentence carries
+                # its sentence-final period — strptime reads
+                # "2026" but not "2026.", so every such form
+                # quarantined until now (verified by probe before
+                # the fix: 0 of 29 valid dot, underscore, and
+                # numeric hyphen forms governed). A single
+                # trailing period is dropped; a double period
+                # ("2026.03.15..") drops to a single-period form
+                # that still fails every format and quarantines,
+                # and a period followed by anything else
+                # ("2026.03.15.10:30:00", "2026.03.15. XYZ") is
+                # not trailing and is left untouched. This runs
+                # first in the dot branch — before the AM/PM
+                # and timezone strips — so a period after a
+                # marker or a suffix ("2026.03.15 10:30:00 AM.",
+                # "2026.03.15 10:30:00 GMT.") leaves the marker
+                # and the suffix at the end again and they strip
+                # normally; an impossible "2026.02.30." date
+                # still fails every format and quarantines
+                # normally. The two non-year-first guard arms
+                # above widen the same way, admitting an
+                # optional trailing period after the year, so a
+                # bare "03.15.2026." is claimed here instead of
+                # falling through to quarantine.
+                dot_date = re.sub(r"\.$", "", dot_date)
                 # AM/PM timezone-suffixed dot datetime:
                 # "2026.03.15 10:30:00 AM Z" or
                 # "2026.03.15T09:00:00 PM -04:00", the way
@@ -1977,11 +2006,11 @@ def read_claims_csv(path):
                     # else: not a real calendar date in dot form:
                     # left untouched, gates quarantine it
             elif isinstance(date, str) and (
-                    re.fullmatch(r"\d{4}_\d{2}_\d{2}", date)
+                    re.fullmatch(r"\d{4}_\d{2}_\d{2}\.?", date)
                     or re.fullmatch(
                         r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
-                        r"Thu|Fri|Sat|Sun)[,\s]+\d{4}_\d{2}_\d{2}",
+                        r"Thu|Fri|Sat|Sun)[,\s]+\d{4}_\d{2}_\d{2}\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -1990,14 +2019,14 @@ def read_claims_csv(path):
                         r"\d{4}_\d{2}_\d{2}[ T](?:\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
-                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{4}_\d{2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2006,7 +2035,7 @@ def read_claims_csv(path):
                         r"\d{4}_\d{2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
-                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2015,13 +2044,13 @@ def read_claims_csv(path):
                         r"\d{4}_\d{2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
                         r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
-                    or re.fullmatch(r"\d{1,2}_\d{1,2}_\d{4}", date)
+                    or re.fullmatch(r"\d{1,2}_\d{1,2}_\d{4}\.?", date)
                     or re.fullmatch(
                         r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
-                        r"Thu|Fri|Sat|Sun)[,\s]+\d{1,2}_\d{1,2}_\d{4}",
+                        r"Thu|Fri|Sat|Sun)[,\s]+\d{1,2}_\d{1,2}_\d{4}\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2030,14 +2059,14 @@ def read_claims_csv(path):
                         r"\d{1,2}_\d{1,2}_\d{4}[ T](?:\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
-                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}_\d{1,2}_\d{4}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2046,7 +2075,7 @@ def read_claims_csv(path):
                         r"\d{1,2}_\d{1,2}_\d{4}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
-                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2055,13 +2084,13 @@ def read_claims_csv(path):
                         r"\d{1,2}_\d{1,2}_\d{4}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
                         r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
-                    or re.fullmatch(r"\d{1,2}_\d{1,2}_\d{2}", date)
+                    or re.fullmatch(r"\d{1,2}_\d{1,2}_\d{2}\.?", date)
                     or re.fullmatch(
                         r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
-                        r"Thu|Fri|Sat|Sun)[,\s]+\d{1,2}_\d{1,2}_\d{2}",
+                        r"Thu|Fri|Sat|Sun)[,\s]+\d{1,2}_\d{1,2}_\d{2}\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2070,14 +2099,14 @@ def read_claims_csv(path):
                         r"\d{1,2}_\d{1,2}_\d{2}[ T](?:\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
-                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}_\d{1,2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2086,7 +2115,7 @@ def read_claims_csv(path):
                         r"\d{1,2}_\d{1,2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
-                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -2095,7 +2124,7 @@ def read_claims_csv(path):
                         r"\d{1,2}_\d{1,2}_\d{2}[ T](?:\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d{4}(?:\d{2}(?:\.\d+)?)?)"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|"
                         r"GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)):
                 # Underscore-separated form: YYYY_MM_DD (the way
                 # some exports and file-naming conventions write
@@ -2216,6 +2245,32 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # Trailing period after the year (or after the
+                # time): "2026_03_15." or "2026_03_15 10:30:00.",
+                # the way a date copied out of a sentence carries
+                # its sentence-final period — strptime reads
+                # "2026" but not "2026.", so every such form
+                # quarantined until now (verified by probe before
+                # the fix: 0 of 29 valid dot, underscore, and
+                # numeric hyphen forms governed). A single
+                # trailing period is dropped; a double period
+                # ("2026_03_15..") drops to a single-period form
+                # that still fails every format and quarantines,
+                # and a period followed by anything else
+                # ("2026_03_15.10:30:00", "2026_03_15. XYZ") is
+                # not trailing and is left untouched. This runs
+                # first in the underscore branch — before the
+                # AM/PM and timezone strips — so a period after
+                # a marker or a suffix ("2026_03_15 10:30:00
+                # AM.", "2026_03_15 10:30:00 GMT.") leaves the
+                # marker and the suffix at the end again and
+                # they strip normally; an impossible
+                # "2026_02_30." date still fails every format
+                # and quarantines normally. Every guard arm
+                # above admits an optional trailing period, so
+                # a bare "2026_03_15." is claimed here instead
+                # of falling through to quarantine.
+                underscore_date = re.sub(r"\.$", "", underscore_date)
                 # AM/PM timezone-suffixed underscore datetime:
                 # "2026_03_15 10:30:00 AM Z" or
                 # "2026_03_15T09:00:00 PM -04:00", the way
@@ -3173,11 +3228,11 @@ def read_claims_csv(path):
                     if cleaned["service_date"] != date:
                         break
             elif isinstance(date, str) and (
-                    re.fullmatch(r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})", date)
+                    re.fullmatch(r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})\.?", date)
                     or re.fullmatch(
                         r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|"
                         r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
-                        r"Thu|Fri|Sat|Sun)[,\s]+\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})",
+                        r"Thu|Fri|Sat|Sun)[,\s]+\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3186,14 +3241,14 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{2}:\d{2}"
                         r"(?::\d{2}(?:\.\d+)?)?"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
-                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{1,2}:\d{2}(?::\d{2})?"
-                        r"(?:\.\d+)?\s*(?:AM|PM)",
+                        r"(?:\.\d+)?\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3202,7 +3257,7 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
-                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3211,7 +3266,7 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})[ T]\d{1,2}:\d{2}(?::\d{2})?"
                         r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
                         r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3220,14 +3275,14 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{6}"
                         r"(?:\.\d+)?"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
-                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{6}"
-                        r"(?:\.\d+)?\s*(?:AM|PM)",
+                        r"(?:\.\d+)?\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3236,7 +3291,7 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{6}"
                         r"(?:\.\d+)?\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
-                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3245,7 +3300,7 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{6}"
                         r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
                         r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3253,14 +3308,14 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{4}"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
-                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{4}"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3269,7 +3324,7 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{4}"
                         r"\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
-                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3278,7 +3333,7 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})T\d{4}"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
                         r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3287,14 +3342,14 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{6}"
                         r"(?:\.\d+)?"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
-                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{6}"
-                        r"(?:\.\d+)?\s*(?:AM|PM)",
+                        r"(?:\.\d+)?\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3303,7 +3358,7 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{6}"
                         r"(?:\.\d+)?\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
-                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3312,7 +3367,7 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{6}"
                         r"(?:\.\d+)?(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
                         r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3320,14 +3375,14 @@ def read_claims_csv(path):
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{4}"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|"
-                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?",
+                        r"UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))?\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
                         r"Friday|Saturday|Sunday|Mon|Tues|Tue|Wed|"
                         r"Thurs|Thur|Thu|Fri|Sat|Sun)[,\s]+)?"
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{4}"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3336,7 +3391,7 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{4}"
                         r"\s*(?:AM|PM)\s+"
                         r"(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|UT|GMT|UTC|"
-                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)",
+                        r"EST|EDT|CST|CDT|MST|MDT|PST|PDT)\.?",
                         date, flags=re.IGNORECASE)
                     or re.fullmatch(
                         r"(?:(?:Monday|Tuesday|Wednesday|Thursday|"
@@ -3345,7 +3400,7 @@ def read_claims_csv(path):
                         r"\d{1,2}-\d{1,2}-(?:\d{4}|\d{2}) \d{4}"
                         r"(?:\s*(?:Z|[+-](?:0\d|1[0-4]):?[0-5]\d|"
                         r"UT|GMT|UTC|EST|EDT|CST|CDT|MST|MDT|PST|PDT))"
-                        r"\s*(?:AM|PM)",
+                        r"\s*(?:AM|PM)\.?",
                         date, flags=re.IGNORECASE)):
                 # Numeric hyphen form: "03-15-2026" (US) or an
                 # unambiguous day-first "15-03-2026", or the
@@ -3520,6 +3575,32 @@ def read_claims_csv(path):
                     r"Saturday|Sunday|Mon|Tues|Tue|Wed|Thurs|Thur|"
                     r"Thu|Fri|Sat|Sun)[,\s]+", "", date,
                     flags=re.IGNORECASE)
+                # Trailing period after the year (or after the
+                # time): "03-15-2026." or "03-15-2026 10:30:00.",
+                # the way a date copied out of a sentence carries
+                # its sentence-final period — strptime reads
+                # "2026" but not "2026.", so every such form
+                # quarantined until now (verified by probe before
+                # the fix: 0 of 29 valid dot, underscore, and
+                # numeric hyphen forms governed). A single
+                # trailing period is dropped; a double period
+                # ("03-15-2026..") drops to a single-period form
+                # that still fails every format and quarantines,
+                # and a period followed by anything else
+                # ("03-15-2026.10:30:00", "03-15-2026. XYZ") is
+                # not trailing and is left untouched. This runs
+                # first in the hyphen branch — before the AM/PM
+                # and timezone strips — so a period after a
+                # marker or a suffix ("03-15-2026 10:30:00 AM.",
+                # "03-15-2026 10:30:00 GMT.") leaves the marker
+                # and the suffix at the end again and they strip
+                # normally; an impossible "02-30-2026." date
+                # still fails every format and quarantines
+                # normally. Every guard arm above admits an
+                # optional trailing period, so a bare
+                # "03-15-2026." is claimed here instead of
+                # falling through to quarantine.
+                hyphen_date = re.sub(r"\.$", "", hyphen_date)
                 # AM/PM numeric hyphen datetime: "03-15-2026
                 # 10:30:00 AM" or "03-15-2026 10:30:00.123 AM",
                 # the way exports write hyphen datetimes on a

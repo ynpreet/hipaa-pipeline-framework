@@ -4280,6 +4280,41 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   "2026_03_15.", numeric hyphen "03-15-2026.") still quarantines
   too — those go through their own normalizations, not the ISO
   and slash branches touched here.
+- Nov 26, 2026 build block (09:05 run): trailing period after the
+  year now normalizes on the dot, underscore, and numeric hyphen
+  paths in hipaa_pipeline_framework/io.py — bare dates
+  ("2026.03.15.", "03.15.2026.", "03.15.26.", "15.03.2026.",
+  "2026_03_15.", "03_15_2026.", "03_15_26.", "15_03_2026.",
+  "03-15-2026.", "15-03-2026.", "03-15-26."), datetimes (space-
+  and T-separated, fractional-second, timezone-suffixed, AM/PM,
+  named-zone, weekday-prefixed, colon-less, and lowercase-t/z
+  forms), now govern as 2026-03-15 instead of quarantining as
+  unparseable_date. Fix: a single trailing period is dropped at
+  the top of each of the three branches (after the weekday strip,
+  before the AM/PM and timezone strips), and every guard arm
+  admits an optional trailing period (18 underscore arms, 22
+  numeric hyphen arms; the two non-year-first dot guard arms
+  widen the same way). Probe before the fix: 0 of 32 valid forms
+  governed; after: all 32 govern, plus all 17 bad forms in the
+  new test still quarantine (double period, impossible date,
+  period-then-time/junk, bogus weekday, unknown zone, over-long
+  fraction). Bare colon-less forms govern on these families (unlike
+  ISO, where "2026-03-15T103000" itself quarantines), so their
+  trailing-period forms ("2026_03_15T103000.",
+  "03-15-2026T103000z.") govern too. 2 new tests (suite now 294,
+  all passing). Demo re-verified same run (10,000 in → 1,589
+  governed, 8,411 quarantined, reasons unchanged; runtime 0.104s;
+  governed, quarantine, and synthetic_raw outputs byte-identical
+  to pre-run outputs; zero raw member IDs and zero patient names
+  in the governed output; CLI smoke-tested on a 4-row CSV: 4 in,
+  3 governed, 1 quarantined — the "2026.03.15.", "2026_03_15.",
+  and "03-15-2026." rows governed as 2026-03-15 and the
+  "February. 30, 2026" row quarantined as unparseable_date).
+  Next gap noted (verified by probe this run): a hyphenated form
+  with the period before the year ("15-Mar.2026") still
+  quarantines — the month-name space insertion leaves mixed
+  separators ("15-Mar 2026") that no format reads — for a later
+  run.
 
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
