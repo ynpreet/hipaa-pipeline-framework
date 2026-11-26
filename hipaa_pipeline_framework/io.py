@@ -2790,9 +2790,10 @@ def read_claims_csv(path):
                 # date or a double period ("March..15, 2026") still
                 # fails every format and quarantines normally. A
                 # hyphenated form with the period before the year
-                # ("15-Mar.2026") is not covered — the space
-                # insertion leaves mixed separators ("15-Mar 2026")
-                # that no format reads — so it still quarantines.
+                # ("15-Mar.2026") leaves mixed separators
+                # ("15-Mar 2026") that no format reads — the
+                # hyphen-join rewrite below turns them back
+                # into a hyphenated date, so it governs.
                 for base in list(candidates):
                     space_normalized = re.sub(
                         r"\b(January|February|March|April|"
@@ -2943,6 +2944,86 @@ def read_claims_csv(path):
                             not in candidates):
                         candidates.append(
                             trailing_period_normalized)
+                # Hyphenated month-name date with a period
+                # before the year: "15-Mar.2026" or
+                # "15-March.2026", the way some exports write
+                # the month abbreviation with a period where
+                # the hyphen belongs — the space insertion
+                # above turns it into "15-Mar. 2026" and the
+                # period-drop rewrites then leave mixed
+                # separators ("15-Mar 2026") that no format
+                # reads, so every such form quarantined until
+                # now (verified by probe before the fix: 0 of
+                # 18 valid day-first forms governed). The space
+                # between
+                # the hyphenated day-month part and the year
+                # is replaced with a hyphen, so the remainder
+                # parses as a hyphenated month-name date; the
+                # lookahead keeps the year to two or four
+                # digits followed by the end, a space, or a
+                # T, so an over-long year ("15-Mar.202610")
+                # or junk after the year ("15-Mar.2026 XYZ")
+                # is untouched and still quarantines, and a
+                # period followed by a time ("15-Mar.2026.
+                # 10300") never reaches this shape. This runs
+                # after the period-drop and trailing-period
+                # rewrites — the space only exists once the
+                # period has been dropped, and a trailing
+                # period ("15-Mar.2026.") is dropped first —
+                # and before the colon-less guard, so a
+                # malformed "15-Mar.2026T10300z" time is
+                # still dropped by the guard instead of
+                # governing through its joined twin; an
+                # impossible "30-Feb.2026" date still fails
+                # every format and quarantines normally. A
+                # "Sept" form ("15-Sept.2026") reaches here
+                # through the "Sept" rewrite, and a full
+                # month name ("15-March.2026") through the
+                # full-period rewrite.
+                for base in list(candidates):
+                    hyphen_joined = re.sub(
+                        r"\b(\d{1,2}-(?:Jan|Feb|Mar|Apr|May|"
+                        r"Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*)"
+                        r"\s+(\d{2,4})(?=$|[\sT])",
+                        r"\1-\2", base, flags=re.IGNORECASE)
+                    if (hyphen_joined != base
+                            and hyphen_joined not in candidates):
+                        candidates.append(hyphen_joined)
+                # Month-first hyphenated month-name date with
+                # a period before the year: "Mar-15.2026",
+                # the same export quirk in month-first order
+                # — the period sits between the day and the
+                # year, where no earlier rewrite touches it
+                # (the space insertion only fires on a period
+                # directly after the month), so every such
+                # form quarantined until now (verified by
+                # probe before the fix: 0 of 4 valid forms
+                # governed). The period is replaced with a
+                # hyphen, so the remainder parses as a
+                # hyphenated month-name date; the lookahead
+                # keeps the year to two or four digits
+                # followed by the end, a space, or a T, so a
+                # double period ("Mar-15..2026"), a period
+                # followed by a time ("Mar-15.2026.10:30:00"),
+                # or junk after the year ("Mar-15.2026 XYZ")
+                # is untouched and still quarantines. This
+                # runs in the same spot as the day-first join
+                # above — after the trailing-period rewrite,
+                # so "Mar-15.2026." is dropped to "Mar-15.2026"
+                # first — and before the colon-less guard, so
+                # a malformed "Mar-15.2026T10300z" time is
+                # still dropped by the guard instead of
+                # governing through its joined twin.
+                for base in list(candidates):
+                    month_first_joined = re.sub(
+                        r"\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|"
+                        r"Aug|Sep|Oct|Nov|Dec)[a-z]*)-"
+                        r"(\d{1,2})\.(\d{2,4})(?=$|[\sT])",
+                        r"\1-\2-\3", base, flags=re.IGNORECASE)
+                    if (month_first_joined != base
+                            and month_first_joined
+                            not in candidates):
+                        candidates.append(month_first_joined)
                 # Colon-less time guard (see the comment
                 # above): drop any candidate whose trailing
                 # colon-less time is not exactly six digits

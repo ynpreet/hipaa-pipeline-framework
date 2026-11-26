@@ -4316,6 +4316,48 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   separators ("15-Mar 2026") that no format reads — for a later
   run.
 
+- Nov 26, 2026, 15:05 run: a period before the year in a
+  hyphenated month-name date now normalizes in
+  read_claims_csv — day-first ("15-Mar.2026", full-month
+  "15-March.2026", "Sept" "15-Sept.2026", two-digit-year
+  "15-Mar.26", datetimes space- and T-separated,
+  fractional-second, timezone-suffixed, AM/PM, named-zone,
+  weekday-prefixed, colon-less, lowercase/uppercase, and
+  trailing-period "15-Mar.2026.") and month-first
+  ("Mar-15.2026", datetime, T-separated, two-digit-year
+  "Mar-15.26") now govern as 2026-03-15 instead of
+  quarantining as unparseable_date. Cause: the month-name
+  space insertion left mixed separators ("15-Mar 2026") that
+  no format reads, and the month-first period sat between the
+  day and the year where no rewrite touched it. Fix: two
+  rewrites after the trailing-period rewrite and before the
+  colon-less guard — a day-first join replaces the space
+  between the hyphenated day-month part and the year with a
+  hyphen, and a month-first rewrite replaces the period
+  between the day and the year with a hyphen; both keep the
+  year to two or four digits followed by the end, a space, or
+  a T. Probe before the fix: 0 of 22 valid forms governed;
+  after: all 22 govern, plus all 14 bad forms probed (double
+  period, impossible date, period-then-time/junk, bogus
+  weekday, malformed colon-less time, over-long year) still
+  quarantine. The "15-Mar.2026" row moved out of the bad
+  missing-space test into the new valid test. 2 new tests
+  (suite now 296, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.389s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv identical ignoring the timestamp column; zero raw
+  member IDs and zero patient names in the governed output;
+  CLI smoke-tested on a 3-row CSV: 3 in, 2 governed,
+  1 quarantined — the "15-Mar.2026" and "Mar-15.2026" rows
+  governed as 2026-03-15 and the "February. 30, 2026" row
+  quarantined as unparseable_date).
+  Next gap noted (verified by probe this run): a period after
+  the month in a hyphenated month-first form ("Mar.15-2026",
+  "Mar. 15-2026", "Mar.15.2026") still quarantines — the
+  period-drop leaves mixed separators ("Mar 15-2026") that no
+  format reads — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
