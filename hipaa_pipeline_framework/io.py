@@ -337,7 +337,12 @@ its sentence-final period, with the same handling after a time)
 has the period dropped the same way, so it governs, while a double
 period ("March 15, 2026..") or a period followed by anything else
 ("March 15, 2026.10:30:00", "March 15, 2026. XYZ") still
-quarantines — and
+quarantines — and a missing space after the month period such as
+"March.15, 2026" or "15 March.2026" (the way some exports write the
+month name or abbreviation with a period and no space before the day
+or the year) has a space inserted before parsing, so they govern,
+while an impossible "Feb.30, 2026" date or a double period
+("March..15, 2026") still quarantines — and
 two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
 2000-2068 and 69-99 as 1969-1999, with the same forms as the
@@ -2674,6 +2679,48 @@ def read_claims_csv(path):
                     if (tz_stripped != base
                             and tz_stripped not in candidates):
                         candidates.append(tz_stripped)
+                # Missing space after the month period:
+                # "March.15, 2026" or "15 March.2026", the way
+                # some exports write the month name or
+                # abbreviation with a period and no space before
+                # the day or the year — a space is inserted after
+                # the period and the month token kept as written,
+                # so the period-drop rewrites below can then drop
+                # the period and the remainder parses as a
+                # month-name date. The period must be followed by
+                # a digit, so a word such as "March.ing" is
+                # untouched, and the "Sept" spelling is included
+                # ("Sept.15, 2026" becomes "Sept. 15, 2026" and
+                # then governs through the "Sept" rewrite). This
+                # runs before the "Sept" and period-drop rewrites
+                # — those drop the period, so after them the space
+                # could never be inserted ("March.15, 2026" would
+                # already have become "March15, 2026") — and after
+                # every other candidate step, so a weekday-prefixed
+                # ("Sunday, March.15, 2026"), ordinal ("March.15th,
+                # 2026"), day-of ("15th of March.2026"), or
+                # timezone-stripped ("March.15, 2026 10:30:00")
+                # form gets its space inserted too, and a malformed
+                # "March.15, 2026T10300z" time is still dropped by
+                # the colon-less guard instead of governing through
+                # its rewritten twin; an impossible "Feb.30, 2026"
+                # date or a double period ("March..15, 2026") still
+                # fails every format and quarantines normally. A
+                # hyphenated form with the period before the year
+                # ("15-Mar.2026") is not covered — the space
+                # insertion leaves mixed separators ("15-Mar 2026")
+                # that no format reads — so it still quarantines.
+                for base in list(candidates):
+                    space_normalized = re.sub(
+                        r"\b(January|February|March|April|"
+                        r"May|June|July|August|September|"
+                        r"October|November|December|Sept|"
+                        r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|"
+                        r"Oct|Nov|Dec)\.(\d)",
+                        r"\1. \2", base, flags=re.IGNORECASE)
+                    if (space_normalized != base
+                            and space_normalized not in candidates):
+                        candidates.append(space_normalized)
                 # "Sept" spelling: "Sept 15, 2026" or "Sept. 15,
                 # 2026", the way some exports abbreviate September
                 # with four letters (and sometimes a period) —
