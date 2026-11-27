@@ -357,6 +357,14 @@ with a period and no hyphen between the month and the day) has the
 space and the hyphen or period between the day and the year replaced
 with hyphens before parsing, so they govern, while an impossible
 "Feb.30-2026" date or an over-long year ("Mar.15-202610") still
+quarantines — and a no-seconds AM/PM time on a hyphenated
+month-name date such as "Mar-15-2026 10:30 AM" or "15-Mar-2026
+10:30 AM" (the way some exports write hyphenated month-name
+datetimes on a 12-hour clock with no seconds) has its marker
+dropped and normalizes to its date part, so it governs, with the
+same timezone-suffix, two-digit-year, T-separated, and
+weekday-prefixed handling as the seconds form, while an impossible
+"Feb-30-2026 10:30 AM" date or a malformed marker still
 quarantines — and
 two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
@@ -867,7 +875,16 @@ def read_claims_csv(path):
     some exports write dates without spaces) normalizes the same
     way, so it governs; an impossible hyphenated month-name date
     (e.g. "30-Feb-2026") is left untouched so the gates
-    quarantine it normally. A service_date in numeric hyphen
+    quarantine it normally. A hyphenated month-name datetime
+    carrying a no-seconds AM/PM time ("Mar-15-2026 10:30 AM" or
+    "15-Mar-2026 10:30 AM", the way exports write hyphenated
+    month-name datetimes on a 12-hour clock with no seconds) has
+    its marker dropped on read and normalizes to its date part the
+    same way, with the same timezone-suffix, two-digit-year,
+    T-separated, and weekday-prefixed handling as the seconds form;
+    an impossible no-seconds AM/PM hyphenated datetime ("Feb-30-2026
+    10:30 AM") or a malformed marker ("Mar-15-2026 10:30 XM") is left
+    untouched so the gates quarantine it normally. A service_date in numeric hyphen
     form ("03-15-2026", the way some exports write the US date
     with hyphens instead of slashes) normalizes the same way,
     with the US form keeping priority: "03-04-2026" reads as
@@ -3167,10 +3184,18 @@ def read_claims_csv(path):
                                 "%b-%d-%Y %H:%M:%S",
                                 "%d-%B-%Y %H:%M:%S",
                                 "%B-%d-%Y %H:%M:%S",
+                                "%d-%b-%Y %H:%M",
+                                "%b-%d-%Y %H:%M",
+                                "%d-%B-%Y %H:%M",
+                                "%B-%d-%Y %H:%M",
                                 "%d-%b-%YT%H:%M:%S",
                                 "%b-%d-%YT%H:%M:%S",
                                 "%d-%B-%YT%H:%M:%S",
                                 "%B-%d-%YT%H:%M:%S",
+                                "%d-%b-%YT%H:%M",
+                                "%b-%d-%YT%H:%M",
+                                "%d-%B-%YT%H:%M",
+                                "%B-%d-%YT%H:%M",
                                 "%b %d, %Y %H:%M:%S.%f",
                                 "%B %d, %Y %H:%M:%S.%f",
                                 "%b %d %Y %H:%M:%S.%f",
@@ -3218,10 +3243,18 @@ def read_claims_csv(path):
                                 "%b-%d-%y %H:%M:%S",
                                 "%d-%B-%y %H:%M:%S",
                                 "%B-%d-%y %H:%M:%S",
+                                "%d-%b-%y %H:%M",
+                                "%b-%d-%y %H:%M",
+                                "%d-%B-%y %H:%M",
+                                "%B-%d-%y %H:%M",
                                 "%d-%b-%yT%H:%M:%S",
                                 "%b-%d-%yT%H:%M:%S",
                                 "%d-%B-%yT%H:%M:%S",
                                 "%B-%d-%yT%H:%M:%S",
+                                "%d-%b-%yT%H:%M",
+                                "%b-%d-%yT%H:%M",
+                                "%d-%B-%yT%H:%M",
+                                "%B-%d-%yT%H:%M",
                                 "%b %d, %y %H:%M:%S.%f",
                                 "%B %d, %y %H:%M:%S.%f",
                                 "%b %d %y %H:%M:%S.%f",
