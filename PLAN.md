@@ -4497,6 +4497,52 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   shapes, while the attached-T form now governs — for a later
   run.
 
+- Nov 27, 2026, 15:05 run: a space before the T separator on a
+  comma or space month-name datetime now normalizes in
+  read_claims_csv — "Mar 15, 2026 T10:30 AM", "15 Mar 2026 T10:30
+  AM", PM and lowercase markers, full-month "March 15,
+  2026 T10:30 AM" and "15 March 2026 T10:30 AM", no-comma "Mar 15
+  2026 T10:30 AM", two-digit-year "Mar 15, 26 T10:30 AM" and "15
+  Mar 26 T10:30 PM", weekday-prefixed "Sunday, Mar 15,
+  2026 T10:30 AM", attached-marker "10:30am", period forms "Mar.
+  15, 2026 T10:30 AM" and "15 Mar. 2026 T10:30 AM", "Sept 15,
+  2026 T10:30 AM", timezone-suffixed "10:30 AM Z", "10:30 AM
+  GMT", suffix-before-marker "10:30Z AM", and offset "10:30 AM
+  +05:30" now govern as 2026-03-15 (2026-09-15 for the Sept
+  form) instead of quarantining as unparseable_date. Cause: the
+  month-name format list carried %H:%M attached-T forms for the
+  comma and space shapes but no %H:%M " T" (space-T) forms,
+  while the space-separated no-seconds form already governed.
+  Fix: twelve new formats after the T-separated %H:%M blocks —
+  %H:%M space-T-separated, four- and two-digit-year, abbreviated
+  and full month names, month-first comma, month-first no-comma,
+  and day-first shapes. Probe before the fix: 0 of 24 valid forms
+  governed; after: all 24 govern, plus all 8 bad forms probed
+  (impossible date, malformed marker, out-of-range hour/minute,
+  unknown zone, malformed offset, bogus weekday, fractional
+  no-seconds time) still quarantine. The marker, timezone,
+  weekday, and period rewrites are time-agnostic, so no candidate
+  change was needed and the colon-less guard is untouched (a
+  colon time never matches its arms). 2 new tests (suite now
+  304, all passing). Demo re-verified same run (10,000 in →
+  1,589 governed, 8,411 quarantined, reasons unchanged; runtime
+  0.387s; governed, quarantine, and summary.json outputs
+  byte-identical to pre-run outputs; audit.csv and audit.jsonl
+  identical ignoring the timestamp column; zero raw member IDs
+  and zero patient names in all outputs; CLI smoke-tested on a
+  3-row CSV: 3 in, 2 governed, 1 quarantined — the "Mar 15, 2026
+  T10:30 AM" and "15 Mar 2026 T10:30 AM" rows governed as
+  2026-03-15 and the "February 30, 2026" row quarantined as
+  unparseable_date). README test count corrected 302 → 304;
+  module docstring documents the space-T no-seconds AM/PM
+  comma/space month-name forms.
+  Next gap noted (verified by probe this run): a space before
+  the T separator on a comma month-name datetime carrying
+  seconds ("Mar 15, 2026 T10:30:00", "Mar 15, 2026 T10:30:00
+  AM") still quarantines — there is no " T%H:%M:%S" format for
+  the comma and space month-name shapes, while the attached-T
+  seconds form governs — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

@@ -373,7 +373,16 @@ no seconds) has its marker dropped and normalizes to its date
 part, so it governs, with the same two-digit-year,
 timezone-suffix, and weekday-prefixed handling as the
 space-separated form, while an impossible "Feb 30, 2026T10:30 AM"
-date or a malformed marker still quarantines — and
+date or a malformed marker still quarantines — and a space before
+the T separator on a comma or space month-name datetime such as
+"Mar 15, 2026 T10:30 AM" or "15 Mar 2026 T10:30 AM" (the way
+some exports write comma month-name datetimes with a spaced T
+separator and a 12-hour clock with no seconds) has its marker
+dropped and normalizes to its date part, so it governs, with the
+same two-digit-year, timezone-suffix, and weekday-prefixed
+handling as the attached-T form, while an impossible
+"Feb 30, 2026 T10:30 AM" date or a malformed marker still
+quarantines — and
 two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
 2000-2068 and 69-99 as 1969-1999, with the same forms as the
@@ -3194,6 +3203,12 @@ def read_claims_csv(path):
                                 "%B %d %YT%H:%M",
                                 "%d %b %YT%H:%M",
                                 "%d %B %YT%H:%M",
+                                "%b %d, %Y T%H:%M",
+                                "%B %d, %Y T%H:%M",
+                                "%b %d %Y T%H:%M",
+                                "%B %d %Y T%H:%M",
+                                "%d %b %Y T%H:%M",
+                                "%d %B %Y T%H:%M",
                                 "%d-%b-%Y %H:%M:%S",
                                 "%b-%d-%Y %H:%M:%S",
                                 "%d-%B-%Y %H:%M:%S",
@@ -3259,6 +3274,12 @@ def read_claims_csv(path):
                                 "%B %d %yT%H:%M",
                                 "%d %b %yT%H:%M",
                                 "%d %B %yT%H:%M",
+                                "%b %d, %y T%H:%M",
+                                "%B %d, %y T%H:%M",
+                                "%b %d %y T%H:%M",
+                                "%B %d %y T%H:%M",
+                                "%d %b %y T%H:%M",
+                                "%d %B %y T%H:%M",
                                 "%d-%b-%y %H:%M:%S",
                                 "%b-%d-%y %H:%M:%S",
                                 "%d-%B-%y %H:%M:%S",
