@@ -350,7 +350,14 @@ quarantines — and a missing space after the month period such as
 month name or abbreviation with a period and no space before the day
 or the year) has a space inserted before parsing, so they govern,
 while an impossible "Feb.30, 2026" date or a double period
-("March..15, 2026") still quarantines — and
+("March..15, 2026") still quarantines — and a period after the
+month in a hyphenated month-first date such as "Mar.15-2026" or
+"Mar.15.2026" (the way some exports write the month abbreviation
+with a period and no hyphen between the month and the day) has the
+space and the hyphen or period between the day and the year replaced
+with hyphens before parsing, so they govern, while an impossible
+"Feb.30-2026" date or an over-long year ("Mar.15-202610") still
+quarantines — and
 two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
 2000-2068 and 69-99 as 1969-1999, with the same forms as the
@@ -3024,6 +3031,61 @@ def read_claims_csv(path):
                             and month_first_joined
                             not in candidates):
                         candidates.append(month_first_joined)
+                # Month-first month-name date with a period
+                # after the month and a hyphen or period
+                # before the year: "Mar.15-2026",
+                # "Mar. 15-2026", or "Mar.15.2026", the way
+                # some exports write the month abbreviation
+                # with a period and no hyphen between the
+                # month and the day — the space insertion
+                # above turns it into "Mar. 15-2026" and the
+                # period-drop rewrites then leave mixed
+                # separators ("Mar 15-2026" or "Mar 15.2026")
+                # that no format reads, so every such form
+                # quarantined until now (verified by probe
+                # before the fix: 0 of 24 valid forms
+                # governed). The space between the month and
+                # the day and the hyphen or period between
+                # the day and the year are both replaced
+                # with hyphens, so the remainder parses as a
+                # hyphenated month-name date; the lookahead
+                # keeps the year to two or four digits
+                # followed by the end, a space, or a T, so
+                # an over-long year ("Mar.15-202610") or a
+                # period followed by a time
+                # ("Mar.15-2026.10:30:00") is untouched and
+                # still quarantines, and junk after the year
+                # ("Mar.15-2026 XYZ") still fails every
+                # format and quarantines. This runs in the
+                # same spot as the hyphen joins above —
+                # after the period-drop and trailing-period
+                # rewrites, so the space only exists once
+                # the period has been dropped and a trailing
+                # period ("Mar.15-2026.") is dropped first —
+                # and before the colon-less guard, so a
+                # malformed "Mar.15-2026T10300z" time is
+                # still dropped by the guard instead of
+                # governing through its joined twin; an
+                # impossible "Feb.30-2026" date still fails
+                # every format and quarantines normally. A
+                # "Sept" form ("Sept.15-2026") reaches here
+                # through the "Sept" rewrite, and a full
+                # month name ("March.15-2026") through the
+                # full-period rewrite. A bare "Mar 15-2026"
+                # with no period after the month governs
+                # through this same join as a side effect,
+                # verified, not claimed as a separate
+                # feature.
+                for base in list(candidates):
+                    month_first_space_joined = re.sub(
+                        r"\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|"
+                        r"Aug|Sep|Oct|Nov|Dec)[a-z]*)\s+"
+                        r"(\d{1,2})[-.](\d{2,4})(?=$|[\sT])",
+                        r"\1-\2-\3", base, flags=re.IGNORECASE)
+                    if (month_first_space_joined != base
+                            and month_first_space_joined
+                            not in candidates):
+                        candidates.append(month_first_space_joined)
                 # Colon-less time guard (see the comment
                 # above): drop any candidate whose trailing
                 # colon-less time is not exactly six digits

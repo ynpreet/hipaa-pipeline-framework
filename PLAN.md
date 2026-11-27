@@ -4358,6 +4358,51 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   period-drop leaves mixed separators ("Mar 15-2026") that no
   format reads — for a later run.
 
+- Nov 26, 2026, 21:05 run: a period after the month in a
+  hyphenated month-first date now normalizes in
+  read_claims_csv — "Mar.15-2026", "Mar. 15-2026",
+  "Mar.15.2026", "Mar. 15.2026", full-month "March.15-2026",
+  "March. 15-2026", "March.15.2026", "Sept" "Sept.15-2026",
+  two-digit-year "Mar.15-26" and "Mar.15.26", datetimes
+  space- and T-separated, fractional-second,
+  timezone-suffixed, AM/PM with seconds, named-zone,
+  weekday-prefixed, colon-less, lowercase, and trailing-period
+  "Mar.15-2026." now govern as 2026-03-15 instead of
+  quarantining as unparseable_date. Cause: the month-name
+  space insertion and period-drop rewrites left mixed
+  separators ("Mar 15-2026" or "Mar 15.2026") that no format
+  reads. Fix: one rewrite after the hyphen joins and before
+  the colon-less guard — a month-first space join replaces
+  the space between the month and the day and the hyphen or
+  period between the day and the year with hyphens, keeping
+  the year to two or four digits followed by the end, a
+  space, or a T. Probe before the fix: 0 of 24 valid forms
+  governed; after: all 24 govern, plus all 12 bad forms
+  probed (double period, impossible date, period-then-time/
+  junk, bogus weekday, malformed colon-less time, over-long
+  year, unknown zone, over-long fraction) still quarantine.
+  A bare "Mar 15-2026" and "Mar 15.2026" with no period after
+  the month govern through the same join as a side effect,
+  verified, not claimed as a separate feature. 2 new tests
+  (suite now 298, all passing). Demo re-verified same run
+  (10,000 in → 1,589 governed, 8,411 quarantined, reasons
+  unchanged; runtime 0.428s; governed, quarantine, and
+  summary.json outputs byte-identical to pre-run outputs;
+  audit.csv and audit.jsonl identical ignoring the timestamp
+  column; zero raw member IDs and zero patient names in all
+  outputs; CLI smoke-tested on a 3-row CSV: 3 in, 2 governed,
+  1 quarantined — the "Mar.15-2026" and "March.15.2026" rows
+  governed as 2026-03-15 and the "February. 30, 2026" row
+  quarantined as unparseable_date). README test count
+  corrected 296 → 298; module docstring documents the
+  hyphenated month-first period forms.
+  Next gap noted (verified by probe this run): a no-seconds
+  AM/PM time on a hyphenated month-name date ("Mar-15-2026
+  10:30 AM", "15-Mar-2026 10:30 AM") still quarantines —
+  there is no no-seconds AM/PM format for hyphenated
+  month-name dates, while the same form governs on ISO,
+  slash, and comma month-name dates — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
