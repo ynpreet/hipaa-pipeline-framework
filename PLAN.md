@@ -4589,6 +4589,59 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   shapes, while the attached-T and space-separated fractional
   forms govern — for a later run.
 
+- Nov 28, 2026, 03:05 run: a space before the T separator on a
+  comma or space month-name datetime carrying fractional seconds now
+  normalizes in read_claims_csv — "Mar 15, 2026 T10:30:00.123",
+  "15 Mar 2026 T10:30:00.123", PM and lowercase markers, full-month
+  "March 15, 2026 T10:30:00.123" and "15 March 2026 T10:30:00.123",
+  no-comma "Mar 15 2026 T10:30:00.123", two-digit-year "Mar 15, 26
+  T10:30:00.123" and "15 Mar 26 T10:30:00.123 PM", weekday-prefixed
+  "Sunday, Mar 15, 2026 T10:30:00.123", attached-marker
+  "10:30:00.123am", period forms "Mar. 15, 2026 T10:30:00.123" and
+  "15 Mar. 2026 T10:30:00.123", "Sept 15, 2026 T10:30:00.123",
+  timezone-suffixed "10:30:00.123 Z", "10:30:00.123 GMT",
+  suffix-before-marker "10:30:00.123Z", and offset "10:30:00.123 AM
+  +05:30" now govern as 2026-03-15 (2026-09-15 for the Sept
+  form) instead of quarantining as unparseable_date, and one- and
+  six-digit fractions ("10:30:00.1", "10:30:00.123456") govern too.
+  Cause: the month-name format list carried %H:%M:%S " T" forms for
+  the comma and space shapes but no %H:%M:%S.%f " T" forms, while
+  the attached-T and space-separated fractional forms govern. Fix:
+  twelve new formats after the space-T %H:%M:%S blocks —
+  %H:%M:%S.%f space-T-separated, four- and two-digit-year,
+  abbreviated and full month names, month-first comma, month-first
+  no-comma, and day-first shapes. Probe before the fix: 0 of 26
+  valid forms governed; after: all 26 govern, plus all 9 bad forms
+  probed (impossible date, malformed marker, out-of-range
+  hour/minute/second, unknown zone, malformed offset, bogus
+  weekday, seven-digit fraction) still quarantine. The marker,
+  timezone, weekday, and period rewrites are time-agnostic, so no
+  candidate change was needed and the colon-less guard is untouched
+  (a colon time never matches its arms). One probe note: a trailing
+  period after the time ("Mar 15, 2026 T10:30:00.") still governs —
+  the trailing-period rewrite drops the period first and the
+  remainder governs through the space-T seconds form; pre-existing
+  behaviour, not a new-format effect, so it is not counted as a bad
+  form. 2 new tests (suite now 308, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.393s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines; audit.csv/audit.jsonl differ
+  only by per-run timestamps; zero raw member IDs, zero patient
+  names in all outputs; CLI smoke-tested on a 3-row CSV: 3 in, 2
+  governed, 1 quarantined — the "Mar 15, 2026 T10:30:00.123" and
+  "15 Mar 2026 T10:30:00.123" rows governed as 2026-03-15 and the
+  "February 30, 2026" row quarantined as unparseable_date).
+  README test count corrected 306 → 308; module docstring
+  documents the space-T fractional-seconds comma/space month-name
+  forms. Next gap noted (verified by probe this run): a space
+  before the T separator on a hyphenated month-name datetime
+  carrying fractional seconds ("Mar-15-2026 T10:30:00.123",
+  "15-Mar-2026 T10:30:00.123 AM") still quarantines — there is
+  no " T%H:%M:%S.%f" format for the hyphenated month-name shapes,
+  while the attached-T and space-separated fractional forms
+  govern — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links
