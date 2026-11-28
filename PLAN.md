@@ -4642,6 +4642,56 @@ HIPAA-oriented pipeline building blocks for healthcare data engineering:
   while the attached-T and space-separated fractional forms
   govern — for a later run.
 
+- Nov 28, 2026, 09:05 run: a space before the T separator on a
+  hyphenated month-name datetime now normalizes in
+  read_claims_csv — "Mar-15-2026 T10:30:00", "15-Mar-2026
+  T10:30:00", "March-15-2026 T10:30:00.123", "15-March-2026
+  T10:30:00.123", two-digit-year "Mar-15-26 T10:30:00" and
+  "15-Mar-26 T10:30:00.123", no-seconds "Mar-15-2026 T10:30" and
+  "15-Mar-2026 T10:30", AM/PM "Mar-15-2026 T10:30:00 AM" and
+  "15-Mar-2026 T10:30:00.123 PM", weekday-prefixed "Sunday,
+  Mar-15-2026 T10:30:00.123" and "Sunday, 15-Mar-2026
+  T10:30:00", timezone-suffixed "10:30:00.123 Z",
+  "10:30:00.123 +05:30", suffix-before-marker "10:30:00.123Z",
+  and offset "10:30:00.123 AM +05:30" now govern as 2026-03-15
+  instead of quarantining as unparseable_date, and one- and
+  six-digit fractions ("10:30:00.1", "10:30:00.123456") govern
+  too. Cause: the hyphenated month-name shapes carried no
+  space-T formats at all — no " T%H:%M", " T%H:%M:%S", or
+  " T%H:%M:%S.%f" — while the attached-T and space-separated
+  forms govern, so the gap was wider than the 03:05 run's note
+  (which named only the fractional form); the probe showed 0 of
+  24 valid hyphenated space-T forms governing before the fix.
+  Fix: 24 new formats after the hyphenated attached-T no-seconds
+  blocks — space-T no-seconds, seconds, and fractional seconds,
+  four- and two-digit-year, abbreviated and full month names,
+  month-first and day-first hyphenated shapes. Probe before the
+  fix: 0 of 24 valid forms governed; after: all 24 govern, plus
+  all 9 bad forms probed (impossible date, malformed marker,
+  out-of-range hour/minute/second, unknown zone, malformed
+  offset, bogus weekday, seven-digit fraction) still quarantine.
+  The marker, timezone, weekday, and period rewrites are
+  time-agnostic, so no candidate change was needed and the
+  colon-less guard is untouched (a colon time never matches its
+  arms). 2 new tests (suite now 310, all passing). Demo
+  re-verified same run (10,000 in → 1,589 governed, 8,411
+  quarantined, reasons unchanged; runtime 0.818s; governed,
+  quarantine, and summary.json outputs byte-identical to pre-run
+  outputs; audit.csv 10,001 lines and audit.jsonl 10,000 lines,
+  differing only in their timestamp columns; zero raw member IDs,
+  zero patient names in all outputs; CLI smoke-tested on a 3-row
+  CSV: 3 in, 2 governed, 1 quarantined — the "Mar-15-2026
+  T10:30:00.123" and "15-Mar-2026 T10:30:00" rows governed as
+  2026-03-15 and the "February 30, 2026" row quarantined as
+  unparseable_date). README test count corrected 308 → 310;
+  module docstring documents the space-T hyphenated month-name
+  forms. Next gap noted (verified by probe this run): a space
+  before the T separator on a hyphenated month-name datetime
+  carrying a colon-less time ("Mar-15-2026 T103000",
+  "15-Mar-2026 T103000.123") still quarantines — there is no
+  " T%H%M%S" format for the hyphenated month-name shapes, while
+  the attached-T colon-less forms govern — for a later run.
+
 ## Adoption evidence plan (from day one — adoption must predate filing)
 - PyPI download stats tracked monthly (trend, not snapshot)
 - GitHub dependents / "used by" watched; named adopters logged with links

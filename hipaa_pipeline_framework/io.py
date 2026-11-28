@@ -398,7 +398,14 @@ spaced T separator and fractional seconds) normalizes to its date
 part, so it governs, with the same two-digit-year, timezone-suffix,
 and weekday-prefixed handling as the attached-T form, while an
 impossible "Feb 30, 2026 T10:30:00.123" date or a malformed marker
-still quarantines — and
+still quarantines — and a space before the T separator on a
+hyphenated month-name datetime such as "Mar-15-2026 T10:30:00",
+"15-Mar-2026 T10:30:00.123", or "Mar-15-2026 T10:30 AM" (the way
+some exports write hyphenated month-name datetimes with a spaced T
+separator) normalizes to its date part, so it governs, with the
+same two-digit-year, timezone-suffix, and weekday-prefixed handling
+as the attached-T form, while an impossible "Feb-30-2026 T10:30:00"
+date or a malformed marker still quarantines — and
 two-digit-year month-name dates such as "Mar 15, 26" (a legacy export
 convention; the two-digit year follows Python's %y pivot, 00-68 read as
 2000-2068 and 69-99 as 1969-1999, with the same forms as the
@@ -3253,6 +3260,18 @@ def read_claims_csv(path):
                                 "%b-%d-%YT%H:%M",
                                 "%d-%B-%YT%H:%M",
                                 "%B-%d-%YT%H:%M",
+                                "%d-%b-%Y T%H:%M",
+                                "%b-%d-%Y T%H:%M",
+                                "%d-%B-%Y T%H:%M",
+                                "%B-%d-%Y T%H:%M",
+                                "%d-%b-%Y T%H:%M:%S",
+                                "%b-%d-%Y T%H:%M:%S",
+                                "%d-%B-%Y T%H:%M:%S",
+                                "%B-%d-%Y T%H:%M:%S",
+                                "%d-%b-%Y T%H:%M:%S.%f",
+                                "%b-%d-%Y T%H:%M:%S.%f",
+                                "%d-%B-%Y T%H:%M:%S.%f",
+                                "%B-%d-%Y T%H:%M:%S.%f",
                                 "%b %d, %Y %H:%M:%S.%f",
                                 "%B %d, %Y %H:%M:%S.%f",
                                 "%b %d %Y %H:%M:%S.%f",
@@ -3336,6 +3355,18 @@ def read_claims_csv(path):
                                 "%b-%d-%yT%H:%M",
                                 "%d-%B-%yT%H:%M",
                                 "%B-%d-%yT%H:%M",
+                                "%d-%b-%y T%H:%M",
+                                "%b-%d-%y T%H:%M",
+                                "%d-%B-%y T%H:%M",
+                                "%B-%d-%y T%H:%M",
+                                "%d-%b-%y T%H:%M:%S",
+                                "%b-%d-%y T%H:%M:%S",
+                                "%d-%B-%y T%H:%M:%S",
+                                "%B-%d-%y T%H:%M:%S",
+                                "%d-%b-%y T%H:%M:%S.%f",
+                                "%b-%d-%y T%H:%M:%S.%f",
+                                "%d-%B-%y T%H:%M:%S.%f",
+                                "%B-%d-%y T%H:%M:%S.%f",
                                 "%b %d, %y %H:%M:%S.%f",
                                 "%B %d, %y %H:%M:%S.%f",
                                 "%b %d %y %H:%M:%S.%f",
